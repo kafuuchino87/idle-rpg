@@ -1,0 +1,403 @@
+// ============================================================================
+// 多人連線（WebRTC P2P via PeerJS）
+// 階段 1：基礎連線 + 房號交換 + 訊息廣播
+// 設計：「房主權威」— host 跑完整戰鬥，guest 發送動作並接收狀態
+// ============================================================================
+
+const MP = {
+  // 連線狀態
+  peer: null,           // PeerJS instance
+  myId: null,           // 我的 peer ID（房號）
+  role: 'solo',         // 'solo' | 'host' | 'guest'
+  hostId: null,         // 房主 ID（含自己當 host 時也是 myId）
+  connections: {},      // { peerId: DataConnection }
+  players: {},          // { peerId: { name, charName, ready, hp, maxHp } }
+
+  // callbacks
+  onConnected: null,
+  onMessage: null,
+  onPlayerJoined: null,
+  onPlayerLeft: null,
+  onDisconnected: null,
+};
+
+// ===== 工具：產生簡短的房號（替代 PeerJS 自帶的 UUID） =====
+// 4 碼字母 + 4 碼數字 = 易讀 ID
+function genShortRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';  // 排除 I/O 避免混淆
+  const nums = '23456789';                    // 排除 0/1
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  code += '-';
+  for (let i = 0; i < 4; i++) code += nums[Math.floor(Math.random() * nums.length)];
+  return code;
+}
+
+// ===== 初始化 PeerJS 連線 =====
+// 使用 PeerJS 預設的免費公共信令服務（peerjs.com）
+function initPeer(desiredId = null) {
+  return new Promise((resolve, reject) => {
+    if (typeof Peer === 'undefined') {
+      reject(new Error('PeerJS 未載入'));
+      return;
+    }
+    const peerId = desiredId || ('vr-' + genShortRoomCode().toLowerCase());
+    const peer = new Peer(peerId, {
+      debug: 1,  // 0=none, 1=err, 2=warn, 3=all
+    });
+    peer.on('open', (id) => {
+      MP.peer = peer;
+      MP.myId = id;
+      console.log('[MP] 連到信令伺服器，我的 ID:', id);
+      // 監聽其他人主動連我（host 模式）
+      peer.on('connection', (conn) => {
+        console.log('[MP] 收到連線:', conn.peer);
+        setupConnection(conn);
+        // host 端：等 conn open 才送 player-info
+        if (conn.open) {
+          onConnectionOpen(conn);
+        } else {
+          conn.on('open', () => onConnectionOpen(conn));
+        }
+      });
+      peer.on('disconnected', () => {
+        console.warn('[MP] 信令伺服器斷線');
+        if (MP.onDisconnected) MP.onDisconnected();
+      });
+      peer.on('error', (err) => {
+        console.error('[MP] Peer 錯誤:', err.type, err);
+      });
+      resolve(id);
+    });
+    peer.on('error', (err) => {
+      // 初始化階段的錯誤（如 ID 已被佔用）
+      if (err.type === 'unavailable-id') reject(new Error('房號被佔用，請換一個'));
+      else reject(err);
+    });
+  });
+}
+
+// ===== 設定一個 DataConnection（持續監聽事件） =====
+// 注意：不要在這裡綁 'open'，因為 guest 端進來時 conn 已 open，
+// listener 會錯過。改由呼叫方在已 open 時直接 onConnectionOpen()。
+function setupConnection(conn) {
+  MP.connections[conn.peer] = conn;
+  conn.on('data', (data) => {
+    handleMessage(conn.peer, data);
+  });
+  conn.on('close', () => {
+    console.log('[MP] 連線關閉:', conn.peer);
+    delete MP.connections[conn.peer];
+    delete MP.players[conn.peer];
+    if (MP.onPlayerLeft) MP.onPlayerLeft(conn.peer);
+  });
+  conn.on('error', (err) => {
+    console.error('[MP] 連線錯誤:', err);
+  });
+}
+
+// ===== 連線已開啟時要做的事（互換 player-info、通知 UI） =====
+function onConnectionOpen(conn) {
+  console.log('[MP] 連線開啟:', conn.peer);
+  sendTo(conn.peer, 'player-info', buildPlayerInfo());
+  if (MP.onPlayerJoined) MP.onPlayerJoined(conn.peer);
+}
+
+// ===== 組合自己的 player-info（給對方看） =====
+function buildPlayerInfo() {
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  const blueprint = cs ? GAME_STATE.getCharacterBlueprint(cs.blueprintId) : null;
+  const cp = cs ? GAME_STATE.combatPower(cs.id) : 0;
+  return {
+    peerId: MP.myId,
+    nickname: GAME_STATE.state.playerNickname || '無名旅人',
+    charName: cs ? cs.name : '?',                            // 角色名（玩家輸入，預設「月凜」）
+    className: blueprint ? blueprint.title : '?',             // 職業（如「銀月狐巫」）
+    pathName: cs && cs.pathName ? cs.pathName : '',           // 轉職分支
+    blueprintId: cs ? cs.blueprintId : 'tsukirin',
+    jobPath: cs ? cs.jobPath : '',                            // A/B/C 路線
+    jobTier: cs ? cs.jobTier : 0,                             // 1/2/3 階
+    level: cs ? cs.level : 1,
+    cp: cp,
+    graduated: cs ? !!cs.graduated : false,
+  };
+}
+
+// ===== 通知所有連線者：我的資訊更新了（如改暱稱） =====
+function broadcastPlayerInfo() {
+  broadcast('player-info', buildPlayerInfo());
+}
+
+// ===== 房主邀請朋友打襲擊戰 =====
+function broadcastRaidLaunch(dungeonId) {
+  if (!isHost()) return;
+  broadcast('raid-launch', { dungeonId, ts: Date.now() });
+}
+
+// ===== Host 廣播敵人狀態（每 200ms） =====
+// 廣播完整敵人資料（name/maxHp/atk/def），Guest 用此重建本地 wave 確保同步
+function broadcastEnemySync() {
+  if (MP.role !== 'host') return;
+  const b = window.BATTLE;
+  if (!b || !b.currentWave || !b.dungeonId) return;
+  broadcast('enemy-sync', {
+    dungeonId: b.dungeonId,
+    waveIdx: b.currentWaveIdx,
+    totalWaves: (b.waves || []).length,
+    enemies: b.currentWave.map(e => ({
+      name: e.name,
+      hp: Math.floor(e.hp || 0),
+      maxHp: e.maxHp,
+      isBoss: !!e.isBoss,
+      atk: e.atk,
+      def: e.def,
+    })),
+    cleared: !!b._cleared,
+  });
+}
+
+// ===== 廣播自己的傷害給所有隊友（雙向）=====
+// Host：對方累計到 damageStats 顯示，自己對敵人扣血是本地處理
+// Guest：Host 收到會幫忙扣敵人 HP（權威），其他 Guest 累計到 damageStats 顯示
+function reportDamageDealt(enemyIdx, dmg, isCrit) {
+  if (MP.role === 'solo' || !MP.peer) return;
+  broadcast('dmg-dealt', {
+    waveIdx: window.BATTLE ? window.BATTLE.currentWaveIdx : 0,
+    enemyIdx, dmg, isCrit,
+  });
+}
+
+// ===== 廣播自己的戰鬥狀態（給隊友顯示） =====
+function broadcastBattleState() {
+  if (MP.role === 'solo') return;
+  const b = window.BATTLE;
+  if (!b || !b.charId) {
+    broadcast('player-state', { inBattle: false });
+    return;
+  }
+  broadcast('player-state', {
+    hp: b.player ? Math.floor(b.player.hp || 0) : 0,
+    maxHp: b.player ? Math.floor(b.player.maxHp || 0) : 0,
+    mp: b.player ? Math.floor(b.player.mp || 0) : 0,
+    maxMp: b.player ? Math.floor(b.player.maxMp || 0) : 0,
+    dungeonId: b.dungeonId,
+    inBattle: true,
+    paused: !!b.paused,
+  });
+}
+
+// 內部 helper
+function isHost() { return MP.role === 'host'; }
+function isGuest() { return MP.role === 'guest'; }
+
+// ===== 處理收到的訊息 =====
+function handleMessage(fromPeerId, data) {
+  if (!data || typeof data !== 'object') return;
+  console.log('[MP] 收到', data.type, 'from', fromPeerId, data.payload);
+
+  // 內建訊息處理
+  if (data.type === 'player-info') {
+    // 保留現有的 battleState（避免被覆蓋）
+    const prevBattleState = MP.players[fromPeerId] && MP.players[fromPeerId].battleState;
+    MP.players[fromPeerId] = { ...data.payload, battleState: prevBattleState };
+  }
+  if (data.type === 'player-state') {
+    if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
+    MP.players[fromPeerId].battleState = data.payload;
+  }
+  if (data.type === 'player-dead') {
+    if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
+    if (!MP.players[fromPeerId].battleState) MP.players[fromPeerId].battleState = {};
+    MP.players[fromPeerId].battleState.dead = true;
+    // 提示給本機 UI
+    if (typeof window.toast === 'function') {
+      const nick = MP.players[fromPeerId].nickname || '隊友';
+      toast(`⚠ ${nick} 陣亡！`, 'error');
+    }
+    // 立即檢查 team-wipe（不等下次 tickBattle）
+    const b = window.BATTLE;
+    if (b && b._dead && !b._teamWipeFired && (b._mpMode === 'host' || b._mpMode === 'guest')) {
+      const playerIds = Object.keys(MP.players);
+      const allAllyDead = playerIds.length > 0 && playerIds.every(id => {
+        const p = MP.players[id];
+        const bs = p && p.battleState;
+        return bs && (bs.dead || (bs.inBattle && bs.maxHp > 0 && bs.hp <= 0));
+      });
+      if (allAllyDead && typeof window.onBattleFail === 'function') {
+        b._teamWipeFired = true;
+        window.onBattleFail();
+      }
+    }
+  }
+  // Guest 收到 Host 廣播的敵人狀態 → 直接以 Host 為準
+  if (data.type === 'enemy-sync' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (b && b._mpMode === 'guest' && b.dungeonId === data.payload.dungeonId) {
+      const hostEnemies = data.payload.enemies || [];
+      const hostWaveIdx = data.payload.waveIdx;
+      const hostTotalWaves = data.payload.totalWaves || (b.waves || []).length;
+
+      // 同步 totalWaves（Host 可能與 Guest 本地 buildWaves 長度不同）
+      if (b.waves && b.waves.length !== hostTotalWaves) {
+        // 補齊或截斷 BATTLE.waves（內容不重要，只用 length 判斷通關時機）
+        while (b.waves.length < hostTotalWaves) b.waves.push([]);
+        if (b.waves.length > hostTotalWaves) b.waves.length = hostTotalWaves;
+      }
+
+      // 對齊 waveIdx 並重建敵人陣容（直接以 Host 為權威，不跑 onEnemyDown 副作用）
+      const waveChanged = b.currentWaveIdx !== hostWaveIdx;
+      const hostNames = hostEnemies.map(e => `${e.name}@${e.maxHp}`).join(',');
+      const localNames = (b.currentWave || []).map(e => `${e.name}@${e.maxHp}`).join(',');
+      if (waveChanged || hostNames !== localNames) {
+        b.currentWaveIdx = hostWaveIdx;
+        b.currentWave = hostEnemies.map(e => ({
+          name: e.name,
+          hp: e.hp,
+          maxHp: e.maxHp,
+          atk: e.atk,
+          def: e.def,
+          isBoss: e.isBoss,
+          nextAtk: 1.4 + Math.random() * 0.4,
+        }));
+        b.enemy = b.currentWave[0] || null;
+        b.freezes = 0;
+        if (b.onUpdate) b.onUpdate();
+      } else {
+        // 結構一致 → 只覆寫 HP（只能降）
+        for (let i = 0; i < Math.min(b.currentWave.length, hostEnemies.length); i++) {
+          if (b.currentWave[i] && hostEnemies[i]) {
+            const newHp = hostEnemies[i].hp;
+            if (newHp < b.currentWave[i].hp) b.currentWave[i].hp = newHp;
+          }
+        }
+      }
+      // Host 已通關 → Guest 跟著結算
+      if (data.payload.cleared && !b._cleared && typeof window.onDungeonClear === 'function') {
+        window.onDungeonClear();
+      }
+    }
+  }
+  // 收到隊友的傷害廣播 → 累計到自己 damageStats 給戰報顯示
+  if (data.type === 'dmg-dealt' && (MP.role === 'host' || MP.role === 'guest')) {
+    const b = window.BATTLE;
+    if (b && (b._mpMode === 'host' || b._mpMode === 'guest')) {
+      const allyName = (MP.players[fromPeerId] && MP.players[fromPeerId].nickname) || '隊友';
+      // 累計到戰報（雙方都做）
+      if (typeof window.trackDamage === 'function') {
+        window.trackDamage(data.payload.dmg, 'mp-ally:' + allyName, !!data.payload.isCrit);
+      }
+      // Host 額外責任：實際扣敵人 HP（權威）
+      if (MP.role === 'host' && b.currentWave && b.currentWaveIdx === data.payload.waveIdx) {
+        const e = b.currentWave[data.payload.enemyIdx];
+        if (e && e.hp > 0) {
+          e.hp -= data.payload.dmg;
+          if (e.hp <= 0 && typeof window.onEnemyDown === 'function') {
+            window.onEnemyDown();
+          }
+        }
+      }
+    }
+  }
+
+  // 交給上層 callback
+  if (MP.onMessage) MP.onMessage(fromPeerId, data.type, data.payload);
+}
+
+// ===== 房主：建立房間 =====
+async function hostRoom() {
+  if (MP.peer) await leaveRoom();
+  const code = genShortRoomCode();
+  const peerId = 'vr-' + code.toLowerCase();
+  await initPeer(peerId);
+  MP.role = 'host';
+  MP.hostId = MP.myId;
+  console.log('[MP] 已建立房間:', code);
+  return code;
+}
+
+// ===== 加入房間 =====
+async function joinRoom(roomCode) {
+  if (MP.peer) await leaveRoom();
+  // 自己拿個隨機 ID
+  await initPeer();
+  MP.role = 'guest';
+  // 連到房主
+  const hostPeerId = 'vr-' + roomCode.toLowerCase();
+  MP.hostId = hostPeerId;
+  return new Promise((resolve, reject) => {
+    const conn = MP.peer.connect(hostPeerId, { reliable: true });
+    const timer = setTimeout(() => {
+      reject(new Error('連線超時（15 秒）— 房號可能錯誤，或對方未開啟房間'));
+    }, 15000);
+    conn.on('open', () => {
+      clearTimeout(timer);
+      setupConnection(conn);
+      onConnectionOpen(conn);  // ← 連上後立刻送 player-info 給房主
+      if (MP.onConnected) MP.onConnected(hostPeerId);
+      resolve(hostPeerId);
+    });
+    conn.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+// ===== 離開房間 / 清理 =====
+async function leaveRoom() {
+  for (const peerId in MP.connections) {
+    try { MP.connections[peerId].close(); } catch (_) {}
+  }
+  MP.connections = {};
+  MP.players = {};
+  if (MP.peer) {
+    try { MP.peer.destroy(); } catch (_) {}
+    MP.peer = null;
+  }
+  MP.myId = null;
+  MP.role = 'solo';
+  MP.hostId = null;
+}
+
+// ===== 廣播訊息給所有連線者 =====
+function broadcast(type, payload) {
+  const msg = { type, payload };
+  for (const peerId in MP.connections) {
+    const conn = MP.connections[peerId];
+    if (conn && conn.open) {
+      try { conn.send(msg); } catch (e) { console.error('[MP] send fail:', e); }
+    }
+  }
+}
+
+// ===== 點對點訊息（指定對象） =====
+function sendTo(peerId, type, payload) {
+  const conn = MP.connections[peerId];
+  if (conn && conn.open) {
+    try { conn.send({ type, payload }); } catch (e) { console.error('[MP] sendTo fail:', e); }
+  }
+}
+
+// ===== 對外 API =====
+window.MP = MP;
+window.MP_API = {
+  hostRoom,
+  joinRoom,
+  leaveRoom,
+  broadcast,
+  broadcastPlayerInfo,
+  broadcastRaidLaunch,
+  broadcastBattleState,
+  broadcastEnemySync,
+  reportDamageDealt,
+  sendTo,
+  isHost,
+  isGuest,
+  isConnected: () => MP.role !== 'solo',
+  getRoomCode: () => {
+    if (!MP.hostId) return null;
+    return MP.hostId.replace(/^vr-/, '').toUpperCase();
+  },
+  getPlayers: () => MP.players,
+  getMyId: () => MP.myId,
+};

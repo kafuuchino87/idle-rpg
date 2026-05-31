@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幻域編年史 · Chronicle of Veilreach</title>
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="logo">幻域編年史 <span class="sub">Chronicle of Veilreach</span></div>
+    <div class="resources">
+      <span class="res" id="resGold">金 <b>0</b></span>
+      <span class="res" id="resShard">魂晶 <b>0</b></span>
+      <span class="res" id="resCharLv">Lv <b>1</b></span>
+      <span class="res" id="resCharExp">經驗 <b>0 / 100</b></span>
+      <span class="res" id="resResonance" style="display:none">共鳴 <b>0</b></span>
+      <span class="res" id="resCP">戰力 <b>0</b></span>
+    </div>
+    <div class="actions">
+      <button id="btnSave" class="ghost">手動存檔</button>
+      <button id="btnReset" class="danger">重設</button>
+    </div>
+  </header>
+
+  <main id="layout">
+
+    <section id="leftPanel" class="panel">
+      <h2>英靈</h2>
+      <div id="charList"></div>
+      <button id="btnCreateChar" class="primary" style="margin-top:10px;width:100%">＋ 建立新英靈</button>
+      <div class="left-hint" id="leftHint">點上方角色卡切換 · 多名英靈共享共鳴等級</div>
+    </section>
+
+    <section id="centerPanel" class="panel">
+      <div id="battleStage">
+        <div class="player-side">
+          <div class="fighter-card player-card" id="playerCard">
+            <div class="card-frame">
+              <div class="portrait" id="playerPortrait"></div>
+            </div>
+            <div class="card-name" id="playerName">月凜</div>
+            <div class="card-sub" id="playerSub">Lv 1</div>
+            <div class="card-hp">
+              <div class="hp-fill" id="playerHpBar"></div>
+              <span class="hp-text" id="playerHpText">0 / 0</span>
+            </div>
+            <div class="card-mp">
+              <div class="mp-fill" id="playerMpBar"></div>
+              <span class="mp-text" id="playerMpText">100 / 100</span>
+            </div>
+            <div id="playerBuffs" class="buff-stack"></div>
+          </div>
+          <div id="allyPanel" class="ally-panel"></div>
+        </div>
+
+        <div class="vs-center">
+          <div class="vs-mark">VS</div>
+          <div class="vs-dungeon" id="dungeonName">尚未出征</div>
+          <div class="vs-tier" id="dungeonTier"></div>
+          <div id="floatingFx"></div>
+        </div>
+
+        <div id="enemyCardsContainer" class="enemy-side"></div>
+
+        <div id="battleSkillBar"></div>
+        <div id="potionSlotBar"></div>
+        <div id="battleLog"></div>
+      </div>
+      <canvas id="battleCanvas" width="1" height="1" style="display:none"></canvas>
+      <div id="bottomBar">
+        <div id="dungeonControls">
+          <button id="btnStop" class="ghost">停止</button>
+          <span id="autoRunReadout">自動：開</span>
+          <button id="btnToggleAuto" class="ghost">切換</button>
+        </div>
+        <div id="panelButtons">
+          <button class="dock-toggle" data-win="char">角色</button>
+          <button class="dock-toggle" data-win="dungeon">副本</button>
+          <button class="dock-toggle" data-win="forge">強化</button>
+          <button class="dock-toggle" data-win="bag">背包</button>
+          <button class="dock-toggle" data-win="skills">技能</button>
+          <button class="dock-toggle" data-win="report">戰報</button>
+          <button class="dock-toggle" data-win="craft">製作</button>
+          <button class="dock-toggle" data-win="shop">商店</button>
+          <button class="dock-toggle" data-win="mpRoom">多人</button>
+          <button class="dock-toggle" data-win="resonance" id="btnOpenResonance" style="display:none">共鳴</button>
+        </div>
+        <div id="clearSummary">
+          <div class="cs-title">上次結算</div>
+          <div class="cs-body" id="clearSummaryBody"><span class="cs-empty">尚無紀錄</span></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 浮動視窗 -->
+  <div class="float-panel hidden" id="winChar" style="left:60px;top:80px;width:640px;max-height:80vh">
+    <div class="float-header"><span class="float-title">角色資訊</span><button class="float-close" data-close="char">×</button></div>
+    <div class="float-body" id="winCharBody">
+      <div id="charStripPortrait"></div>
+      <div id="charStripInfo"></div>
+    </div>
+  </div>
+  <div class="float-panel hidden" id="winDungeon" style="left:80px;top:90px">
+    <div class="float-header"><span class="float-title">副本</span><button class="float-close" data-close="dungeon">×</button></div>
+    <div class="float-body" id="tabDungeon"></div>
+  </div>
+  <div class="float-panel hidden" id="winForge" style="left:120px;top:130px">
+    <div class="float-header"><span class="float-title">強化</span><button class="float-close" data-close="forge">×</button></div>
+    <div class="float-body" id="tabForge"></div>
+  </div>
+  <div class="float-panel hidden" id="winBag" style="left:160px;top:170px">
+    <div class="float-header"><span class="float-title">背包</span><button class="float-close" data-close="bag">×</button></div>
+    <div class="float-body" id="tabBag"></div>
+  </div>
+  <div class="float-panel hidden" id="winSkills" style="left:200px;top:210px">
+    <div class="float-header"><span class="float-title">技能</span><button class="float-close" data-close="skills">×</button></div>
+    <div class="float-body" id="tabSkills"></div>
+  </div>
+  <div class="float-panel hidden" id="winReport" style="left:240px;top:250px;width:520px">
+    <div class="float-header"><span class="float-title">戰報</span><button class="float-close" data-close="report">×</button></div>
+    <div class="float-body" id="tabReport"><span style="color:var(--muted)">尚無戰鬥紀錄</span></div>
+  </div>
+  <div class="float-panel hidden" id="winEquip" style="left:300px;top:200px;width:380px">
+    <div class="float-header"><span class="float-title">裝備詳細</span><button class="float-close" data-close="equip">×</button></div>
+    <div class="float-body" id="tabEquip"></div>
+  </div>
+  <div class="float-panel hidden" id="winResonance" style="left:200px;top:140px;width:480px">
+    <div class="float-header"><span class="float-title">共鳴 · 屬性配點</span><button class="float-close" data-close="resonance">×</button></div>
+    <div class="float-body" id="tabResonance"></div>
+  </div>
+  <div class="float-panel hidden" id="winCraft" style="left:340px;top:180px;width:520px">
+    <div class="float-header"><span class="float-title">製作</span><button class="float-close" data-close="craft">×</button></div>
+    <div class="float-body" id="tabCraft"></div>
+  </div>
+  <div class="float-panel hidden" id="winShop" style="left:360px;top:140px;width:560px">
+    <div class="float-header"><span class="float-title">商店</span><button class="float-close" data-close="shop">×</button></div>
+    <div class="float-body" id="tabShop"></div>
+  </div>
+  <div class="float-panel hidden" id="winRaidPreview" style="left:380px;top:80px;width:540px;max-height:88vh">
+    <div class="float-header"><span class="float-title">⚔ 襲擊戰挑戰</span><button class="float-close" data-close="raidPreview">×</button></div>
+    <div class="float-body" id="tabRaidPreview"></div>
+  </div>
+  <div class="float-panel hidden" id="winCraftPreview" style="left:520px;top:160px;width:420px;max-height:80vh">
+    <div class="float-header"><span class="float-title">裝備藍圖</span><button class="float-close" data-close="craftPreview">×</button></div>
+    <div class="float-body" id="tabCraftPreview"></div>
+  </div>
+  <div class="float-panel hidden" id="winMpRoom" style="left:420px;top:120px;width:460px;max-height:80vh">
+    <div class="float-header"><span class="float-title">⚔ 多人房間（Beta · 階段 1）</span><button class="float-close" data-close="mpRoom">×</button></div>
+    <div class="float-body" id="tabMpRoom"></div>
+  </div>
+  <div class="float-panel hidden" id="winPotionConfig" style="left:380px;top:200px;width:420px">
+    <div class="float-header"><span class="float-title">藥水欄設定</span><button class="float-close" data-close="potionConfig">×</button></div>
+    <div class="float-body" id="tabPotionConfig"></div>
+  </div>
+
+  <footer id="toast"></footer>
+
+  <!-- 創角畫面（首次進入或無角色時顯示） -->
+  <div id="creationOverlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>創建你的英靈</h2>
+      <p class="overlay-sub">霜月家末代弟子的故事，將由你命名。</p>
+
+      <div class="creation-grid">
+        <div class="creation-portrait" id="creationPortrait"></div>
+        <div class="creation-form">
+          <div class="form-row">
+            <label>玩家暱稱 <span style="color:var(--hp-enemy)">＊</span></label>
+            <input id="creationNickname" type="text" maxlength="16" placeholder="你自己的名字 / ID（多人連線顯示用）">
+            <div class="form-hint">最多 16 字。這是「你」的名字，所有角色共用。</div>
+          </div>
+          <div class="form-row">
+            <label>角色</label>
+            <div class="char-name-fixed">月凜 <small>（銀月狐巫 · 角色既定名）</small></div>
+            <div class="form-hint">這是角色既定的名字，無法變更。如果你改了它，這就不是「月凜」了。</div>
+          </div>
+          <div class="form-row">
+            <label>職業 · 銀月狐巫</label>
+            <div class="cls-info">
+              <div><b>武器：</b>銀月矛</div>
+              <div><b>定位：</b>近戰 · 三路線分歧（Lv 25/50/75 轉職）</div>
+              <div><b>特色：</b>東方武術 × 雪狐契約 × 雙形態</div>
+            </div>
+          </div>
+          <div class="form-row lore">
+            <p>霜月家末代弟子，自幼能聽見雪山深處的低語。十二歲那年雪狐之靈「白霧」附身於她，從此她以家傳銀月矛行走江湖，誓要找出當年焚毀祖廟的火影。</p>
+          </div>
+          <button class="primary big" id="btnCreate">踏上旅程</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 轉職選擇 -->
+  <div id="jobOverlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2 id="jobTitle">一轉 · 選擇你的道路</h2>
+      <p class="overlay-sub" id="jobSub">月凜在霜月家祖廟前佇立良久——是時候決定流派。</p>
+      <div class="path-grid" id="pathGrid"></div>
+    </div>
+  </div>
+
+  <!-- 戰鬥結算彈窗（襲擊戰通關 / 失敗時跳） -->
+  <div id="resultOverlay" class="overlay hidden">
+    <div class="overlay-card result-card">
+      <div class="result-header">
+        <h2 id="resultTitle">通關成功</h2>
+        <div id="resultSubtitle" class="result-subtitle"></div>
+      </div>
+      <div class="result-stats" id="resultStats"></div>
+      <div class="result-section-title">技能輸出</div>
+      <div class="result-skills" id="resultSkills"></div>
+      <div id="resultLootSection">
+        <div class="result-section-title">戰利品</div>
+        <div class="result-loot" id="resultLoot"></div>
+      </div>
+      <div class="result-actions">
+        <button class="primary big" id="resultClose">確認</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 解鎖通知 -->
+  <div id="unlockOverlay" class="overlay hidden">
+    <div class="overlay-card small">
+      <h3 id="unlockTitle">技能解鎖</h3>
+      <div id="unlockBody"></div>
+      <button class="primary" id="btnUnlockOk">知道了</button>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="js/data.js?v=125"></script>
+<script src="js/state.js?v=125"></script>
+<script src="js/pixel.js?v=125"></script>
+<script src="js/procedural.js?v=125"></script>
+<script src="js/battle.js?v=125"></script>
+<script src="js/multiplayer.js?v=125"></script>
+<script src="js/game.js?v=125"></script>
+</body>
+</html>

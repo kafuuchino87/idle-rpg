@@ -1,0 +1,3176 @@
+// ===========================================================================
+// 主邏輯：創角、UI、主迴圈、解鎖通知、轉職
+// ===========================================================================
+
+window.addEventListener('DOMContentLoaded', init);
+
+function init() {
+  PIXEL.init();
+
+  if (!GAME_STATE.state.hasCharacter) {
+    showCreationOverlay();
+  } else {
+    enterGame();
+  }
+
+  bindGlobalEvents();
+}
+
+function enterGame() {
+  PIXEL.setScene({ charId: GAME_STATE.state.activeCharId });
+  renderAll();
+
+  BATTLE.onUpdate = () => { renderHudBars(); };
+  BATTLE.onLog = () => { renderBattleLog(); };
+  BATTLE.onClear = () => {
+    renderHud(); renderDungeonList(); renderForge(); renderBag(); renderClearSummary(); flushPendingNotifications();
+    // 襲擊戰通關跳結算彈窗（停止自動戰鬥防誤入）
+    if (BATTLE.lastClear && BATTLE.lastClear.isRaid) showResultModal(BATTLE.lastClear);
+  };
+  BATTLE.onFail = () => {
+    renderHud();
+    // 戰敗一律跳結算彈窗（玩家會想知道為什麼停了）
+    if (BATTLE.lastClear) showResultModal(BATTLE.lastClear);
+  };
+
+  let last = performance.now();
+  let lastMpBroadcast = 0;
+  let lastAllyRender = 0;
+  const OFFLINE_MAX_MS = 10 * 60 * 1000;   // 最多補 10 分鐘的離線時間
+  const OFFLINE_THRESHOLD = 3000;          // 超過 3 秒視為「背景中斷」
+  function loop(now) {
+    const elapsed = now - last;
+    if (elapsed > OFFLINE_THRESHOLD) {
+      // 分頁背景太久（rAF 被瀏覽器暫停），用固定步長補上時間
+      const compensation = Math.min(elapsed, OFFLINE_MAX_MS);
+      const STEP = 100;  // 100ms 一塊，比正常 frame 慢 6×，但避免一次跳太多
+      const steps = Math.floor(compensation / STEP);
+      for (let i = 0; i < steps; i++) tickBattle(STEP);
+      last = now;
+      if (typeof toast === 'function' && compensation > 5000) {
+        toast(`離開 ${(compensation / 1000).toFixed(0)} 秒，已補上戰鬥進度`, 'gold');
+      }
+    } else {
+      const dt = Math.min(150, elapsed);
+      last = now;
+      tickBattle(dt);
+    }
+    renderHudBars();
+    renderSpeedReadout();
+    renderSkillBar();
+    flushPendingNotifications();
+    // 多人：每 500ms 廣播戰鬥狀態 + 重繪 ally panel
+    if (now - lastMpBroadcast > 500) {
+      lastMpBroadcast = now;
+      if (window.MP_API && MP_API.isConnected()) {
+        MP_API.broadcastBattleState();
+        // 備援 team-wipe 檢查（若 tickBattle 沒跑或 player-dead 訊息漏接）
+        const b = window.BATTLE;
+        if (b && b._dead && !b._teamWipeFired && (b._mpMode === 'host' || b._mpMode === 'guest')) {
+          const players = MP_API.getPlayers();
+          const playerIds = Object.keys(players);
+          const allAllyDead = playerIds.length > 0 && playerIds.every(id => {
+            const p = players[id];
+            const bs = p && p.battleState;
+            return bs && (bs.dead || (bs.inBattle && bs.maxHp > 0 && bs.hp <= 0));
+          });
+          if (allAllyDead && typeof window.onBattleFail === 'function') {
+            b._teamWipeFired = true;
+            window.onBattleFail();
+          }
+        }
+      }
+    }
+    if (now - lastAllyRender > 300) {
+      lastAllyRender = now;
+      renderAllyPanel();
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  setInterval(() => GAME_STATE.saveState(), 30000);
+  window.addEventListener('beforeunload', () => GAME_STATE.saveState());
+
+  toast(`歡迎回來，旅人。`);
+}
+
+function renderAll() {
+  renderCharList();
+  renderCharDetail();
+  renderDungeonList();
+  renderForge();
+  renderBag();
+  renderSkills();
+  renderHud();
+  renderHudBars();
+}
+
+// ============================================================================
+// 創角畫面
+// ============================================================================
+function showCreationOverlay(isAdditional) {
+  document.getElementById('creationOverlay').classList.remove('hidden');
+  document.getElementById('creationPortrait').innerHTML = CHAR_PORTRAIT('tsukirin', { bg: true, forceBase: true });
+
+  document.getElementById('btnCreate').onclick = () => {
+    const nickname = (document.getElementById('creationNickname').value || '').trim();
+    // 玩家暱稱（跨角色共用）— 首次創角才需要填
+    if (!GAME_STATE.getPlayerNickname()) {
+      if (!nickname) {
+        toast('請填寫玩家暱稱（多人連線會用到）', 'error');
+        document.getElementById('creationNickname')?.focus();
+        return;
+      }
+      GAME_STATE.setPlayerNickname(nickname);
+    } else if (nickname) {
+      // 加角色時若有填，順便更新暱稱
+      GAME_STATE.setPlayerNickname(nickname);
+    }
+    // 角色名固定為「月凜」（角色既定名，不可改）
+    const cs = GAME_STATE.createCharacter('tsukirin', '月凜');
+    if (!cs) { toast('已達角色上限', 'error'); return; }
+    document.getElementById('creationOverlay').classList.add('hidden');
+    if (isAdditional) {
+      renderAll();
+      toast(`「${name}」加入隊伍。`, 'gold');
+    } else {
+      enterGame();
+      toast(`「${name}」的旅程開始了。`, 'gold');
+    }
+  };
+}
+
+// ============================================================================
+// 全域事件
+// ============================================================================
+function bindGlobalEvents() {
+  // 浮動視窗：按鈕開關
+  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom' };
+  document.querySelectorAll('.dock-toggle, .cs-detail-btn').forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.win;
+      const win = document.getElementById(winMap[key]);
+      const wasOpen = !win.classList.contains('hidden');
+      win.classList.toggle('hidden', wasOpen);
+      btn.classList.toggle('active', !wasOpen);
+      if (!wasOpen) {
+        bringWindowToFront(win);
+        if (key === 'char') renderCharDetail();
+        if (key === 'dungeon') renderDungeonList();
+        if (key === 'forge') renderForge();
+        if (key === 'bag') renderBag();
+        if (key === 'skills') renderSkills();
+        if (key === 'report') renderBattleReport();
+        if (key === 'resonance') renderResonance();
+        if (key === 'craft') renderCraft();
+        if (key === 'shop') renderShop();
+        if (key === 'potionConfig') renderPotionConfig();
+        if (key === 'mpRoom') renderMpRoom();
+      }
+    };
+  });
+  // 關閉按鈕
+  document.querySelectorAll('.float-close').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.close;
+      const w = document.getElementById(winMap[key]);
+      if (w) {
+        // 清掉 inline display 並加上 hidden class，雙重保險
+        w.style.display = '';
+        w.style.visibility = '';
+        w.classList.add('hidden');
+      }
+      document.querySelector(`.dock-toggle[data-win="${key}"]`)?.classList.remove('active');
+    };
+  });
+  // 拖移
+  document.querySelectorAll('.float-panel').forEach(win => {
+    const header = win.querySelector('.float-header');
+    if (!header) return;
+    header.onmousedown = (e) => {
+      if (e.target.classList.contains('float-close')) return;
+      bringWindowToFront(win);
+      const r = win.getBoundingClientRect();
+      const dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const move = (ev) => {
+        win.style.left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - dx)) + 'px';
+        win.style.top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy)) + 'px';
+        win.style.right = 'auto';
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    };
+  });
+
+  document.getElementById('btnStop').onclick = () => {
+    if (BATTLE.running) { stopBattle('手動停止'); toast('已停止'); }
+  };
+  document.getElementById('btnToggleAuto').onclick = () => {
+    GAME_STATE.state.autoRun = !GAME_STATE.state.autoRun;
+    toast(`自動再戰：${GAME_STATE.state.autoRun ? '開' : '關'}`);
+    GAME_STATE.scheduleSave();
+  };
+  document.getElementById('btnSave').onclick = () => { GAME_STATE.saveState(); toast('已存檔', 'gold'); };
+  document.getElementById('btnReset').onclick = () => {
+    if (confirm('確定要重設所有進度嗎？此動作無法復原。')) {
+      GAME_STATE.resetState();
+      location.reload();
+    }
+  };
+  document.getElementById('btnUnlockOk').onclick = () => {
+    document.getElementById('unlockOverlay').classList.add('hidden');
+  };
+
+  // 新角色按鈕：開啟創角彈窗（最多 4 名）
+  const btnNewChar = document.getElementById('btnCreateChar');
+  if (btnNewChar) {
+    btnNewChar.onclick = () => {
+      const count = Object.keys(GAME_STATE.state.characters).length;
+      if (count >= GAME_STATE.MAX_CHARACTERS) {
+        toast(`已達 ${GAME_STATE.MAX_CHARACTERS} 名角色上限，請先重設`, 'error');
+        return;
+      }
+      // 重設輸入框
+      const nickInput = document.getElementById('creationNickname');
+      if (nickInput) {
+        nickInput.value = GAME_STATE.getPlayerNickname() || '';
+        // 已有暱稱時不可改（避免改新角色順便覆蓋舊暱稱）
+        nickInput.disabled = !!GAME_STATE.getPlayerNickname();
+      }
+      showCreationOverlay(true);  // 第二次以上創角
+    };
+  }
+}
+
+// ============================================================================
+// 角色列表（左）
+// ============================================================================
+function renderCharList() {
+  const root = document.getElementById('charList');
+  root.innerHTML = '';
+  const ids = Object.keys(GAME_STATE.state.characters);
+  for (const id of ids) {
+    const cs = GAME_STATE.state.characters[id];
+    const bp = GAME_STATE.getCharacterBlueprint((GAME_STATE.state.characters[id] || {}).blueprintId || id);
+    const card = document.createElement('div');
+    card.className = 'char-card' + (id === GAME_STATE.state.activeCharId ? ' active' : '');
+    const cp = GAME_STATE.combatPower(id);
+    const lvText = cs.graduated ? '畢' : `Lv ${cs.level}`;
+    card.innerHTML = `
+      <div class="char-portrait">${CHAR_PORTRAIT(id)}</div>
+      <div class="char-info">
+        <div class="cname">${cs.customName}</div>
+        <div class="ctitle">${bp.title} · ${lvText}</div>
+        <div class="cstat">CP ${cp.toLocaleString()}</div>
+      </div>
+    `;
+    card.onclick = () => switchCharacter(id);
+    root.appendChild(card);
+  }
+}
+
+function switchCharacter(id) {
+  if (BATTLE.running) {
+    stopBattle();
+    toast('已停止戰鬥並切換角色');
+  }
+  GAME_STATE.state.activeCharId = id;
+  PIXEL.setScene({ charId: id });
+  renderAll();
+  GAME_STATE.scheduleSave();
+}
+
+// ============================================================================
+// 角色詳細頁
+// ============================================================================
+function renderCharDetail() {
+  const portRoot = document.getElementById('charStripPortrait');
+  const infoRoot = document.getElementById('charStripInfo');
+  if (!portRoot || !infoRoot) return;
+  const id = GAME_STATE.state.activeCharId;
+  if (!id) { portRoot.innerHTML = ''; infoRoot.innerHTML = ''; return; }
+  const cs = GAME_STATE.state.characters[id];
+  const bp = GAME_STATE.getCharacterBlueprint((GAME_STATE.state.characters[id] || {}).blueprintId || id);
+  const s = GAME_STATE.effectiveStats(id);
+  const cp = GAME_STATE.combatPower(id);
+
+  // 大立繪
+  portRoot.innerHTML = CHAR_PORTRAIT(id, { bg: true });
+
+  // 職階文字
+  let jobText = '一階弟子';
+  if (cs.jobPath) {
+    const p = bp.paths[cs.jobPath];
+    if (cs.jobTier === 1) jobText = `一轉 · ${p.name}`;
+    else if (cs.jobTier === 2) jobText = `二轉 · ${p.tier2.name}`;
+    else if (cs.jobTier === 3) jobText = `三轉 · ${p.tier3.name}`;
+  }
+  if (cs.graduated) jobText += '（已畢業）';
+
+  let expBar = '', expInfoText = '';
+  if (cs.graduated) {
+    const need = GAME_STATE.resonanceExpFor(GAME_STATE.state.resonance);
+    const pct = Math.min(100, (GAME_STATE.state.resonanceExp / need) * 100);
+    expBar = `<div class="exp-bar"><div style="width:${pct}%"></div></div>`;
+    expInfoText = `<span class="exp-info">共鳴 R${GAME_STATE.state.resonance} · ${GAME_STATE.state.resonanceExp.toLocaleString()} / ${need.toLocaleString()}</span>`;
+  } else {
+    const need = GAME_DATA.expForLevel(cs.level);
+    const pct = Math.min(100, (cs.exp / need) * 100);
+    expBar = `<div class="exp-bar"><div style="width:${pct}%"></div></div>`;
+    expInfoText = `<span class="exp-info">${cs.exp.toLocaleString()} / ${need.toLocaleString()}</span>`;
+  }
+
+  infoRoot.innerHTML = `
+    <div class="char-name-line">
+      <h3>${cs.customName}</h3>
+      <span class="char-tier-tag">${jobText}</span>
+      <span class="char-title-tag">「${bp.title}」</span>
+    </div>
+    <div class="char-lv-line">
+      <span class="lv-badge">Lv ${cs.level}${cs.graduated ? ' MAX' : ''}</span>
+      ${expBar}
+      ${expInfoText}
+    </div>
+    <div class="lore-quote">${bp.lore}</div>
+    <div class="stat-grid">
+      <div class="stat-card offense">
+        <div class="stat-card-title">攻擊組</div>
+        <div class="stat-row-pair"><span>攻擊</span><b>${s.atk}</b></div>
+        <div class="stat-row-pair"><span>暴擊</span><b>${(s.crit * 100).toFixed(1)}%</b></div>
+        <div class="stat-row-pair"><span>暴傷</span><b>${(s.critDmg * 100).toFixed(0)}%</b></div>
+      </div>
+      <div class="stat-card defense">
+        <div class="stat-card-title">防禦組</div>
+        <div class="stat-row-pair"><span>防禦</span><b>${s.def}</b></div>
+        <div class="stat-row-pair"><span>生命</span><b>${s.hp}</b></div>
+        <div class="stat-row-pair"><span>減傷</span><b>${(s.dmgReduce * 100).toFixed(0)}%</b></div>
+      </div>
+      <div class="stat-card utility">
+        <div class="stat-card-title">機動組</div>
+        <div class="stat-row-pair"><span>速度</span><b>${s.spd.toFixed(2)}</b></div>
+        <div class="stat-row-pair"><span>CD減</span><b>${((s.cdReduce || 0) * 100).toFixed(0)}%${s.cdReduceRaw > s.cdReduce ? `<span style="color:var(--gold);font-size:9px;margin-left:4px" title="原始 ${(s.cdReduceRaw * 100).toFixed(0)}% 被上限壓低">(上限)</span>` : ''}</b></div>
+        <div class="stat-row-pair"><span>對 BOSS</span><b>+${((s.vsBoss || 0) * 100).toFixed(0)}%</b></div>
+        <div class="stat-row-pair"><span>技能傷害</span><b>+${((s.skillDmg || 0) * 100).toFixed(0)}%</b></div>
+      </div>
+      <div class="stat-card mp-card">
+        <div class="stat-card-title">秘力組</div>
+        <div class="stat-row-pair"><span>MP 上限</span><b>${s.maxMp}</b></div>
+        <div class="stat-row-pair"><span>回復/秒</span><b>${s.mpRegen.toFixed(1)}</b></div>
+        <div class="stat-row-pair"><span>普攻回藍</span><b>+${s.mpPerHit}</b></div>
+      </div>
+      <div class="stat-card cp-card">
+        <div class="stat-card-title">戰力</div>
+        <div class="cp-value">${cp.toLocaleString()}</div>
+      </div>
+    </div>
+    ${renderActiveSets(cs)}
+  `;
+}
+
+function renderActiveSets(cs) {
+  const counts = GAME_DATA.countSetPieces(cs);
+  const keys = Object.keys(counts);
+  if (!keys.length) return '';
+  let html = '<div class="set-summary"><div class="set-summary-title">套裝效果</div>';
+  for (const setId of keys) {
+    const setDef = GAME_DATA.findSet(setId);
+    if (!setDef) continue;
+    const n = counts[setId];
+    html += `<div class="set-block">
+      <div class="set-block-title" style="color:${setDef.color}">${setDef.name} <span style="color:var(--muted);font-size:10px">(${n} / 5)</span></div>`;
+    for (const b of setDef.bonuses) {
+      const active = n >= b.pieces;
+      html += `<div class="set-bonus ${active ? 'active' : 'inactive'}">${active ? '✓' : '–'} ${b.label}</div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderClearSummary() {
+  const body = document.getElementById('clearSummaryBody');
+  if (!body) return;
+  const lc = BATTLE.lastClear;
+  if (!lc) {
+    body.innerHTML = '<span class="cs-empty">尚無紀錄</span>';
+    return;
+  }
+  const totalDmg = lc.damage ? lc.damage.total : 0;
+  const dps = (lc.damage && lc.time > 0) ? Math.floor(totalDmg / lc.time) : 0;
+  // Buff 標籤（卷軸生效中時顯示在經驗/金錢數字旁，明確標「卷軸」避免和副本固有倍率混淆）
+  const expBuffTag = lc.expBuff > 0 ? `<span class="cs-buff">卷軸 ×${(1+lc.expBuff).toFixed(1)}</span>` : '';
+  const goldBuffTag = lc.goldBuff > 0 ? `<span class="cs-buff">卷軸 ×${(1+lc.goldBuff).toFixed(1)}</span>` : '';
+  const dropBuffTag = lc.dropBuff > 0 ? `<span class="cs-buff">卷軸 ×${(1+lc.dropBuff).toFixed(1)}</span>` : '';
+  // 材料分項顯示（按 tier 排序，依稀有度配色）
+  const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
+  const TIER_ORDER = ['粗鋼', '精鋼', '星鋼', '神鋼', '永晶', '夢晶'];
+  const matEntries = lc.matDrops
+    ? Object.entries(lc.matDrops).sort((a, b) => TIER_ORDER.indexOf(a[0]) - TIER_ORDER.indexOf(b[0]))
+    : (lc.matName ? [[lc.matName, lc.matQty]] : []);
+  const matHtml = matEntries.map(([name, qty]) =>
+    `<span class="cs-mat" style="color:${TIER_COLOR[name] || 'var(--text)'}">${name} +${qty}</span>`
+  ).join('');
+  // 寶箱（如有掉落）
+  let chestHtml = '';
+  if (lc.chest) {
+    const chestDef = GAME_DATA.CHESTS && GAME_DATA.CHESTS[lc.chest];
+    if (chestDef) {
+      chestHtml = `<span class="cs-chest" style="color:${chestDef.color}">📦 ${chestDef.name}</span>`;
+    }
+  }
+  body.innerHTML = `
+    <span class="cs-name">${lc.dungeonName}</span>
+    <span class="cs-time">${lc.time.toFixed(1)}s</span>
+    <span class="cs-exp">經驗 +${lc.exp.toLocaleString()}${expBuffTag}</span>
+    <span class="cs-num">金 +${lc.gold.toLocaleString()}${goldBuffTag}</span>
+    ${matHtml || '<span class="cs-mat" style="color:var(--muted)">無材料</span>'}
+    ${lc.shard ? `<span class="cs-mat" style="color:var(--shard)">魂晶 +${lc.shard}</span>` : ''}
+    ${chestHtml}
+    ${lc.gem ? `<span class="cs-drop">💎 ${lc.gem}</span>` : ''}
+    ${lc.drop ? `<span class="cs-drop">${lc.drop}${dropBuffTag}</span>` : ''}
+    ${totalDmg ? `<span class="cs-dmg">傷害 ${Math.floor(totalDmg).toLocaleString()} (${dps.toLocaleString()} dps)</span>` : ''}
+  `;
+  renderBattleReport();
+}
+
+function renderBattleReport() {
+  const root = document.getElementById('tabReport');
+  if (!root) return;
+  const lc = BATTLE.lastClear;
+  if (!lc) {
+    root.innerHTML = '<span style="color:var(--muted)">尚無戰鬥紀錄</span>';
+    return;
+  }
+  const d = lc.damage || { total: 0, bySkill: {}, hits: 0, crits: 0 };
+  const dps = lc.time > 0 ? Math.floor(d.total / lc.time) : 0;
+  const critRate = d.hits > 0 ? (d.crits / d.hits * 100).toFixed(1) : '0.0';
+
+  const sorted = Object.entries(d.bySkill).sort((a, b) => b[1] - a[1]);
+  const rows = sorted.map(([sid, dmg]) => {
+    let name, isAlly = false;
+    if (sid.startsWith('mp-ally:')) {
+      name = '⛺ ' + sid.slice('mp-ally:'.length) + '（隊友）';
+      isAlly = true;
+    } else {
+      const sk = GAME_DATA.SKILLS[sid];
+      name = sk ? sk.name : sid;
+    }
+    const pct = d.total > 0 ? (dmg / d.total * 100) : 0;
+    return `
+      <div class="report-skill${isAlly ? ' ally' : ''}">
+        <div class="report-skill-head">
+          <span class="report-skill-name">${name}</span>
+          <span class="report-skill-pct">${pct.toFixed(1)}%</span>
+        </div>
+        <div class="report-skill-bar"><div style="width:${Math.min(100, pct)}%"></div></div>
+        <div class="report-skill-dmg">${Math.floor(dmg).toLocaleString()}</div>
+      </div>
+    `;
+  }).join('');
+
+  root.innerHTML = `
+    <div class="report-header">
+      <h4 style="margin:0 0 4px">${lc.dungeonName}</h4>
+      <div style="font-size:11px;color:var(--muted)">通關時間 ${lc.time.toFixed(2)} 秒</div>
+    </div>
+    <div class="report-stats">
+      <div class="report-stat"><span>總傷害</span><b>${Math.floor(d.total).toLocaleString()}</b></div>
+      <div class="report-stat"><span>DPS</span><b>${dps.toLocaleString()}</b></div>
+      <div class="report-stat"><span>命中</span><b>${d.hits}</b></div>
+      <div class="report-stat"><span>暴擊率</span><b>${critRate}%</b></div>
+    </div>
+    <div class="report-loot">
+      <div class="cs-loot-grid">
+        <span class="cs-exp">經驗 +${lc.exp.toLocaleString()}</span>
+        <span class="cs-num">金幣 +${lc.gold.toLocaleString()}</span>
+        <span class="cs-mat">${lc.matName} +${lc.matQty}</span>
+        ${lc.shard ? `<span class="cs-mat">魂晶 +${lc.shard}</span>` : ''}
+        ${lc.drop ? `<span class="cs-drop">${lc.drop}</span>` : ''}
+      </div>
+    </div>
+    <div class="report-section-title">技能輸出明細</div>
+    <div class="report-skills">${rows || '<span style="color:var(--muted);font-size:11px">本場戰鬥無輸出</span>'}</div>
+  `;
+}
+
+// ============================================================================
+// HUD
+// ============================================================================
+let _craftTab = 'equip';  // 'equip' / 'material'
+function renderCraft() {
+  const root = document.getElementById('tabCraft');
+  if (!root) return;
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (!cs) { root.innerHTML = ''; return; }
+  const st = GAME_STATE.state;
+  const tabs = `
+    <div class="craft-tabs">
+      <button class="${_craftTab === 'equip' ? 'active' : ''}" data-tab="equip">⚔ 裝備製作</button>
+      <button class="${_craftTab === 'material' ? 'active' : ''}" data-tab="material">⚒ 材料升階</button>
+    </div>`;
+
+  let body = '';
+  if (_craftTab === 'equip') {
+    const rows = GAME_DATA.RECIPES.map(rec => {
+      const def = GAME_DATA.findEquipment(rec.target);
+      if (!def) return '';
+      const lvOk = cs.level >= (rec.requiredLv || 0);
+      const goldOk = st.gold >= rec.cost.gold;
+      const matsOk = Object.entries(rec.cost.mats).every(([n, q]) => (st.bag.materials[n] || 0) >= q);
+      const canMake = lvOk && goldOk && matsOk;
+      const matsStr = Object.entries(rec.cost.mats).map(([n, q]) => {
+        const have = st.bag.materials[n] || 0;
+        const ok = have >= q;
+        return `<span class="${ok ? 'ok' : 'no'}">${n} ${have}/${q}</span>`;
+      }).join(' ');
+      return `
+        <div class="craft-row">
+          <div class="craft-info">
+            <div class="craft-name">
+              <span class="bag-item ${def.rarity} cp-clickable" style="display:inline-block;padding:1px 6px;border-width:1px;cursor:pointer" data-preview="${def.id}" title="點擊查看屬性">${def.name}</span>
+              <small>Lv ${rec.requiredLv}+</small>
+            </div>
+            <div class="craft-cost">
+              <span class="${goldOk ? 'ok' : 'no'}">金 ${rec.cost.gold.toLocaleString()}</span>
+              ${matsStr}
+            </div>
+          </div>
+          <button class="primary" data-craft="${rec.id}" ${canMake ? '' : 'disabled'}>製作</button>
+        </div>
+      `;
+    }).filter(Boolean).join('');
+    body = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">用素材製作中低階裝備。UR 裝備僅由「襲擊戰」副本掉落，不可製作。</div>
+      <div class="craft-list">${rows}</div>`;
+  } else {
+    // 材料升階
+    const rows = GAME_DATA.MATERIAL_RECIPES.map(rec => {
+      const lvOk = cs.level >= (rec.requiredLv || 0);
+      const goldOk = st.gold >= rec.gold;
+      const matsOk = Object.entries(rec.from).every(([n, q]) => (st.bag.materials[n] || 0) >= q);
+      const canMake = lvOk && goldOk && matsOk;
+      const fromStr = Object.entries(rec.from).map(([n, q]) => {
+        const have = st.bag.materials[n] || 0;
+        return `<span class="${have >= q ? 'ok' : 'no'}">${n} ${have}/${q}</span>`;
+      }).join(' ');
+      // 計算可以做的最大量（min of available / cost ratio）
+      let maxMake = Math.floor(st.gold / rec.gold);
+      for (const [n, q] of Object.entries(rec.from)) {
+        maxMake = Math.min(maxMake, Math.floor((st.bag.materials[n] || 0) / q));
+      }
+      maxMake = Math.max(0, maxMake);
+      return `
+        <div class="craft-row">
+          <div class="craft-info">
+            <div class="craft-name">${rec.name}<small>Lv ${rec.requiredLv}+</small></div>
+            <div class="craft-cost">
+              <span class="${goldOk ? 'ok' : 'no'}">金 ${rec.gold.toLocaleString()}</span>
+              ${fromStr}
+              <span style="color:var(--accent)">→ ${rec.to} ×${rec.toQty}</span>
+            </div>
+          </div>
+          <div class="craft-buttons" style="display:flex;flex-direction:column;gap:4px">
+            <button class="primary small" data-matcraft="${rec.id}" data-qty="1" ${canMake ? '' : 'disabled'}>合成 ×1</button>
+            ${maxMake >= 10 ? `<button class="ghost small" data-matcraft="${rec.id}" data-qty="10">×10</button>` : ''}
+            ${maxMake >= 50 ? `<button class="ghost small" data-matcraft="${rec.id}" data-qty="${maxMake}">×全部 (${maxMake})</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+    body = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">用多顆低階材料合成 1 顆高階。比率較高（10-12 : 1）但給粗鋼等過剩材料一個出口。<br>夢晶不開放合成，只能襲擊戰拿。</div>
+      <div class="craft-list">${rows}</div>`;
+  }
+
+  root.innerHTML = tabs + body;
+  root.querySelectorAll('.craft-tabs button').forEach(btn => {
+    btn.onclick = () => { _craftTab = btn.dataset.tab; renderCraft(); };
+  });
+  root.querySelectorAll('button[data-craft]').forEach(btn => {
+    btn.onclick = () => doCraft(btn.dataset.craft);
+  });
+  root.querySelectorAll('[data-preview]').forEach(el => {
+    el.onclick = () => showCraftPreview(el.dataset.preview);
+  });
+  root.querySelectorAll('button[data-matcraft]').forEach(btn => {
+    btn.onclick = () => {
+      const qty = parseInt(btn.dataset.qty) || 1;
+      const r = GAME_STATE.craftMaterial(btn.dataset.matcraft, qty);
+      if (r.ok) {
+        toast(`合成 ${r.toName} ×${r.toQty}`, 'gold');
+        renderCraft(); renderBag(); renderHud();
+      } else toast(r.reason, 'error');
+    };
+  });
+}
+
+// ============================================================================
+// 商店 / 藥水欄
+// ============================================================================
+function renderShop() {
+  const root = document.getElementById('tabShop');
+  if (!root) return;
+  const st = GAME_STATE.state;
+  // 分類顯示
+  const sections = [
+    { key: 'hp', title: '生命藥水', desc: '戰鬥中綁定第一槽自動回復' },
+    { key: 'mp', title: '秘力藥水', desc: '戰鬥中綁定第二槽自動回復；MP 用盡技能會跳過' },
+    { key: 'buff', title: '戰鬥藥劑', desc: '綁定第三槽，效果結束時自動再喝' },
+    { key: 'scroll', title: '加成卷軸', desc: '使用後啟動全域 buff（30 分鐘），不需綁定' },
+  ];
+  let html = '';
+  for (const s of sections) {
+    const items = GAME_DATA.POTIONS.filter(p => p.category === s.key);
+    html += `<div class="shop-section">
+      <div class="shop-section-title">${s.title}<span class="shop-section-desc">${s.desc}</span></div>
+      <div class="shop-grid">`;
+    for (const p of items) {
+      const have = (st.bag.potions && st.bag.potions[p.id]) || 0;
+      const goldOk = st.gold >= p.cost.gold;
+      const matsOk = !p.cost.mats || Object.entries(p.cost.mats).every(([n, q]) => (st.bag.materials[n] || 0) >= q);
+      const ok = goldOk && matsOk;
+      const matsStr = p.cost.mats ? Object.entries(p.cost.mats).map(([n, q]) => {
+        const h = st.bag.materials[n] || 0;
+        return `<span class="${h >= q ? 'ok' : 'no'}">${n} ${h}/${q}</span>`;
+      }).join(' ') : '';
+      html += `<div class="shop-row ${ok ? '' : 'locked'}">
+        <div class="shop-info">
+          <div class="shop-name bag-item ${p.rarity}" style="display:inline-block;padding:1px 6px">${p.name}</div>
+          <span style="color:var(--muted);font-size:10px;margin-left:6px">持有 ${have}</span>
+          <div class="shop-desc">${p.desc}</div>
+          <div class="shop-cost"><span class="${goldOk ? 'ok' : 'no'}">金 ${p.cost.gold.toLocaleString()}</span> ${matsStr}</div>
+        </div>
+        <div class="shop-buy">
+          <button class="primary" data-buy="${p.id}" data-qty="1" ${ok ? '' : 'disabled'}>買 ×1</button>
+          <button class="ghost" data-buy="${p.id}" data-qty="10" ${ok ? '' : 'disabled'}>×10</button>
+        </div>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+  // ===== 魂晶兌換 =====
+  html += `<div class="shop-section">
+    <div class="shop-section-title">魂晶兌換<span class="shop-section-desc">用魂晶（目前 <b style="color:var(--shard)">${st.shard}</b>）換稀有材料/寶石/重抽券</span></div>
+    <div class="shop-grid">`;
+  for (const ex of GAME_DATA.SHARD_EXCHANGE) {
+    const ok = st.shard >= ex.cost;
+    html += `<div class="shop-row ${ok ? '' : 'locked'}">
+      <div class="shop-info">
+        <div class="shop-name" style="color:var(--shard)">${ex.name}</div>
+        <div class="shop-desc">${ex.desc}</div>
+        <div class="shop-cost"><span class="${ok ? 'ok' : 'no'}">魂晶 ${ex.cost}</span></div>
+      </div>
+      <div class="shop-buy">
+        <button class="primary" data-exchange="${ex.id}" ${ok ? '' : 'disabled'}>兌換</button>
+      </div>
+    </div>`;
+  }
+  html += '</div></div>';
+  root.innerHTML = html;
+  root.querySelectorAll('button[data-buy]').forEach(b => {
+    b.onclick = () => {
+      const r = GAME_STATE.buyPotion(b.dataset.buy, parseInt(b.dataset.qty));
+      if (r.ok) {
+        const p = GAME_DATA.findPotion(b.dataset.buy);
+        toast(`購得 ${p.name} ×${b.dataset.qty}`, 'gold');
+        renderShop(); renderHud(); renderBag();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
+  });
+  root.querySelectorAll('button[data-exchange]').forEach(b => {
+    b.onclick = () => {
+      const r = GAME_STATE.exchangeShard(b.dataset.exchange);
+      if (r.ok) {
+        toast(`兌換 ${r.label}（-${r.costShard} 魂晶）`, 'gold');
+        renderShop(); renderHud(); renderBag();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
+  });
+}
+
+// 玩家當前生效的 buff（戰鬥用：藥水 + 技能）+ 全域 buff（卷軸）
+function renderActiveBuffs() {
+  const root = document.getElementById('playerBuffs');
+  if (!root) return;
+  const list = [];
+
+  // 戰鬥 buff（技能 / 藥水）
+  if (window.BATTLE && BATTLE.buffs && BATTLE.buffs.length) {
+    for (const b of BATTLE.buffs) {
+      if (b.dur <= 0) continue;
+      const isPotion = !!b._potionId;
+      const isSkill = !!b._skillId;
+      let name = b._name || (isPotion ? '藥水' : '技能');
+      let kind = isPotion ? 'potion' : 'skill';
+      // 推估效果類型（決定顏色）
+      let effTag = '';
+      if (b.atk) { effTag = `atk +${Math.round(b.atk * 100)}%`; }
+      else if (b.crit) { effTag = `crit +${Math.round(b.crit * 100)}%`; }
+      else if (b.spdMul) { effTag = `spd +${Math.round(b.spdMul * 100)}%`; }
+      else if (b.dmgReduce) { effTag = `減傷 +${Math.round(b.dmgReduce * 100)}%`; }
+      list.push({
+        name, kind, effTag,
+        remain: b.dur,
+        max: b._maxDur || (isPotion ? (GAME_DATA.findPotion(b._potionId)?.duration || b.dur) : b.dur),
+      });
+    }
+  }
+
+  // 召喚物（持續傷害）
+  if (window.BATTLE && BATTLE.summons && BATTLE.summons.length) {
+    for (const s of BATTLE.summons) {
+      if (s.dur <= 0) continue;
+      list.push({
+        name: '🦊 ' + (s._name || '召喚物'),
+        kind: 'summon',
+        effTag: `每 0.8s 攻擊一次`,
+        remain: s.dur,
+        max: s._maxDur || s.dur,
+      });
+    }
+  }
+  // DoT（持續傷害）
+  if (window.BATTLE && BATTLE.dots && BATTLE.dots.length) {
+    for (const d of BATTLE.dots) {
+      if (d.dur <= 0) continue;
+      list.push({
+        name: '🔥 ' + (d._name || 'DoT'),
+        kind: 'dot',
+        effTag: `每 0.5s 持續傷害`,
+        remain: d.dur,
+        max: d._maxDur || d.dur,
+      });
+    }
+  }
+
+  // 全域 buff（卷軸類）
+  const gbs = (GAME_STATE.state.globalBuffs || []).filter(x => x.expiresAt > Date.now());
+  for (const g of gbs) {
+    const p = GAME_DATA.findPotion(g.potionId);
+    if (!p) continue;
+    list.push({
+      name: p.name,
+      kind: 'global',
+      effTag: p.desc.split('，')[0],
+      remain: Math.max(0, (g.expiresAt - Date.now()) / 1000),
+      max: p.duration,
+    });
+  }
+
+  if (!list.length) { root.innerHTML = ''; return; }
+
+  root.innerHTML = list.map(b => {
+    const pct = b.max > 0 ? Math.max(0, Math.min(100, (b.remain / b.max) * 100)) : 0;
+    const min = Math.floor(b.remain / 60);
+    const sec = Math.floor(b.remain % 60);
+    const timeStr = min > 0 ? `${min}:${sec.toString().padStart(2,'0')}` : `${b.remain.toFixed(1)}s`;
+    return `<div class="buff-chip buff-${b.kind}">
+      <div class="buff-chip-name">${b.name}</div>
+      <div class="buff-chip-eff">${b.effTag}</div>
+      <div class="buff-chip-time">${timeStr}</div>
+      <div class="buff-chip-bar"><div class="buff-chip-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderPotionSlotBar() {
+  const root = document.getElementById('potionSlotBar');
+  if (!root) return;
+  const st = GAME_STATE.state;
+  const cs = st.characters[st.activeCharId];
+  if (!cs || !cs.potionSlots) { root.innerHTML = ''; root._pslotKey = ''; return; }
+
+  const slotLabels = ['HP 自動', 'MP 自動', 'Buff 自動'];
+  const slotIcons = ['❤', '✦', '⚡'];
+  const cds = (window.BATTLE && BATTLE.potionCDs) || {};
+
+  // ===== 計算「結構級」的 key，只有這個變了才整批 rebuild =====
+  // 結構變動 = 槽位綁定變了 / 存量變了 / global buff list 變了
+  const gbs = (st.globalBuffs || []).filter(b => b.expiresAt > Date.now());
+  const structKey = cs.potionSlots.map((s, i) => {
+    const pid = s.potionId;
+    const have = pid ? ((st.bag.potions && st.bag.potions[pid]) || 0) : 0;
+    return `${pid || '_'}|${have}|${s.threshold}`;
+  }).join('||') + '/' + gbs.map(g => g.potionId).join(',');
+
+  if (root._pslotKey !== structKey) {
+    root._pslotKey = structKey;
+    // 整批 rebuild
+    let html = '';
+    for (let i = 0; i < 3; i++) {
+      const slot = cs.potionSlots[i];
+      const pid = slot.potionId;
+      const have = pid ? ((st.bag.potions && st.bag.potions[pid]) || 0) : 0;
+      const p = pid ? GAME_DATA.findPotion(pid) : null;
+      const thresholdText = (i < 2 && pid) ? `≤${Math.round(slot.threshold * 100)}%` : '';
+      html += `<button type="button" class="potion-slot ${pid ? 'filled' : 'empty'}" data-pslot="${i}" onclick="openPotionConfig(${i})">
+        <div class="pslot-icon">${slotIcons[i]}</div>
+        <div class="pslot-info">
+          <div class="pslot-label">${slotLabels[i]} ${thresholdText}</div>
+          <div class="pslot-name">${p ? p.name : '（未綁定）'}</div>
+          <div class="pslot-qty">${pid ? `存量 ${have}` : '點擊綁定藥水'}</div>
+        </div>
+        <div class="pslot-cd-overlay" data-cd-overlay style="display:none"><span></span></div>
+        <div class="pslot-cd-bar" data-cd-bar style="height:0"></div>
+      </button>`;
+    }
+    if (gbs.length) {
+      const list = gbs.map(b => {
+        const p = GAME_DATA.findPotion(b.potionId);
+        return `<span class="global-buff-chip" data-pid="${b.potionId}">${p ? p.name : b.potionId} <b data-rem></b></span>`;
+      }).join('');
+      html += `<div class="global-buff-row">${list}</div>`;
+    }
+    root.innerHTML = html;
+    // 點擊由 button 的 inline onclick 處理，不再用 event delegation 避免重複觸發
+  }
+
+  // ===== 每幀只更新 CD 倒數與 buff 時間，不動 button DOM =====
+  for (let i = 0; i < 3; i++) {
+    const btn = root.querySelector(`button[data-pslot="${i}"]`);
+    if (!btn) continue;
+    const cdRemain = cds[i] || 0;
+    const slot = cs.potionSlots[i];
+    const pid = slot.potionId;
+    const p = pid ? GAME_DATA.findPotion(pid) : null;
+    const baseCD = p ? (p.cd || (p.type === 'buff' && p.kind === 'combat' ? p.duration : 0)) : 0;
+    const cdPct = baseCD > 0 ? Math.min(100, (cdRemain / baseCD) * 100) : 0;
+    const overlay = btn.querySelector('[data-cd-overlay]');
+    const bar = btn.querySelector('[data-cd-bar]');
+    if (cdRemain > 0) {
+      btn.classList.add('cooling');
+      if (overlay) { overlay.style.display = 'flex'; overlay.querySelector('span').textContent = cdRemain.toFixed(1) + 's'; }
+      if (bar) bar.style.height = cdPct + '%';
+    } else {
+      btn.classList.remove('cooling');
+      if (overlay) overlay.style.display = 'none';
+      if (bar) bar.style.height = '0';
+    }
+  }
+  // 全域 buff 倒數
+  root.querySelectorAll('.global-buff-chip').forEach(chip => {
+    const pid = chip.dataset.pid;
+    const gb = gbs.find(g => g.potionId === pid);
+    if (!gb) return;
+    const remain = Math.max(0, Math.floor((gb.expiresAt - Date.now()) / 1000));
+    const min = Math.floor(remain / 60);
+    const sec = remain % 60;
+    const b = chip.querySelector('[data-rem]');
+    if (b) b.textContent = `${min}:${sec.toString().padStart(2,'0')}`;
+  });
+}
+
+window.openPotionConfig = function openPotionConfig(slotIdx) {
+  console.log('[potion] openPotionConfig called for slot', slotIdx);
+  window._configSlotIdx = slotIdx;
+  const win = document.getElementById('winPotionConfig');
+  if (!win) { console.error('[potion] winPotionConfig DOM 不存在！'); return; }
+  // 完全用 inline style 強制顯示，bypass .hidden 邏輯
+  win.classList.remove('hidden');
+  win.style.display = 'flex';
+  win.style.visibility = 'visible';
+  win.style.opacity = '1';
+  // 視窗大小與置中
+  const vw = window.innerWidth || 1280;
+  const vh = window.innerHeight || 800;
+  win.style.left = Math.max(20, Math.floor((vw - 420) / 2)) + 'px';
+  win.style.top  = Math.max(20, Math.floor(vh * 0.15)) + 'px';
+  win.style.width = '420px';
+  win.style.zIndex = '9999';
+  // 也清掉 max-height 防止內容被截
+  win.style.maxHeight = '70vh';
+  // toast 確認
+  if (typeof toast === 'function') toast(`已開啟藥水欄 #${slotIdx + 1} 設定`, 'gold');
+  // 渲染內容
+  renderPotionConfig();
+  console.log('[potion] window 狀態：', { display: win.style.display, left: win.style.left, top: win.style.top, classList: win.className });
+};
+
+// 關閉藥水設定的覆寫版本（清掉 inline display:flex）
+window.closePotionConfig = function() {
+  const win = document.getElementById('winPotionConfig');
+  if (!win) return;
+  win.style.display = 'none';
+  win.classList.add('hidden');
+};
+
+function renderPotionConfig() {
+  const root = document.getElementById('tabPotionConfig');
+  if (!root) return;
+  const slotIdx = window._configSlotIdx || 0;
+  const st = GAME_STATE.state;
+  const cs = st.characters[st.activeCharId];
+  if (!cs || !cs.potionSlots) { root.innerHTML = ''; return; }
+  const slot = cs.potionSlots[slotIdx];
+  const slotLabels = ['HP 自動回復', 'MP 自動回復', 'Buff 自動使用'];
+
+  // 此槽接受的類別
+  const acceptedTypes = slotIdx === 0 ? ['hp_heal'] : slotIdx === 1 ? ['mp_heal'] : ['buff'];
+  const owned = Object.entries(st.bag.potions || {}).filter(([, q]) => q > 0)
+    .map(([id, q]) => ({ id, q, p: GAME_DATA.findPotion(id) }))
+    .filter(o => o.p && acceptedTypes.includes(o.p.type) && (slotIdx !== 2 || o.p.kind === 'combat'));
+
+  let thresholdControl = '';
+  if (slotIdx < 2) {
+    const pct = Math.round((slot.threshold || 0) * 100);
+    thresholdControl = `<div class="pcfg-section">
+      <div class="pcfg-label">觸發條件：當前 ${slotIdx === 0 ? 'HP' : 'MP'} ≤ <b id="cfgThVal">${pct}</b>%</div>
+      <input type="range" min="10" max="90" step="5" value="${pct}" id="cfgThresholdSlider" style="width:100%">
+    </div>`;
+  } else {
+    thresholdControl = `<div class="pcfg-section" style="font-size:11px;color:var(--muted)">Buff 槽：當綁定藥水的持續時間結束時，會自動再喝一瓶。</div>`;
+  }
+
+  let listHtml;
+  if (!owned.length) {
+    listHtml = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">背包無可用藥水，請至商店購買。</div>';
+  } else {
+    listHtml = owned.map(o => {
+      const isCur = slot.potionId === o.id;
+      return `<div class="pcfg-row ${isCur ? 'current' : ''}" data-bind="${o.id}">
+        <div class="pcfg-row-info">
+          <span class="bag-item ${o.p.rarity}" style="display:inline-block;padding:1px 6px">${o.p.name}</span>
+          <span style="color:var(--muted);font-size:11px">×${o.q}</span>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${o.p.desc}</div>
+        </div>
+        <button class="${isCur ? 'danger' : 'primary'}" data-bindid="${o.id}">${isCur ? '解除' : '綁定'}</button>
+      </div>`;
+    }).join('');
+  }
+
+  root.innerHTML = `
+    <div class="pcfg-title">${slotLabels[slotIdx]}</div>
+    ${thresholdControl}
+    <div class="pcfg-section">
+      <div class="pcfg-label">選擇藥水：</div>
+      <div class="pcfg-list">${listHtml}</div>
+    </div>
+  `;
+  // bind
+  root.querySelectorAll('button[data-bindid]').forEach(b => {
+    b.onclick = () => {
+      const cur = slot.potionId;
+      const tgt = b.dataset.bindid;
+      GAME_STATE.setPotionSlot(st.activeCharId, slotIdx, cur === tgt ? null : tgt);
+      renderPotionConfig(); renderPotionSlotBar();
+    };
+  });
+  const slider = document.getElementById('cfgThresholdSlider');
+  if (slider) {
+    slider.oninput = () => {
+      const v = parseInt(slider.value) / 100;
+      GAME_STATE.setPotionThreshold(st.activeCharId, slotIdx, v);
+      document.getElementById('cfgThVal').textContent = slider.value;
+      renderPotionSlotBar();
+    };
+  }
+}
+
+function doCraft(recipeId) {
+  const rec = GAME_DATA.findRecipe(recipeId);
+  if (!rec) return;
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (cs.level < (rec.requiredLv || 0)) return toast(`需要 Lv ${rec.requiredLv}`, 'error');
+  if (GAME_STATE.state.gold < rec.cost.gold) return toast('金幣不足', 'error');
+  for (const [n, q] of Object.entries(rec.cost.mats)) {
+    if ((GAME_STATE.state.bag.materials[n] || 0) < q) return toast(`${n} 不足`, 'error');
+  }
+  // 扣費 + 產生 instance
+  GAME_STATE.gainGold(-rec.cost.gold);
+  for (const [n, q] of Object.entries(rec.cost.mats)) GAME_STATE.consumeMaterial(n, q);
+  const instId = GAME_STATE.createEquipInstance(rec.target, true);
+  const def = GAME_DATA.findEquipment(rec.target);
+  toast(`製作完成：${def.name}`, 'gold');
+  renderCraft();
+  renderBag();
+  renderHud();
+}
+
+function renderResonance() {
+  const root = document.getElementById('tabResonance');
+  if (!root) return;
+  const st = GAME_STATE.state;
+  if (!st.resonanceUnlocked) {
+    root.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">需要任一角色到 99 級畢業才能解鎖共鳴。</div>';
+    return;
+  }
+  const pts = st.resonancePoints || {};
+  const unspent = GAME_STATE.getResonanceUnspent();
+  const stats = [
+    { key: 'atk',       name: '攻擊',    delta: '+2.5 / 點' },
+    { key: 'def',       name: '防禦',    delta: '+1.5 / 點' },
+    { key: 'hp',        name: '生命',    delta: '+30 / 點' },
+    { key: 'crit',      name: '暴擊',    delta: '+0.5% / 點' },
+    { key: 'critDmg',   name: '暴傷',    delta: '+2% / 點' },
+    { key: 'spd',       name: '速度',    delta: '+1% / 點' },
+    { key: 'dmgReduce', name: '減傷',    delta: '+0.5% / 點' },
+    { key: 'cdReduce',  name: 'CD 縮減', delta: '+0.5% / 點（總值 ≤ 50%）' },
+    { key: 'vsBoss',    name: '對 BOSS', delta: '+1% / 點' },
+    { key: 'skillDmg',  name: '技能傷害',delta: '+0.5% / 點' },
+    { key: 'maxMp',     name: 'MP 上限', delta: '+10 / 點' },
+  ];
+  const rows = stats.map(s => {
+    const cur = pts[s.key] || 0;
+    const cap = GAME_STATE.getResonanceCap(s.key);
+    const isCapped = Number.isFinite(cap) && cur >= cap;
+    const canAdd1 = unspent > 0 && !isCapped;
+    const canAdd10 = unspent >= 10 && (!Number.isFinite(cap) || cur + 10 <= cap);
+    const capLabel = Number.isFinite(cap)
+      ? `<small class="reson-cap">${cur} / ${cap}</small>`
+      : `<small class="reson-cap reson-cap-inf">${cur} ∞</small>`;
+    return `
+      <div class="reson-row ${isCapped ? 'capped' : ''}">
+        <div class="reson-name">${s.name}<small>${s.delta}</small></div>
+        <div class="reson-count">${capLabel}</div>
+        <button class="primary" data-alloc="${s.key}" ${canAdd1 ? '' : 'disabled'}>＋</button>
+        <button class="primary" data-alloc="${s.key}" data-amt="10" ${canAdd10 ? '' : 'disabled'}>+10</button>
+      </div>
+    `;
+  }).join('');
+  root.innerHTML = `
+    <div class="reson-header">
+      <div>共鳴等級 <b style="color:var(--gold);font-size:18px">R${st.resonance}</b></div>
+      <div>可分配點數 <b style="color:var(--accent);font-size:18px">${unspent}</b></div>
+      <button class="ghost" id="btnResonReset">重置</button>
+    </div>
+    <div class="reson-list">${rows}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">每提升 1 共鳴等級給 1 點。可重置免費（不消耗）。全角色共享。</div>
+  `;
+  root.querySelectorAll('button[data-alloc]').forEach(btn => {
+    btn.onclick = () => {
+      const stat = btn.dataset.alloc;
+      const amt = parseInt(btn.dataset.amt || '1');
+      if (GAME_STATE.allocateResonance(stat, amt)) {
+        renderResonance(); renderHud(); renderCharDetail(); renderCharList();
+      }
+    };
+  });
+  const btnReset = document.getElementById('btnResonReset');
+  if (btnReset) btnReset.onclick = () => {
+    if (confirm('重置共鳴點數？所有分配點數會收回。')) {
+      GAME_STATE.resetResonance();
+      renderResonance(); renderHud(); renderCharDetail(); renderCharList();
+    }
+  };
+}
+
+function renderEquipDetail(instId) {
+  const root = document.getElementById('tabEquip');
+  if (!root) return;
+  const inst = GAME_STATE.state.bag.equipment[instId];
+  if (!inst) { root.innerHTML = '<div style="color:var(--muted)">無</div>'; return; }
+  const def = GAME_DATA.findEquipment(inst.itemId);
+  if (!def) return;
+  const forge = inst.forge || 0;
+  const fmult = GAME_DATA.forgeMultiplier(forge);
+  // 白值 base stats
+  const baseRows = Object.entries(def.stats).map(([k, v]) => {
+    const isPct = (k === 'crit' || k === 'spd' || k === 'critDmg' || k === 'dmgReduce');
+    const final = isPct ? v : v * fmult;
+    const display = isPct ? `+${(final * 100).toFixed(1)}%` : `+${Math.floor(final)}`;
+    const names = { atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊', critDmg: '暴傷', spd: '速度', dmgReduce: '減傷' };
+    return `<div class="eq-row"><span>${names[k] || k}</span><b>${display}</b></div>`;
+  }).join('');
+  // 固定效果
+  let fixedHtml = '<div class="eq-empty">無</div>';
+  if (def.fixed) {
+    const effList = Object.entries(def.fixed.effect || {}).map(([k, raw]) => {
+      const v = GAME_DATA.resolveFixedValue(raw, forge);
+      const names = { atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊', critDmg: '暴傷', spd: '速度', dmgReduce: '減傷', cdReduce: 'CD減', vsBoss: '對 BOSS', allMul: '所有屬性' };
+      const isPct = (k === 'crit' || k === 'spd' || k === 'critDmg' || k === 'dmgReduce' || k === 'cdReduce' || k === 'vsBoss' || k === 'allMul');
+      const display = isPct ? `+${(v * 100).toFixed(1)}%` : `+${Math.floor(v)}`;
+      return `<div class="eq-row"><span>${names[k] || k}</span><b style="color:var(--gold)">${display}</b></div>`;
+    }).join('');
+    fixedHtml = `<div style="color:var(--accent);font-weight:600;margin-bottom:4px;font-size:12px">${def.fixed.label}</div>${effList}`;
+  }
+  // 隨機詞綴（用全域 helper 統一格式）
+  const affixHtml = inst.affixes && inst.affixes.length
+    ? inst.affixes.map(a => {
+        const f = formatAffix(a);
+        return `<div class="eq-row"><span>${f.label}</span><b style="color:var(--shard)">+${f.value}</b></div>`;
+      }).join('')
+    : '<div class="eq-empty">無</div>';
+  // 鑲嵌孔
+  const socketCount = GAME_DATA.socketsForRarity(def.rarity);
+  if (!inst.sockets) inst.sockets = new Array(socketCount).fill(null);
+  let socketHtml;
+  if (socketCount === 0) {
+    socketHtml = '<div class="eq-empty">此稀有度無鑲嵌孔</div>';
+  } else {
+    // stat 簡寫對應
+    const STAT_CHAR = { atk: '攻', def: '防', hp: '生', crit: '暴', spd: '速', critDmg: '傷', dmgReduce: '盾' };
+    const STAT_NAME = { atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊率', spd: '速度', critDmg: '暴擊傷害', dmgReduce: '減傷' };
+    socketHtml = '<div class="socket-row">';
+    const totals = {};  // 鑲嵌總和 { stat: { value, pct } }
+    for (let i = 0; i < socketCount; i++) {
+      const gemId = inst.sockets[i];
+      if (gemId) {
+        const gem = GAME_DATA.findGem(gemId);
+        const ch = gem ? (STAT_CHAR[gem.stat] || '?') : '?';
+        const tier = gem ? gem.tier : 0;
+        const rarity = gem ? gem.rarity : 'N';
+        const valStr = gem ? (gem.pct ? `+${(gem.value * 100).toFixed(1)}%` : `+${gem.value}`) : '';
+        const tip = gem ? `${gem.name} ${valStr}（點擊取下並銷毀）` : '';
+        socketHtml += `<div class="socket filled rarity-${rarity}" data-inst="${instId}" data-slot="${i}" data-action="unsocket" title="${tip}">
+          <span class="socket-stat">${ch}</span>
+          <span class="socket-tier">T${tier}</span>
+        </div>`;
+        if (gem) {
+          if (!totals[gem.stat]) totals[gem.stat] = { value: 0, pct: gem.pct };
+          totals[gem.stat].value += gem.value;
+        }
+      } else {
+        socketHtml += `<div class="socket empty" data-inst="${instId}" data-slot="${i}" data-action="socket" title="點擊嵌入魔法石">+</div>`;
+      }
+    }
+    socketHtml += '</div>';
+    // 鑲嵌總和顯示
+    const totalEntries = Object.entries(totals);
+    if (totalEntries.length > 0) {
+      const lines = totalEntries.map(([stat, info]) => {
+        const display = info.pct ? `+${(info.value * 100).toFixed(1)}%` : `+${Math.floor(info.value)}`;
+        return `<span class="socket-total-item"><span class="socket-total-stat">${STAT_NAME[stat] || stat}</span> <span class="socket-total-val">${display}</span></span>`;
+      }).join('');
+      socketHtml += `<div class="socket-totals"><div class="socket-totals-label">鑲嵌加成</div><div class="socket-totals-body">${lines}</div></div>`;
+    }
+    socketHtml += '<div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">點擊空孔嵌入魔法石。<span style="color:var(--hp-enemy)">★ 取下會直接銷毀，無法回收！</span></div>';
+    socketHtml += `<div id="gemPicker_${instId}" class="gem-picker hidden"></div>`;
+  }
+
+  // 套裝
+  let setHtml = '';
+  if (def.setId) {
+    const setDef = GAME_DATA.findSet(def.setId);
+    if (setDef) {
+      const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+      const counts = cs ? GAME_DATA.countSetPieces(cs) : {};
+      const n = counts[def.setId] || 0;
+      setHtml = `<div class="eq-section">
+        <div class="eq-section-title" style="color:${setDef.color}">套裝：${setDef.name} (${n}/5)</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${setDef.tagline}</div>`;
+      for (const b of setDef.bonuses) {
+        const active = n >= b.pieces;
+        setHtml += `<div class="set-bonus ${active ? 'active' : 'inactive'}">${active ? '✓' : '–'} ${b.label}</div>`;
+      }
+      setHtml += '</div>';
+    }
+  }
+
+  const tokens = GAME_STATE.state.bag.rerollTokens || 0;
+  const canReroll = def.rarity !== 'N' && inst.affixes && inst.affixes.length > 0;
+  const rerollBtn = canReroll
+    ? `<button class="ghost small" data-reroll="${instId}" ${tokens > 0 ? '' : 'disabled'}>重抽詞綴（券 ×${tokens}）</button>`
+    : '';
+  root.innerHTML = `
+    <div class="eq-header">
+      <div class="eq-name bag-item ${def.rarity}" style="display:inline-block;padding:2px 8px">${def.name}</div>
+      <span style="margin-left:6px;color:var(--muted);font-size:11px">${GAME_DATA.SLOT_LABELS[def.slot]} · ${def.rarity}${forge ? ' +' + forge : ''}</span>
+    </div>
+    <div class="eq-section"><div class="eq-section-title">基礎屬性（白值，依強化提升）</div>${baseRows}</div>
+    <div class="eq-section"><div class="eq-section-title">固定效果</div>${fixedHtml}</div>
+    <div class="eq-section"><div class="eq-section-title">隨機詞綴 ${rerollBtn}</div>${affixHtml}</div>
+    <div class="eq-section"><div class="eq-section-title">鑲嵌 (${socketCount} 孔)</div>${socketHtml}</div>
+    ${setHtml}
+  `;
+  // 重抽詞綴按鈕
+  const rerollBtnEl = root.querySelector('button[data-reroll]');
+  if (rerollBtnEl) {
+    rerollBtnEl.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm('消耗 1 張重抽券，重新隨機所有詞綴？')) return;
+      const r = GAME_STATE.rerollAffixes(instId);
+      if (r.ok) {
+        toast(`${r.name} 詞綴已重抽`, 'gold');
+        renderEquipDetail(instId); renderBag(); renderHud();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
+  }
+
+  // 綁定 socket 點擊事件
+  root.querySelectorAll('.socket[data-action]').forEach(el => {
+    el.onclick = () => {
+      const slotIdx = parseInt(el.dataset.slot);
+      const action = el.dataset.action;
+      if (action === 'unsocket') {
+        // 兩段式確認：第一次點顯示警告，3 秒內再點同個孔才真的銷毀
+        const key = `${instId}#${slotIdx}`;
+        if (window._pendingUnsocket === key) {
+          // 第二次點擊：執行銷毀
+          clearTimeout(window._pendingUnsocketTimer);
+          window._pendingUnsocket = null;
+          const r = GAME_STATE.unsocketGem(instId, slotIdx);
+          if (r && r.ok) {
+            toast('魔法石已銷毀', 'error');
+            renderEquipDetail(instId); renderBag(); renderHud();
+          } else if (r && r.reason) {
+            toast(r.reason, 'error');
+          }
+        } else {
+          // 第一次點擊：標記、變色提示
+          window._pendingUnsocket = key;
+          el.classList.add('unsocket-pending');
+          const gemId = GAME_STATE.state.bag.equipment[instId]?.sockets?.[slotIdx];
+          const gem = gemId ? GAME_DATA.findGem(gemId) : null;
+          const name = gem ? gem.name : '魔法石';
+          toast(`⚠ 再點一次以銷毀「${name}」（3 秒內）`, 'error');
+          // 3 秒後自動取消
+          if (window._pendingUnsocketTimer) clearTimeout(window._pendingUnsocketTimer);
+          window._pendingUnsocketTimer = setTimeout(() => {
+            window._pendingUnsocket = null;
+            document.querySelectorAll('.socket.unsocket-pending').forEach(s => s.classList.remove('unsocket-pending'));
+          }, 3000);
+        }
+      } else {
+        openGemPicker(instId, slotIdx);
+      }
+    };
+  });
+}
+
+function openGemPicker(instId, slotIdx) {
+  const root = document.getElementById('gemPicker_' + instId);
+  if (!root) return;
+  const gems = GAME_STATE.state.bag.gems || {};
+  const owned = Object.entries(gems).filter(([id, q]) => q > 0);
+  if (!owned.length) {
+    root.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px;text-align:center">背包無魔法石。請至特殊副本（強化試煉）或襲擊戰取得。</div>';
+    root.classList.remove('hidden');
+    return;
+  }
+  root.innerHTML = '<div class="gem-picker-title">選擇要嵌入的魔法石：</div>' +
+    owned.map(([id, qty]) => {
+      const g = GAME_DATA.findGem(id);
+      if (!g) return '';
+      const isPct = (g.stat === 'crit' || g.stat === 'spd' || g.stat === 'critDmg');
+      const valDisp = isPct ? `+${(g.value * 100).toFixed(1)}%` : `+${g.value}`;
+      const statName = { atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊', spd: '速度' }[g.stat] || g.stat;
+      return `<div class="gem-pick-row" data-gem="${id}">
+        <span class="bag-item ${g.rarity}" style="display:inline-block;padding:1px 6px">${g.name}</span>
+        <span style="color:var(--muted);font-size:11px">${statName} ${valDisp}</span>
+        <span style="color:var(--text);font-size:11px">×${qty}</span>
+        <button class="primary" data-gemid="${id}">嵌入</button>
+      </div>`;
+    }).join('') +
+    '<button class="ghost" data-cancel="1" style="margin-top:6px;width:100%">取消</button>';
+  root.classList.remove('hidden');
+  root.querySelectorAll('button[data-gemid]').forEach(b => {
+    b.onclick = () => {
+      const gid = b.dataset.gemid;
+      if (GAME_STATE.socketGem(instId, slotIdx, gid)) {
+        toast('鑲嵌成功', 'gold');
+        renderEquipDetail(instId); renderBag(); renderHud();
+      } else {
+        toast('鑲嵌失敗', 'error');
+      }
+    };
+  });
+  const cancel = root.querySelector('button[data-cancel]');
+  if (cancel) cancel.onclick = () => root.classList.add('hidden');
+}
+
+window.showRaidPreview = function(dungeonId) {
+  const d = GAME_DATA.getDungeon(dungeonId);
+  if (!d) return;
+  const win = document.getElementById('winRaidPreview');
+  const body = document.getElementById('tabRaidPreview');
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  const myCP = cs ? GAME_STATE.combatPower(cs.id) : 0;
+  const lvOk = !d.requiredLv || (cs && cs.level >= d.requiredLv);
+  const cpRatio = myCP / d.cp;
+  // 戰力評估
+  let assessment, assessClass;
+  if (cpRatio >= 1.5) { assessment = '戰力遠超 BOSS，勝券在握'; assessClass = 'safe'; }
+  else if (cpRatio >= 1.0) { assessment = '戰力足以挑戰'; assessClass = 'ok'; }
+  else if (cpRatio >= 0.6) { assessment = '戰力略遜，需精打細算'; assessClass = 'warn'; }
+  else { assessment = '戰力嚴重不足，凶多吉少'; assessClass = 'danger'; }
+
+  const lore = (d.lore || []).map(l => l === '' ? '<br>' : `<p>${l}</p>`).join('');
+  const rewards = (d.rewards || []).map(r => `
+    <div class="raid-reward-row">
+      <span class="raid-reward-label">${r.label}</span>
+      <span class="raid-reward-value" style="color:${r.color || 'var(--text)'}">${r.value}</span>
+    </div>
+  `).join('');
+
+  // ===== 多人連線狀態 =====
+  const mpConnected = window.MP_API && MP_API.isConnected();
+  const mpHost = mpConnected && MP_API.isHost();
+  const mpGuest = mpConnected && MP_API.isGuest();
+  const mpPlayers = mpConnected ? Object.values(MP_API.getPlayers()) : [];
+  let mpHtml = '';
+  if (mpConnected) {
+    const myNick = GAME_STATE.getPlayerNickname() || '我';
+    const teamList = [
+      `<li class="raid-team-row${mpHost ? ' host' : ''}"><b>${myNick}</b> <small>（你）</small> ${mpHost ? '<span class="raid-tag-host">HOST</span>' : '<span class="raid-tag-guest">GUEST</span>'}</li>`,
+      ...mpPlayers.map(p => `<li class="raid-team-row${p.peerId === MP.hostId ? ' host' : ''}"><b>${p.nickname || '無名旅人'}</b> <small>${p.charName || ''} Lv ${p.level || 1}</small> ${p.peerId === MP.hostId ? '<span class="raid-tag-host">HOST</span>' : '<span class="raid-tag-guest">GUEST</span>'}</li>`)
+    ].join('');
+    const teamCP = (myCP + mpPlayers.reduce((s, p) => s + (p.cp || 0), 0)).toLocaleString();
+    mpHtml = `
+      <div class="raid-section-title" style="color:#5fa8ff">⛺ 隊伍（${mpPlayers.length + 1} 人 · 總戰力 ${teamCP}）</div>
+      <ul class="raid-team-list">${teamList}</ul>
+      ${mpHost
+        ? '<div class="raid-mp-note host">你是房主。點「進入戰鬥」會自動帶朋友一起進。</div>'
+        : '<div class="raid-mp-note guest">等待房主開戰 — Guest 無法主動進入。</div>'}
+    `;
+  } else {
+    mpHtml = `
+      <div class="raid-mp-note solo">＊ 想揪朋友一起打？開「多人」視窗建房 / 加房後再回來。</div>
+    `;
+  }
+
+  body.innerHTML = `
+    <div class="raid-preview">
+      <div class="raid-boss-portrait">
+        <img src="${d.bossPortrait || ''}" alt="${d.boss}" onerror="this.style.display='none'">
+      </div>
+      <div class="raid-info">
+        <div class="raid-title">${d.name}</div>
+        <div class="raid-subtitle">CP ${d.cp.toLocaleString()} · 難度 ×${d.difficultyMul || 1} · 需畢業 Lv ${d.requiredLv}</div>
+        <div class="raid-lore">${lore}</div>
+        ${d.warning ? `<div class="raid-warning">⚠ ${d.warning}</div>` : ''}
+        <div class="raid-section-title">通關獎勵</div>
+        <div class="raid-rewards">${rewards}</div>
+        <div class="raid-section-title">戰力評估</div>
+        <div class="raid-assessment ${assessClass}">
+          <div>你的戰力：<b>${myCP.toLocaleString()}</b> vs BOSS <b>${d.cp.toLocaleString()}</b> (${(cpRatio * 100).toFixed(0)}%)</div>
+          <div style="margin-top:4px">${assessment}</div>
+        </div>
+        ${mpHtml}
+        <div class="raid-actions">
+          <button class="primary big raid-start" data-raid-start="${d.id}" ${(lvOk && !mpGuest) ? '' : 'disabled'}>
+            ${mpHost ? `⚔ 進入戰鬥（揪 ${mpPlayers.length} 位朋友）` : (mpGuest ? '🕓 等待房主開戰...' : '⚔ 進入戰鬥')}
+          </button>
+          <button class="ghost" data-raid-close>暫不挑戰</button>
+        </div>
+        ${!lvOk ? '<div class="raid-warning">需要先畢業（主線 Lv 99）才能進入</div>' : ''}
+      </div>
+    </div>
+  `;
+  // 顯示視窗
+  win.classList.remove('hidden');
+  win.style.display = 'flex';
+  win.style.visibility = 'visible';
+  win.style.opacity = '1';
+  win.style.left = '460px';
+  win.style.top = '60px';
+  win.style.width = '540px';
+  win.style.zIndex = '9999';
+  bringWindowToFront(win);
+  win.classList.add('flash-open');
+  setTimeout(() => win.classList.remove('flash-open'), 600);
+  // 綁定按鈕
+  body.querySelector('button[data-raid-start]')?.addEventListener('click', () => {
+    // 房主：廣播 raid-launch 給朋友
+    if (window.MP_API && MP_API.isHost()) {
+      MP_API.broadcastRaidLaunch(d.id);
+      const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
+      toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
+    } else {
+      toast(`進入襲擊戰：${d.name}`, 'error');
+    }
+    win.style.display = '';
+    win.classList.add('hidden');
+    PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
+    startBattle(d.id, GAME_STATE.state.activeCharId);
+  });
+  body.querySelector('button[data-raid-close]')?.addEventListener('click', () => {
+    win.style.display = '';
+    win.classList.add('hidden');
+  });
+};
+
+// ============================================================================
+// 製作藍圖預覽
+// ============================================================================
+window.showCraftPreview = function(equipId) {
+  const def = GAME_DATA.findEquipment(equipId);
+  if (!def) return;
+  const win = document.getElementById('winCraftPreview');
+  const body = document.getElementById('tabCraftPreview');
+  if (!win || !body) return;
+
+  const SLOT_NAME = { weapon: '武器', head: '頭部', top: '上身', bottom: '下身', feet: '腳部' };
+  const STAT_NAME = {
+    atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊率', critDmg: '暴擊傷害',
+    spd: '速度', dmgReduce: '減傷', cdReduce: 'CD 縮減', vsBoss: '對王傷害',
+    skillDmg: '技能傷害', maxMp: 'MP 上限',
+  };
+  const isPct = k => ['crit', 'critDmg', 'spd', 'dmgReduce', 'cdReduce', 'vsBoss', 'skillDmg'].includes(k);
+  const fmtVal = (k, v) => {
+    if (typeof v === 'string') return v;  // forge:0.10+0.008 之類的標籤
+    return isPct(k) ? `+${(v * 100).toFixed(0)}%` : `+${v}`;
+  };
+
+  // 基礎 stats
+  const statLines = Object.entries(def.stats || {}).map(([k, v]) => `
+    <div class="cp-stat-row">
+      <span class="cp-stat-name">${STAT_NAME[k] || k}</span>
+      <span class="cp-stat-val">${fmtVal(k, v)}</span>
+    </div>
+  `).join('');
+
+  // 固定效果
+  let fixedHtml = '';
+  if (def.fixed) {
+    fixedHtml = `
+      <div class="cp-section-title">固定效果（可隨強化提升）</div>
+      <div class="cp-fixed">${def.fixed.label}</div>
+    `;
+  }
+
+  // 強化 +10 後的最終屬性試算
+  const FORGE_MAX = 10;
+  const fmul = GAME_DATA.forgeMultiplier ? GAME_DATA.forgeMultiplier(FORGE_MAX) : (1 + FORGE_MAX * 0.12);
+  const finalStats = {};
+  for (const [k, v] of Object.entries(def.stats || {})) {
+    finalStats[k] = isPct(k) ? v : v * fmul;
+  }
+  // 固定效果加成
+  if (def.fixed && def.fixed.effect) {
+    for (const [k, v] of Object.entries(def.fixed.effect)) {
+      let val = v;
+      if (typeof v === 'string' && v.startsWith('forge:')) {
+        const [base, perLv] = v.slice(6).split('+').map(parseFloat);
+        val = base + perLv * FORGE_MAX;
+      }
+      finalStats[k] = (finalStats[k] || 0) + val;
+    }
+  }
+  const finalLines = Object.entries(finalStats).filter(([k, v]) => v !== 0).map(([k, v]) => {
+    const display = isPct(k) ? `+${(v * 100).toFixed(0)}%` : `+${Math.floor(v)}`;
+    return `<div class="cp-stat-row">
+      <span class="cp-stat-name">${STAT_NAME[k] || k}</span>
+      <span class="cp-stat-val" style="color:var(--accent)">${display}</span>
+    </div>`;
+  }).join('');
+
+  // 套裝資訊
+  let setHtml = '';
+  if (def.setId) {
+    const setDef = GAME_DATA.findSet ? GAME_DATA.findSet(def.setId) : (GAME_DATA.SETS && GAME_DATA.SETS[def.setId]);
+    if (setDef) {
+      const bonusList = (setDef.bonuses || []).map(b => `
+        <div class="cp-set-bonus">
+          <span class="cp-set-pieces">${b.pieces} 件</span>
+          <span class="cp-set-label">${b.label}</span>
+        </div>
+      `).join('');
+      setHtml = `
+        <div class="cp-section-title" style="color:${setDef.color || '#c084ff'}">套裝：${setDef.name}</div>
+        <div class="cp-set-tagline">${setDef.tagline || ''}</div>
+        <div class="cp-set-bonuses">${bonusList}</div>
+      `;
+    }
+  }
+
+  body.innerHTML = `
+    <div class="craft-preview">
+      <div class="cp-header">
+        <div class="cp-name bag-item ${def.rarity}" style="padding:4px 10px">${def.name}</div>
+        <div class="cp-meta">
+          <span class="cp-rarity ${def.rarity}">${def.rarity}</span>
+          <span class="cp-slot">${SLOT_NAME[def.slot] || def.slot}</span>
+          <span class="cp-tier">階 ${def.tier ?? '-'}</span>
+        </div>
+      </div>
+      <div class="cp-section-title">基礎屬性（+0）</div>
+      <div class="cp-stats">${statLines || '<div style="color:var(--muted);font-size:11px">— 無基礎屬性 —</div>'}</div>
+      ${fixedHtml}
+      <div class="cp-section-title">強化滿（+${FORGE_MAX}）試算屬性</div>
+      <div class="cp-stats">${finalLines}</div>
+      ${setHtml}
+      <div class="cp-hint">＊ 詞綴（隨機）製作完成後會額外滾出，視窗只顯示固定值</div>
+    </div>
+  `;
+
+  // 顯示視窗
+  win.classList.remove('hidden');
+  win.style.display = 'flex';
+  win.style.visibility = 'visible';
+  win.style.opacity = '1';
+  win.style.zIndex = '9999';
+  // 智能定位：放在 winCraft 右側
+  const craftWin = document.getElementById('winCraft');
+  if (craftWin && !craftWin.classList.contains('hidden')) {
+    const r = craftWin.getBoundingClientRect();
+    const vw = window.innerWidth || 1280;
+    const desiredLeft = r.right + 12;
+    const winW = 420;
+    if (desiredLeft + winW < vw - 10) {
+      win.style.left = desiredLeft + 'px';
+      win.style.top = r.top + 'px';
+    } else {
+      // 右側放不下，放畫面右側
+      win.style.left = Math.max(10, vw - winW - 20) + 'px';
+      win.style.top = '80px';
+    }
+  }
+  bringWindowToFront(win);
+  win.classList.add('flash-open');
+  setTimeout(() => win.classList.remove('flash-open'), 400);
+};
+
+window.openEquipDetail = function(instId) {
+  renderEquipDetail(instId);
+  const win = document.getElementById('winEquip');
+  if (!win) return;
+  win.classList.remove('hidden');
+  // 智能定位：避開其他開著的浮窗，貼到右側或畫面中央偏右
+  const vw = window.innerWidth || 1280;
+  const vh = window.innerHeight || 800;
+  // 嘗試找出當前最右側的浮窗，把詳細視窗放在它右邊
+  let rightmost = 0;
+  document.querySelectorAll('.float-panel:not(.hidden)').forEach(p => {
+    if (p === win) return;
+    const r = p.getBoundingClientRect();
+    if (r.right > rightmost) rightmost = r.right;
+  });
+  const winW = 380;
+  let left = Math.max(rightmost + 16, vw - winW - 40);
+  if (left + winW > vw - 10) left = Math.max(20, vw - winW - 20);
+  win.style.left = left + 'px';
+  win.style.top = '120px';
+  win.style.width = winW + 'px';
+  bringWindowToFront(win);
+};
+
+function renderHud() {
+  const st = GAME_STATE.state;
+  const cs = st.characters[st.activeCharId];
+  document.querySelector('#resGold b').textContent = st.gold.toLocaleString();
+  document.querySelector('#resShard b').textContent = st.shard.toLocaleString();
+  if (cs) {
+    document.querySelector('#resCharLv b').textContent = cs.graduated ? 'Max' : cs.level;
+    if (cs.graduated) {
+      const need = GAME_STATE.resonanceExpFor(st.resonance);
+      document.querySelector('#resCharExp b').textContent = `${st.resonanceExp.toLocaleString()} / ${need.toLocaleString()}`;
+    } else {
+      const need = GAME_DATA.expForLevel(cs.level);
+      document.querySelector('#resCharExp b').textContent = `${cs.exp.toLocaleString()} / ${need.toLocaleString()}`;
+    }
+    document.querySelector('#resCP b').textContent = GAME_STATE.combatPower(st.activeCharId).toLocaleString();
+  }
+  // 共鳴顯示
+  const resRow = document.getElementById('resResonance');
+  if (st.resonanceUnlocked) {
+    resRow.style.display = '';
+    const unspent = GAME_STATE.getResonanceUnspent();
+    resRow.querySelector('b').textContent = `R${st.resonance}${unspent > 0 ? ` (+${unspent})` : ''}`;
+    document.getElementById('btnOpenResonance').style.display = '';
+  } else {
+    resRow.style.display = 'none';
+  }
+}
+
+let _lastPortraitKey = null;
+let _lastEnemyName = null;
+
+function renderHudBars() {
+  const st = GAME_STATE.state;
+  const cs = st.characters[st.activeCharId];
+
+  // ===== 玩家卡 =====
+  if (cs) {
+    const tierKey = cs.jobPath && cs.jobTier > 0 ? `${cs.jobPath}${cs.jobTier}` : 'base';
+    const key = `${cs.id}-${tierKey}`;
+    const root = document.getElementById('playerPortrait');
+    if (root && (_lastPortraitKey !== key || !root.children.length)) {
+      root.innerHTML = CHAR_PORTRAIT(cs.id);
+      _lastPortraitKey = key;
+    }
+    document.getElementById('playerName').textContent = cs.customName;
+    const bp = GAME_STATE.getCharacterBlueprint(cs.id);
+    let jobText = '一階弟子';
+    if (cs.jobPath) {
+      const p = bp.paths[cs.jobPath];
+      if (cs.jobTier === 1) jobText = p.name;
+      else if (cs.jobTier === 2) jobText = p.tier2.name;
+      else if (cs.jobTier === 3) jobText = p.tier3.name;
+    }
+    document.getElementById('playerSub').textContent = `Lv ${cs.graduated ? 'Max' : cs.level} · ${jobText}`;
+  }
+
+  if (BATTLE.player) {
+    const p = BATTLE.player;
+    // 陣亡狀態（組隊用）
+    const pc = document.getElementById('playerCard');
+    if (pc) pc.classList.toggle('dead', !!BATTLE._dead);
+    document.getElementById('playerHpText').textContent = BATTLE._dead
+      ? '陣亡 · 等待隊友'
+      : `${Math.max(0, Math.floor(p.hp))} / ${p.maxHp}`;
+    document.getElementById('playerHpBar').style.width = `${Math.max(0, (p.hp / p.maxHp) * 100)}%`;
+    const mpBar = document.getElementById('playerMpBar');
+    const mpText = document.getElementById('playerMpText');
+    if (mpBar && mpText) {
+      mpText.textContent = `${Math.max(0, Math.floor(p.mp || 0))} / ${p.maxMp || 100}`;
+      mpBar.style.width = `${Math.max(0, ((p.mp || 0) / (p.maxMp || 100)) * 100)}%`;
+    }
+  } else if (cs) {
+    const stats = GAME_STATE.effectiveStats(cs.id);
+    document.getElementById('playerHpText').textContent = `${stats.hp} / ${stats.hp}`;
+    document.getElementById('playerHpBar').style.width = '100%';
+    const mpBar = document.getElementById('playerMpBar');
+    const mpText = document.getElementById('playerMpText');
+    if (mpBar && mpText) { mpText.textContent = `${stats.maxMp} / ${stats.maxMp}`; mpBar.style.width = '100%'; }
+  } else {
+    document.getElementById('playerHpText').textContent = '— / —';
+    document.getElementById('playerHpBar').style.width = '0%';
+    const mpBar = document.getElementById('playerMpBar');
+    const mpText = document.getElementById('playerMpText');
+    if (mpBar && mpText) { mpText.textContent = '— / —'; mpBar.style.width = '0%'; }
+  }
+
+  // 藥水欄
+  renderPotionSlotBar();
+  // Buff 顯示
+  renderActiveBuffs();
+
+  // ===== 怪物卡（多隻支援） =====
+  renderEnemyCards();
+
+  // ===== 副本標題 =====
+  if (BATTLE.dungeonId) {
+    const d = GAME_DATA.getDungeon(BATTLE.dungeonId);
+    const r = GAME_DATA.getRegionByDungeon(BATTLE.dungeonId);
+    let title = d.name;
+    let tierLine = `${r.name} · CP ${d.cp}`;
+    // 多人模式標籤
+    if (BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') {
+      const allies = window.MP_API ? Object.values(MP_API.getPlayers()).map(p => p.nickname || '無名').join('、') : '';
+      tierLine = `⛺ 組隊中（${allies}）· BOSS HP 共享 · ` + tierLine;
+    } else if (window.MP_API && MP_API.isConnected() && !d.isRaid) {
+      tierLine = `🔸 連線中（單機副本，無同步）· ` + tierLine;
+    }
+    document.getElementById('dungeonName').textContent = title;
+    document.getElementById('dungeonTier').textContent = tierLine;
+  } else {
+    document.getElementById('dungeonName').textContent = '尚未出征';
+    document.getElementById('dungeonTier').textContent = '';
+  }
+}
+
+// 觸發卡片動畫
+window.battleAnim = function(target, kind) {
+  const id = target === 'player' ? 'playerCard' : 'enemyCard';
+  const card = document.getElementById(id);
+  if (!card) return;
+  const frame = card.querySelector('.card-frame');
+  if (!frame) return;
+  frame.classList.remove('attacking', 'hit', 'crit-flash');
+  void frame.offsetWidth;  // restart animation
+  frame.classList.add(kind);
+  setTimeout(() => frame.classList.remove(kind), 600);
+};
+
+// 浮動傷害數字
+window.floatDamage = function(text, kind) {
+  const root = document.getElementById('floatingFx');
+  if (!root) return;
+  const el = document.createElement('div');
+  el.className = 'float-dmg' + (kind ? ' ' + kind : '');
+  el.textContent = text;
+  el.style.left = (40 + Math.random() * 20) + '%';
+  root.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+};
+
+let _lastWaveSig = '';
+function renderEnemyCards() {
+  const root = document.getElementById('enemyCardsContainer');
+  if (!root) return;
+  const wave = BATTLE.currentWave || [];
+  // 簽名以判斷是否需要重建 DOM
+  const sig = wave.map(e => e.name + '|' + e.maxHp).join('::') + '#' + (BATTLE.currentWaveIdx || 0);
+  if (sig !== _lastWaveSig) {
+    _lastWaveSig = sig;
+    root.className = 'enemy-side cnt-' + Math.max(1, Math.min(3, wave.length || 1));
+    root.innerHTML = '';
+    if (wave.length === 0) {
+      root.innerHTML = `
+        <div class="fighter-card enemy-card">
+          <div class="card-frame"><div class="portrait"></div></div>
+          <div class="card-name">${BATTLE.running ? '進場中…' : '—'}</div>
+          <div class="card-sub"></div>
+          <div class="card-hp enemy-hp"><div class="hp-fill" style="width:0%"></div><span class="hp-text">— / —</span></div>
+        </div>`;
+      return;
+    }
+    wave.forEach((e, i) => {
+      const card = document.createElement('div');
+      card.className = 'fighter-card enemy-card';
+      card.dataset.idx = i;
+      card.innerHTML = `
+        <div class="card-frame">
+          <div class="portrait"></div>
+          <div class="enemy-debuffs"></div>
+        </div>
+        <div class="card-name">${e.name}</div>
+        <div class="card-sub">${e.isBoss ? 'BOSS' : `波 ${(BATTLE.currentWaveIdx||0)+1} / ${BATTLE.waves.length}`}</div>
+        <div class="card-hp enemy-hp">
+          <div class="hp-fill"></div>
+          <span class="hp-text"></span>
+        </div>
+      `;
+      root.appendChild(card);
+      // 加上像素 portrait
+      const portrait = card.querySelector('.portrait');
+      if (portrait && typeof renderEnemyPortrait === 'function') {
+        const cv = renderEnemyPortrait(e.name, 140);
+        portrait.appendChild(cv);
+      }
+    });
+  }
+  // 每幀只更新 HP bar 與目標標示
+  const cards = root.querySelectorAll('.enemy-card');
+  const isFrozen = BATTLE.freezes > 0;
+  const hasDot = (BATTLE.dots || []).some(d => d.dur > 0);
+  wave.forEach((e, i) => {
+    const card = cards[i];
+    if (!card) return;
+    const fill = card.querySelector('.hp-fill');
+    const txt = card.querySelector('.hp-text');
+    if (fill) fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
+    if (txt) txt.textContent = `${Math.max(0, Math.floor(e.hp))} / ${e.maxHp}`;
+    card.classList.toggle('active-target', e === BATTLE.enemy);
+    // Debuff badges
+    const debuffEl = card.querySelector('.enemy-debuffs');
+    if (debuffEl) {
+      const badges = [];
+      if (isFrozen && e === BATTLE.enemy) badges.push(`<span class="debuff-badge debuff-freeze" title="冰封">❄ ${BATTLE.freezes.toFixed(1)}s</span>`);
+      if (hasDot && e === BATTLE.enemy) badges.push(`<span class="debuff-badge debuff-dot" title="持續傷害">🔥</span>`);
+      debuffEl.innerHTML = badges.join('');
+    }
+    card.classList.toggle('is-frozen', isFrozen && e === BATTLE.enemy);
+  });
+}
+
+function renderSpeedReadout() {
+  document.getElementById('autoRunReadout').textContent = `自動再戰：${GAME_STATE.state.autoRun ? '開' : '關'}`;
+}
+
+function renderBattleLog() {
+  const root = document.getElementById('battleLog');
+  root.innerHTML = BATTLE.log.slice(-20).map(l => `<div class="${l.klass || ''}">${l.html}</div>`).join('');
+  root.scrollTop = root.scrollHeight;
+}
+
+// 戰鬥技能列：5 槽，依裝備技能即時顯示 CD
+let _lastSkillBarKey = '';
+function renderSkillBar() {
+  const root = document.getElementById('battleSkillBar');
+  if (!root) return;
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (!cs) { root.innerHTML = ''; return; }
+  const eq = cs.equippedSkills || [null, null, null, null, null];
+  const key = eq.join('|');
+
+  if (key !== _lastSkillBarKey) {
+    _lastSkillBarKey = key;
+    root.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const sid = eq[i];
+      const btn = document.createElement('div');
+      btn.className = 'skill-btn' + (sid ? '' : ' empty');
+      btn.dataset.slot = i;
+      if (sid) {
+        const sk = GAME_DATA.SKILLS[sid];
+        const tierClass = sk.costTier ? `mp-tier-${sk.costTier}` : '';
+        btn.innerHTML = `
+          <div class="sb-name">${sk.name}</div>
+          <div class="sb-tag">${sk.tag}</div>
+          <div class="sb-mp ${tierClass}">MP ${sk.mpCost || 0}</div>
+          <div class="sb-cd"></div>
+          <div class="sb-cd-overlay"></div>
+        `;
+        btn.dataset.sid = sid;
+      } else {
+        btn.innerHTML = `<div class="sb-name" style="color:var(--muted);font-size:11px">空槽 ${i+1}</div>`;
+      }
+      root.appendChild(btn);
+    }
+  }
+
+  // 更新每個按鈕的 CD overlay
+  const btns = root.querySelectorAll('.skill-btn');
+  btns.forEach(btn => {
+    const sid = btn.dataset.sid;
+    if (!sid) return;
+    const sk = GAME_DATA.SKILLS[sid];
+    if (!sk) return;
+    const cdLeft = (BATTLE.skillCDs && BATTLE.skillCDs[sid]) || 0;
+    const overlay = btn.querySelector('.sb-cd-overlay');
+    const cdText = btn.querySelector('.sb-cd');
+    if (cdLeft > 0) {
+      overlay.style.width = `${Math.min(100, cdLeft / sk.cd * 100)}%`;
+      cdText.textContent = cdLeft.toFixed(1) + 's';
+    } else {
+      overlay.style.width = '0%';
+      cdText.textContent = '就緒';
+      cdText.style.color = 'var(--hp-self)';
+    }
+  });
+}
+
+// 把視窗拉到最前
+let _winZ = 100;
+function bringWindowToFront(win) {
+  _winZ += 1;
+  win.style.zIndex = _winZ;
+}
+
+// 觸發單個技能按鈕閃光
+window.flashSkillButton = function(sid) {
+  const btn = document.querySelector(`#battleSkillBar .skill-btn[data-sid="${sid}"]`);
+  if (!btn) return;
+  btn.classList.remove('casting');
+  void btn.offsetWidth;
+  btn.classList.add('casting');
+  setTimeout(() => btn.classList.remove('casting'), 500);
+};
+
+// ============================================================================
+// 副本列表
+// ============================================================================
+let _dungeonTab = 'main';  // 'main' / 'special' / 'raid'
+function renderDungeonList() {
+  const root = document.getElementById('tabDungeon');
+  root.innerHTML = '';
+  const activeId = GAME_STATE.state.activeCharId;
+  const cs = GAME_STATE.state.characters[activeId];
+
+  // 分頁
+  const tabs = document.createElement('div');
+  tabs.className = 'craft-tabs';
+  tabs.innerHTML = `
+    <button class="${_dungeonTab === 'main' ? 'active' : ''}" data-dtab="main">🗺 主線</button>
+    <button class="${_dungeonTab === 'special' ? 'active' : ''}" data-dtab="special">⭐ 特殊副本</button>
+    <button class="${_dungeonTab === 'raid' ? 'active' : ''}" data-dtab="raid">⚔ 襲擊戰</button>
+  `;
+  root.appendChild(tabs);
+  tabs.querySelectorAll('button[data-dtab]').forEach(b => {
+    b.onclick = () => { _dungeonTab = b.dataset.dtab; renderDungeonList(); };
+  });
+
+  // 依分頁過濾 regions
+  const filteredRegions = GAME_DATA.REGIONS.filter(r => {
+    if (_dungeonTab === 'main') return !r.isSpecial && !r.isRaid;
+    if (_dungeonTab === 'special') return r.isSpecial;
+    if (_dungeonTab === 'raid') return r.isRaid;
+    return true;
+  });
+  if (filteredRegions.length === 0) {
+    root.innerHTML += '<div style="color:var(--muted);font-size:12px;text-align:center;padding:30px">尚無此類副本</div>';
+    return;
+  }
+  for (const r of filteredRegions) {
+    const block = document.createElement('div');
+    block.className = 'region-block';
+    const titleTag = r.isSpecial ? ' <span style="color:var(--shard);font-size:10px">[特殊]</span>'
+                   : r.isRaid ? ' <span style="color:var(--hp-enemy);font-size:10px">[襲擊]</span>' : '';
+    block.innerHTML = `<div class="region-title">${r.name}${titleTag} · <span style="color:var(--muted);font-size:11px">${r.tagline}</span></div>`;
+    for (const d of r.dungeons) {
+      const row = document.createElement('div');
+      const unlocked = GAME_STATE.isDungeonUnlocked(d.id);
+      const lvOk = !d.requiredLv || (cs && cs.level >= d.requiredLv);
+      const cp = GAME_STATE.combatPower(activeId);
+      let klass = 'dungeon-row';
+      if (!unlocked || !lvOk) klass += ' locked';
+      if (BATTLE.dungeonId === d.id) klass += ' active';
+      let cpClass = 'dungeon-cp';
+      if (cp < d.cp * 0.7) cpClass += ' high';
+      else if (cp > d.cp * 2) cpClass += ' easy';
+      row.className = klass;
+      // 特殊類型標籤
+      let typeTag = '';
+      if (d.special === 'exp') typeTag = '<span style="color:var(--exp);font-size:10px;margin-left:4px">經驗</span>';
+      else if (d.special === 'mat') typeTag = '<span style="color:var(--shard);font-size:10px;margin-left:4px">材料</span>';
+      else if (d.special === 'forge') typeTag = '<span style="color:var(--gold);font-size:10px;margin-left:4px">強化</span>';
+      else if (d.isRaid) typeTag = '<span style="color:var(--hp-enemy);font-size:10px;margin-left:4px">RAID</span>';
+      // Lv 99 顯示「需畢業」，其他顯示「需 LvN」
+      const lvTag = d.requiredLv
+        ? `<span style="font-size:10px;color:${lvOk ? 'var(--muted)' : 'var(--hp-enemy)'};margin-left:4px">${d.requiredLv >= 99 ? '需畢業' : `需 Lv${d.requiredLv}`}</span>`
+        : '';
+      row.innerHTML = `
+        <div class="dungeon-name">${d.name}${typeTag}${lvTag}${GAME_STATE.state.clearedDungeons[d.id] ? ' <span style="color:var(--hp-self);font-size:10px">已通</span>' : ''}</div>
+        <div class="${cpClass}">CP ${d.cp}</div>
+      `;
+      if (unlocked) {
+        row.onclick = () => {
+          GAME_STATE.state.selectedDungeonId = d.id;
+          // 襲擊戰不直接開打 → 跳預覽視窗
+          if (d.isRaid) {
+            showRaidPreview(d.id);
+            return;
+          }
+          PIXEL.setScene({ regionId: r.id });
+          const ok = startBattle(d.id, activeId);
+          if (ok) toast(`出征 ${d.name}`);
+          renderDungeonList();
+        };
+      }
+      block.appendChild(row);
+    }
+    root.appendChild(block);
+  }
+}
+
+// ============================================================================
+// 強化
+// ============================================================================
+function renderForge() {
+  const root = document.getElementById('tabForge');
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  root.innerHTML = '';
+  if (!cs || !cs.equip) return;
+
+  for (const slot of GAME_DATA.EQUIPMENT_SLOTS) {
+    const label = GAME_DATA.SLOT_LABELS[slot];
+    const instId = cs.equip[slot];
+    if (!instId) {
+      const empty = document.createElement('div');
+      empty.className = 'forge-block';
+      empty.innerHTML = `<h4>${label}：<span style="color:var(--muted);font-size:12px">（未裝備）</span></h4>`;
+      root.appendChild(empty);
+      continue;
+    }
+    const inst = GAME_STATE.state.bag.equipment[instId];
+    const def = GAME_DATA.findEquipment(inst.itemId);
+    if (!def) continue;
+    const lvl = inst.forge || 0;
+    const maxLvl = 15;
+
+    // base stat 顯示（套用強化倍率）
+    const statStr = Object.entries(def.stats).map(([k, v]) => statLabel(k, v, lvl)).join(' · ');
+    const affixStr = inst.affixes.length
+      ? `<div class="forge-row" style="color:var(--shard);font-size:11px">詞綴：${inst.affixes.map(a => formatAffix(a).raw).join('、')}</div>`
+      : '';
+
+    const block = document.createElement('div');
+    block.className = 'forge-block';
+    let bottom;
+    if (lvl >= maxLvl) {
+      bottom = `<div style="color:var(--gold);font-size:11px">★ 已達上限</div>`;
+    } else {
+      const cost = GAME_DATA.forgeCost(lvl);
+      const goldOk = GAME_STATE.state.gold >= cost.goldCost;
+      const matOk = (GAME_STATE.state.bag.materials[cost.mat] || 0) >= cost.matCost;
+      bottom = `
+        <div class="forge-cost">
+          <span class="${goldOk ? 'ok' : 'no'}">金 ${cost.goldCost.toLocaleString()}</span>
+          <span class="${matOk ? 'ok' : 'no'}">${cost.mat} x${cost.matCost}</span>
+          <span>成功率 ${(cost.successRate * 100).toFixed(0)}%</span>
+        </div>
+        <button class="primary" ${goldOk && matOk ? '' : 'disabled'} data-forge-inst="${instId}">強化 +${lvl + 1}</button>
+      `;
+    }
+    block.innerHTML = `
+      <h4>${label}：<span class="bag-item ${def.rarity}" style="display:inline-block;padding:1px 6px;border-width:1px">${def.name}</span> <span style="color:var(--accent)">+${lvl}</span></h4>
+      <div class="forge-row"><span>${statStr}</span><b>${(GAME_DATA.forgeMultiplier(lvl) * 100 - 100).toFixed(0)}%</b></div>
+      ${affixStr}
+      <div class="forge-bar"><div style="width:${(lvl / maxLvl) * 100}%"></div></div>
+      ${bottom}
+    `;
+    root.appendChild(block);
+  }
+
+  root.querySelectorAll('button[data-forge-inst]').forEach(btn => {
+    btn.onclick = () => doForge(btn.dataset.forgeInst);
+  });
+}
+
+function statLabel(k, v, forge) {
+  const isPct = (k === 'crit' || k === 'spd' || k === 'critDmg' || k === 'dmgReduce');
+  // 強化等級加成（百分比類不吃強化倍率，與 effectiveStats 邏輯一致）
+  const mul = forge ? GAME_DATA.forgeMultiplier(forge) : 1;
+  const actual = isPct ? v : Math.floor(v * mul);
+  const display = isPct ? `+${(v * 100).toFixed(0)}%` : `+${actual}`;
+  const names = { atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊', critDmg: '暴傷', spd: '速度', dmgReduce: '減傷' };
+  return `${names[k] || k} ${display}`;
+}
+
+function doForge(instId) {
+  const inst = GAME_STATE.state.bag.equipment[instId];
+  if (!inst) return;
+  const cost = GAME_DATA.forgeCost(inst.forge || 0);
+  if (GAME_STATE.state.gold < cost.goldCost) return toast('金幣不足', 'error');
+  if ((GAME_STATE.state.bag.materials[cost.mat] || 0) < cost.matCost) return toast(`${cost.mat} 不足`, 'error');
+  GAME_STATE.gainGold(-cost.goldCost);
+  GAME_STATE.consumeMaterial(cost.mat, cost.matCost);
+  if (Math.random() < cost.successRate) {
+    inst.forge = (inst.forge || 0) + 1;
+    toast(`強化成功！+${inst.forge}`, 'gold');
+  } else {
+    toast(`強化失敗，材料消耗`, 'error');
+  }
+  renderForge();
+  renderHud();
+  renderCharDetail();
+  renderCharList();
+  GAME_STATE.scheduleSave();
+}
+
+// ============================================================================
+// 背包
+// ============================================================================
+let _bagTab = 'items';  // 'items' (物資) / 'equip' (裝備)
+function renderBag() {
+  const root = document.getElementById('tabBag');
+  root.innerHTML = '';
+  const st = GAME_STATE.state;
+  const cs = st.characters[st.activeCharId];
+  if (!cs) return;
+
+  // ===== 分頁 =====
+  const tabs = document.createElement('div');
+  tabs.className = 'craft-tabs';
+  tabs.innerHTML = `
+    <button class="${_bagTab === 'items' ? 'active' : ''}" data-bagtab="items">📦 物資</button>
+    <button class="${_bagTab === 'equip' ? 'active' : ''}" data-bagtab="equip">⚔ 裝備</button>
+  `;
+  root.appendChild(tabs);
+  tabs.querySelectorAll('button[data-bagtab]').forEach(b => {
+    b.onclick = () => { _bagTab = b.dataset.bagtab; renderBag(); };
+  });
+
+  // ===== 批次分解工具列（只在裝備分頁顯示） =====
+  if (_bagTab !== 'equip') {} else {
+  const bar = document.createElement('div');
+  bar.className = 'bag-toolbar';
+  bar.innerHTML = `
+    <span class="bag-tool-title">批次分解：</span>
+    <button class="ghost small" data-batch="N">分解所有 N</button>
+    <button class="ghost small" data-batch="R">分解 N + R</button>
+    <button class="ghost small" data-batch="SR">分解 N + R + SR</button>
+  `;
+  root.appendChild(bar);
+  bar.querySelectorAll('button[data-batch]').forEach(b => {
+    b.onclick = () => {
+      const tier = b.dataset.batch;
+      const label = { N: 'N', R: 'N+R', SR: 'N+R+SR' }[tier];
+      if (!confirm(`確定分解所有 ${label} 階未裝備裝備？此操作無法復原。`)) return;
+      const r = GAME_STATE.batchDisassemble({ maxRarity: tier });
+      if (r.count === 0) { toast('沒有可分解的裝備', 'error'); return; }
+      const matStr = Object.entries(r.mats).map(([n, q]) => `${n} ×${q}`).join('、');
+      toast(`分解 ${r.count} 件 → ${matStr}、金 +${r.gold}${r.gems ? `、寶石 ×${r.gems}`:''}`, 'gold');
+      renderBag(); renderHud();
+    };
+  });
+  }  // 結束「裝備分頁的批次工具列」 else block
+
+  // ===== 物資分頁顯示：材料 / 寶箱 / 藥水 / 魔法石 =====
+  if (_bagTab === 'items') {
+
+  // ===== 材料 =====
+  const matSec = document.createElement('div');
+  matSec.className = 'bag-section';
+  matSec.innerHTML = `<h4>材料</h4>`;
+  const matGrid = document.createElement('div');
+  matGrid.className = 'bag-grid';
+  for (const [name, qty] of Object.entries(st.bag.materials)) {
+    const def = GAME_DATA.ITEMS.materials[name] || { rarity: 'N' };
+    const cell = document.createElement('div');
+    cell.className = `bag-item ${def.rarity}`;
+    cell.innerHTML = `<div class="iname">${name}</div><div class="itag">${def.rarity}</div><div class="qty">${qty}</div>`;
+    matGrid.appendChild(cell);
+  }
+  if (Object.keys(st.bag.materials).length === 0) matGrid.innerHTML = '<div style="color:var(--muted);font-size:11px">無</div>';
+  matSec.appendChild(matGrid);
+  root.appendChild(matSec);
+
+  // ===== 寶箱 =====
+  const chests = st.bag.chests || {};
+  const chestEntries = Object.entries(chests).filter(([, q]) => q > 0);
+  if (chestEntries.length > 0) {
+    const cSec = document.createElement('div');
+    cSec.className = 'bag-section';
+    cSec.innerHTML = `<h4>寶箱 <span style="color:var(--muted);font-size:10px;font-weight:400">點擊開啟領取獎勵</span></h4>`;
+    const cGrid = document.createElement('div');
+    cGrid.className = 'bag-grid';
+    for (const [cid, qty] of chestEntries) {
+      const c = GAME_DATA.findChest(cid);
+      if (!c) continue;
+      const cell = document.createElement('div');
+      cell.className = `bag-item ${c.rarity}`;
+      cell.innerHTML = `
+        <div class="iname" style="color:${c.color}">${c.name}</div>
+        <div class="itag">${c.rarity}</div>
+        <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${c.desc}</div>
+        <div class="qty">${qty}</div>
+        <button class="primary small" style="margin-top:6px;width:100%" data-openchest="${cid}">開啟</button>
+      `;
+      cGrid.appendChild(cell);
+    }
+    cSec.appendChild(cGrid);
+    root.appendChild(cSec);
+  }
+
+  // ===== 藥水 / 卷軸 =====
+  const potions = st.bag.potions || {};
+  const potionEntries = Object.entries(potions).filter(([, q]) => q > 0);
+  if (potionEntries.length > 0) {
+    const potSec = document.createElement('div');
+    potSec.className = 'bag-section';
+    potSec.innerHTML = `<h4>藥水 / 卷軸</h4>`;
+    const potGrid = document.createElement('div');
+    potGrid.className = 'bag-grid';
+    for (const [pid, qty] of potionEntries) {
+      const p = GAME_DATA.findPotion(pid);
+      if (!p) continue;
+      const isScroll = p.type === 'buff' && p.kind === 'global';
+      const cell = document.createElement('div');
+      cell.className = `bag-item ${p.rarity}`;
+      cell.innerHTML = `
+        <div class="iname">${p.name}</div>
+        <div class="itag">${p.rarity}</div>
+        <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${p.desc}</div>
+        <div class="qty">${qty}</div>
+        ${isScroll
+          ? `<button class="primary small" style="margin-top:6px;width:100%" data-usescroll="${pid}">使用</button>`
+          : '<div style="font-size:9px;color:var(--muted);margin-top:4px;text-align:center">綁定到藥水欄自動使用</div>'}
+      `;
+      potGrid.appendChild(cell);
+    }
+    potSec.appendChild(potGrid);
+    root.appendChild(potSec);
+  }
+
+  // ===== 魔法石 =====
+  const gems = st.bag.gems || {};
+  const gemEntries = Object.entries(gems).filter(([, q]) => q > 0);
+  if (gemEntries.length > 0) {
+    const gemSec = document.createElement('div');
+    gemSec.className = 'bag-section';
+    gemSec.innerHTML = `<h4>魔法石
+      <span style="margin-left:8px">
+        <button class="ghost small" data-sellgems="N">賣所有 N</button>
+        <button class="ghost small" data-sellgems="R">賣 N + R</button>
+        <button class="ghost small" data-sellgems="SR">賣 N + R + SR</button>
+      </span>
+    </h4>`;
+    const gemGrid = document.createElement('div');
+    gemGrid.className = 'bag-grid';
+    const GEM_PRICES = { 1: 10, 2: 60, 3: 280, 4: 1500, 5: 8000 };
+    for (const [gid, qty] of gemEntries) {
+      const g = GAME_DATA.findGem(gid);
+      if (!g) continue;
+      const isPct = (g.stat === 'crit' || g.stat === 'spd' || g.stat === 'critDmg');
+      const valDisp = isPct ? `+${(g.value * 100).toFixed(1)}%` : `+${g.value}`;
+      const statName = { atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊', spd: '速度', critDmg: '暴傷', dmgReduce: '減傷' }[g.stat] || g.stat;
+      const unitPrice = GEM_PRICES[g.tier] || 10;
+      const cell = document.createElement('div');
+      cell.className = `bag-item ${g.rarity}`;
+      cell.innerHTML = `
+        <div class="iname">${g.name}</div>
+        <div class="itag">${g.rarity}</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px">${statName} ${valDisp}</div>
+        <div class="qty">${qty}</div>
+        <div class="bag-cell-actions">
+          <button class="danger small" data-sellgem="${gid}" title="售出 1 顆">賣 ${unitPrice} 金</button>
+          ${qty >= 2 ? `<button class="danger small" data-sellgem="${gid}" data-all="1" title="售出全部">賣 ×${qty}</button>` : ''}
+        </div>
+      `;
+      gemGrid.appendChild(cell);
+    }
+    gemSec.appendChild(gemGrid);
+    root.appendChild(gemSec);
+  }
+  }  // 結束物資分頁
+
+  // ===== 裝備分頁 =====
+  if (_bagTab === 'equip') {
+  const equippedInstIds = new Set(Object.values(cs.equip || {}));
+  for (const slot of GAME_DATA.EQUIPMENT_SLOTS) {
+    const label = GAME_DATA.SLOT_LABELS[slot];
+    const sec = document.createElement('div');
+    sec.className = 'bag-section';
+    sec.innerHTML = `<h4>${label}</h4>`;
+    const grid = document.createElement('div');
+    grid.className = 'bag-grid';
+    const instances = Object.entries(st.bag.equipment).filter(([id, inst]) => {
+      const def = GAME_DATA.findEquipment(inst.itemId);
+      if (!def || def.slot !== slot) return false;
+      if (slot === 'weapon' && def.owner && def.owner !== cs.id) return false;
+      return true;
+    });
+    // 排序：1) 裝備中優先 2) 稀有度高 3) 強化等級高 4) 詞綴多
+    instances.sort((a, b) => {
+      const ea = equippedInstIds.has(a[0]) ? 1 : 0;
+      const eb = equippedInstIds.has(b[0]) ? 1 : 0;
+      if (ea !== eb) return eb - ea;
+      const da = GAME_DATA.findEquipment(a[1].itemId);
+      const db = GAME_DATA.findEquipment(b[1].itemId);
+      if (db.tier !== da.tier) return db.tier - da.tier;
+      const fa = a[1].forge || 0, fb = b[1].forge || 0;
+      if (fb !== fa) return fb - fa;
+      const aA = (a[1].affixes || []).length;
+      const aB = (b[1].affixes || []).length;
+      return aB - aA;
+    });
+    for (const [instId, inst] of instances) {
+      const def = GAME_DATA.findEquipment(inst.itemId);
+      const isEquipped = cs.equip[slot] === instId;
+      const cell = document.createElement('div');
+      cell.className = `bag-item ${def.rarity}`;
+      const forge = inst.forge || 0;
+      const statStr = Object.entries(def.stats).map(([k, v]) => statLabel(k, v, forge)).join('<br>');
+      const affixStr = inst.affixes.length
+        ? '<div style="color:var(--shard);font-size:10px;margin-top:3px">' + inst.affixes.map(a => formatAffix(a).raw).join('、') + '</div>'
+        : '';
+      cell.innerHTML = `
+        <div class="iname">${def.name}${forge ? ` +${forge}` : ''}</div>
+        <div class="itag">${def.rarity}</div>
+        <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${statStr}</div>
+        ${affixStr}
+        ${isEquipped
+          ? '<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">[裝備中]</div>'
+          : `<div class="bag-cell-actions">
+              <button data-equip="${slot}:${instId}">裝備</button>
+              <button class="danger small" data-disasm="${instId}" title="分解返還材料">分解</button>
+            </div>`}
+      `;
+      cell.style.cursor = 'pointer';
+      cell.dataset.instId = instId;
+      cell.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        openEquipDetail(instId);
+      });
+      grid.appendChild(cell);
+    }
+    if (instances.length === 0) {
+      grid.innerHTML = '<div style="color:var(--muted);font-size:11px">無</div>';
+    }
+    sec.appendChild(grid);
+    root.appendChild(sec);
+  }
+  }  // 結束裝備分頁
+
+  root.querySelectorAll('button[data-equip]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const [slot, instId] = btn.dataset.equip.split(':');
+      equipItem(slot, instId);
+    };
+  });
+  root.querySelectorAll('button[data-sellgem]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const gid = btn.dataset.sellgem;
+      const sellAll = btn.dataset.all === '1';
+      const cur = (GAME_STATE.state.bag.gems && GAME_STATE.state.bag.gems[gid]) || 0;
+      const qty = sellAll ? cur : 1;
+      const g = GAME_DATA.findGem(gid);
+      // 高階確認
+      if (g && (g.tier >= 4)) {
+        if (!confirm(`真的要售出 ${g.name} ×${qty}？無法復原。`)) return;
+      }
+      const r = GAME_STATE.sellGem(gid, qty);
+      if (r.ok) {
+        toast(`售出 ${r.name} ×${qty} → 金 +${r.gold}`, 'gold');
+        renderBag(); renderHud();
+      } else toast(r.reason, 'error');
+    };
+  });
+  root.querySelectorAll('button[data-sellgems]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const cap = btn.dataset.sellgems;
+      const label = { N: 'N', R: 'N + R', SR: 'N + R + SR' }[cap];
+      if (!confirm(`真的要賣掉所有 ${label} 階魔法石？`)) return;
+      const r = GAME_STATE.sellGemsBatch(cap);
+      if (r.count === 0) return toast('沒有可賣的魔法石', 'error');
+      toast(`售出 ${r.count} 顆魔法石 → 金 +${r.gold}`, 'gold');
+      renderBag(); renderHud();
+    };
+  });
+  root.querySelectorAll('button[data-openchest]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const cid = btn.dataset.openchest;
+      const r = GAME_STATE.openChest(cid);
+      if (!r.ok) return toast(r.reason, 'error');
+      // 顯示開箱結果
+      showChestRewardOverlay(r);
+      renderBag(); renderHud();
+    };
+  });
+  root.querySelectorAll('button[data-usescroll]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const pid = btn.dataset.usescroll;
+      const p = GAME_DATA.findPotion(pid);
+      if (!p) return;
+      // 檢查是否已有同卷軸生效
+      const existing = (GAME_STATE.state.globalBuffs || []).find(b => b.potionId === pid && b.expiresAt > Date.now());
+      if (existing) {
+        if (!confirm(`「${p.name}」已生效中，使用後會延長時間，是否繼續？`)) return;
+      }
+      if (!GAME_STATE.consumePotion(pid, 1)) { toast('卷軸已耗盡', 'error'); return; }
+      GAME_STATE.activateGlobalBuff(pid);
+      toast(`${p.name} 已啟用（${Math.floor(p.duration / 60)} 分鐘）`, 'gold');
+      renderBag(); renderHud();
+    };
+  });
+  root.querySelectorAll('button[data-disasm]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.disasm;
+      const inst = GAME_STATE.state.bag.equipment[id];
+      const def = inst && GAME_DATA.findEquipment(inst.itemId);
+      if (!def) return;
+      if (def.tier >= 3) {
+        if (!confirm(`真的要分解 [${def.rarity}] ${def.name}${inst.forge ? ' +'+inst.forge : ''}？此操作無法復原。`)) return;
+      }
+      const r = GAME_STATE.disassembleEquipment(id);
+      if (r.ok) {
+        toast(`分解 ${r.name} → ${r.mat} ×${r.matQty}、金 +${r.gold}${r.gems.length ? `、退回寶石 ×${r.gems.length}`:''}`, 'gold');
+        renderBag(); renderHud();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
+  });
+}
+
+function equipItem(slot, instId) {
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (!cs.equip) cs.equip = {};
+  cs.equip[slot] = instId;
+  toast('已裝備');
+  renderBag();
+  renderHud();
+  renderCharDetail();
+  renderCharList();
+  renderForge();
+  GAME_STATE.scheduleSave();
+}
+
+// ============================================================================
+// 技能 / 被動頁
+// ============================================================================
+function renderSkills() {
+  const root = document.getElementById('tabSkills');
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (!cs) { root.innerHTML = ''; return; }
+  const bp = GAME_STATE.getCharacterBlueprint(cs.id);
+  if (!cs.equippedSkills) cs.equippedSkills = [null, null, null, null, null];
+  root.innerHTML = '';
+
+  // ===== 已裝備（5 槽，依優先順序） =====
+  const eqH = document.createElement('div');
+  eqH.className = 'region-title';
+  eqH.innerHTML = '已裝備技能 <span style="color:var(--muted);font-size:10px">（戰鬥優先順序由上到下）</span>';
+  root.appendChild(eqH);
+
+  for (let i = 0; i < 5; i++) {
+    const sid = cs.equippedSkills[i];
+    const row = document.createElement('div');
+    row.className = 'skill-row equipped-slot';
+    if (sid) {
+      const sk = GAME_DATA.SKILLS[sid];
+      const mults = Array.isArray(sk.mult) ? sk.mult : [sk.mult];
+      const total = mults.reduce((a, b) => a + b, 0);
+      // CD 進度
+      const cdLeft = BATTLE.skillCDs && BATTLE.skillCDs[sid] || 0;
+      const cdPct = cdLeft > 0 ? (cdLeft / sk.cd * 100) : 0;
+      row.innerHTML = `
+        <div class="sk-head">
+          <div><span style="color:var(--accent);margin-right:6px">#${i + 1}</span><b class="sk-name">${sk.name}</b></div>
+          <div class="sk-tag">${sk.tag}</div>
+        </div>
+        <div class="sk-desc">${sk.desc}</div>
+        <div class="sk-stats">
+          ${sk.isBuff ? '<span>Buff</span><b style="color:var(--shard)">支援型</b>' : `<span>倍率</span><b>${(total * 100).toFixed(0)}%</b>`}
+          <span>冷卻</span><b>${sk.cd}s</b>
+          <span>MP</span><b class="mp-tier-${sk.costTier || 'light'}">${sk.mpCost || 0}</b>
+        </div>
+        <div class="skill-cd-bar"><div style="width:${cdPct}%"></div></div>
+        <div class="skill-slot-actions">
+          ${i > 0 ? `<button data-act="up" data-i="${i}">↑</button>` : ''}
+          ${i < 4 ? `<button data-act="dn" data-i="${i}">↓</button>` : ''}
+          <button data-act="rm" data-i="${i}">取下</button>
+        </div>
+      `;
+    } else {
+      row.classList.add('empty-slot');
+      row.innerHTML = `<div class="empty-slot-text">空槽 #${i + 1} — 從下方候選池點選裝備</div>`;
+    }
+    root.appendChild(row);
+  }
+
+  // ===== 候選池（已解鎖但未裝備、非普攻） =====
+  const equipped = new Set(cs.equippedSkills);
+  const available = cs.unlockedSkills.filter(sid => {
+    const sk = GAME_DATA.SKILLS[sid];
+    return sk && !sk.isBasic && !equipped.has(sid);
+  });
+  if (available.length) {
+    const h = document.createElement('div');
+    h.className = 'region-title';
+    h.style.marginTop = '14px';
+    h.textContent = '候選池（未裝備）';
+    root.appendChild(h);
+    for (const sid of available) {
+      const sk = GAME_DATA.SKILLS[sid];
+      const mults = Array.isArray(sk.mult) ? sk.mult : [sk.mult];
+      const total = mults.reduce((a, b) => a + b, 0);
+      const row = document.createElement('div');
+      row.className = 'skill-row available';
+      const hasEmpty = cs.equippedSkills.includes(null);
+      row.innerHTML = `
+        <div class="sk-head"><div class="sk-name">${sk.name}</div><div class="sk-tag">${sk.tag}</div></div>
+        <div class="sk-desc">${sk.desc}</div>
+        <div class="sk-stats">
+          ${sk.isBuff ? '<span>Buff</span><b style="color:var(--shard)">支援型</b>' : `<span>倍率</span><b>${(total * 100).toFixed(0)}%</b>`}
+          <span>冷卻</span><b>${sk.cd}s</b>
+          <span>MP</span><b class="mp-tier-${sk.costTier || 'light'}">${sk.mpCost || 0}</b>
+        </div>
+        <button class="primary" data-act="eq" data-sid="${sid}" ${hasEmpty ? '' : 'disabled'}>${hasEmpty ? '裝備到空槽' : '槽位已滿'}</button>
+      `;
+      root.appendChild(row);
+    }
+  }
+
+  // ===== 已掌握被動 =====
+  if (cs.unlockedPassives.length) {
+    const h = document.createElement('div');
+    h.className = 'region-title';
+    h.style.marginTop = '14px';
+    h.textContent = '已掌握被動（自動生效，不佔技能槽）';
+    root.appendChild(h);
+    for (const pid of cs.unlockedPassives) {
+      const ps = GAME_DATA.PASSIVES[pid];
+      if (!ps) continue;
+      const row = document.createElement('div');
+      row.className = 'skill-row passive';
+      row.innerHTML = `
+        <div class="sk-head"><div class="sk-name">${ps.name}</div><div class="sk-tag">被動</div></div>
+        <div class="sk-desc">${ps.desc}</div>
+      `;
+      root.appendChild(row);
+    }
+  }
+
+  // ===== 即將解鎖 =====
+  const upcoming = [];
+  for (const u of bp.unlocks) {
+    if (u.lv <= cs.level) continue;
+    if (u.type === 'skill') {
+      if (u.pathAny || u.path === cs.jobPath) {
+        const sk = GAME_DATA.SKILLS[u.skill];
+        if (sk) upcoming.push({ lv: u.lv, name: sk.name, kind: '技能', desc: sk.desc });
+      }
+    } else if (u.type === 'passive') {
+      if (u.pathAny || u.path === cs.jobPath) {
+        const ps = GAME_DATA.PASSIVES[u.passive];
+        if (ps) upcoming.push({ lv: u.lv, name: ps.name, kind: '被動', desc: ps.desc });
+      }
+    } else if (u.type === 'job') {
+      upcoming.push({ lv: u.lv, name: `${u.tier === 1 ? '一' : u.tier === 2 ? '二' : '三'}轉`, kind: '轉職', desc: '選擇你的道路。' });
+    } else if (u.type === 'graduate') {
+      upcoming.push({ lv: u.lv, name: '畢業 · 解鎖共鳴', kind: '里程碑', desc: '99 級畢業，解鎖跨角色共鳴等級系統。' });
+    }
+    if (upcoming.length >= 6) break;
+  }
+  if (upcoming.length) {
+    const h = document.createElement('div');
+    h.className = 'region-title';
+    h.style.marginTop = '14px';
+    h.textContent = '即將解鎖';
+    root.appendChild(h);
+    for (const up of upcoming) {
+      const row = document.createElement('div');
+      row.className = 'skill-row locked';
+      row.innerHTML = `
+        <div class="sk-head"><div class="sk-name">${up.name}</div><div class="sk-tag">${up.kind}</div></div>
+        <div class="sk-desc">${up.desc}</div>
+        <div class="sk-lock">Lv ${up.lv} 解鎖</div>
+      `;
+      root.appendChild(row);
+    }
+  }
+
+  // 綁事件
+  root.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.onclick = () => {
+      const act = btn.dataset.act;
+      const i = parseInt(btn.dataset.i);
+      const eq = cs.equippedSkills;
+      if (act === 'up' && i > 0) { [eq[i-1], eq[i]] = [eq[i], eq[i-1]]; }
+      else if (act === 'dn' && i < 4) { [eq[i+1], eq[i]] = [eq[i], eq[i+1]]; }
+      else if (act === 'rm') { eq[i] = null; }
+      else if (act === 'eq') {
+        const sid = btn.dataset.sid;
+        const idx = eq.indexOf(null);
+        if (idx >= 0) eq[idx] = sid;
+      }
+      GAME_STATE.scheduleSave();
+      renderSkills();
+    };
+  });
+}
+
+// ============================================================================
+// 解鎖通知 / 轉職彈窗（從 STATE.pendingUnlocks 取出）
+// ============================================================================
+function flushPendingNotifications() {
+  const st = GAME_STATE.state;
+  const cs = st.characters[st.activeCharId];
+
+  // 自癒：等級已達轉職門檻但 pendingJobChoice=0（狀態漏掉時補上）
+  if (cs && st.pendingJobChoice === 0 && !cs.graduated) {
+    const need = cs.level >= 75 ? 3 : cs.level >= 50 ? 2 : cs.level >= 25 ? 1 : 0;
+    if (need > cs.jobTier) st.pendingJobChoice = cs.jobTier + 1;
+  }
+
+  // 優先處理轉職（有 pendingJobChoice）
+  if (st.pendingJobChoice && !document.getElementById('jobOverlay').classList.contains('open')) {
+    if (document.getElementById('jobOverlay').classList.contains('hidden')) {
+      showJobChoice(st.pendingJobChoice);
+    }
+    return;
+  }
+  // 解鎖通知處理
+  // - 共鳴升等 → 直接 toast 不彈窗（量多會煩）
+  // - 技能 / 被動 / 畢業 → 用彈窗（重要事件）
+  if (st.pendingUnlocks.length > 0) {
+    const importants = [];
+    const resonances = [];
+    while (st.pendingUnlocks.length) {
+      const u = GAME_STATE.dequeueUnlock();
+      if (u.kind === 'job') continue;  // 由 jobOverlay 處理
+      if (u.kind === 'resonance') resonances.push(u);
+      else importants.push(u);
+    }
+    // 共鳴 batch 成單一 toast
+    if (resonances.length) {
+      const max = resonances[resonances.length - 1].lv;
+      const min = resonances[0].lv;
+      const msg = resonances.length === 1
+        ? `共鳴提升至 R${max}（+1 點可分配）`
+        : `共鳴 R${min - 1} → R${max}（+${resonances.length} 點可分配）`;
+      if (typeof toast === 'function') toast(msg, 'gold');
+    }
+    // 重要事件用彈窗
+    if (importants.length && document.getElementById('unlockOverlay').classList.contains('hidden')) {
+      showUnlockOverlay(importants.slice(0, 8));
+    }
+  }
+}
+
+function showUnlockOverlay(items) {
+  const ov = document.getElementById('unlockOverlay');
+  const body = document.getElementById('unlockBody');
+  const title = document.getElementById('unlockTitle');
+  let html = '';
+  let hasGrad = false;
+  for (const u of items) {
+    if (u.kind === 'skill') html += `<div class="unlock-line unlock-skill">Lv ${u.lv} · 解鎖技能 <b>${u.name}</b></div>`;
+    else if (u.kind === 'passive') html += `<div class="unlock-line unlock-passive">Lv ${u.lv} · 解鎖被動 <b>${u.name}</b></div>`;
+    else if (u.kind === 'graduate') { html += `<div class="unlock-line unlock-resonance">Lv 99 · <b>畢業！</b>共鳴等級系統已開啟。</div>`; hasGrad = true; }
+    else if (u.kind === 'resonance') html += `<div class="unlock-line unlock-resonance">共鳴等級提升至 <b>R${u.lv}</b></div>`;
+  }
+  title.textContent = hasGrad ? '畢業 · 銀月之路' : '成長 · 新的力量';
+  body.innerHTML = html;
+  ov.classList.remove('hidden');
+  renderCharDetail();
+  renderSkills();
+  renderHud();
+  renderCharList();
+}
+
+function showJobChoice(tier) {
+  const ov = document.getElementById('jobOverlay');
+  const title = document.getElementById('jobTitle');
+  const sub = document.getElementById('jobSub');
+  const grid = document.getElementById('pathGrid');
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  const bp = GAME_STATE.getCharacterBlueprint(cs.id);
+
+  title.textContent = `${tier === 1 ? '一' : tier === 2 ? '二' : '三'}轉 · ${tier === 1 ? '選擇你的道路' : '精修現有路線'}`;
+  if (tier === 1) sub.textContent = '月凜在霜月家祖廟前佇立良久——是時候決定流派。';
+  else if (tier === 2) sub.textContent = '走在道路上的她，能力進一步覺醒。';
+  else sub.textContent = '銀月之路的盡頭，是真正的她自己。';
+
+  grid.innerHTML = '';
+  if (tier === 1) {
+    // 兩選一
+    for (const key of ['A', 'B']) {
+      const p = bp.paths[key];
+      const skill = bp.unlocks.find(u => u.type === 'skill' && u.path === key && u.lv === 25);
+      const sk = skill ? GAME_DATA.SKILLS[skill.skill] : null;
+      const opt = document.createElement('div');
+      opt.className = 'path-option';
+      opt.innerHTML = `
+        <h4>${p.name}</h4>
+        <div class="path-tag">${p.tag}</div>
+        <div class="path-desc">${p.desc}</div>
+        ${sk ? `<div class="path-skill">解鎖技能：<b>${sk.name}</b> — ${sk.desc}</div>` : ''}
+      `;
+      opt.onclick = () => {
+        GAME_STATE.selectJobPath(key, 1);
+        ov.classList.add('hidden');
+        renderAll();
+      };
+      grid.appendChild(opt);
+    }
+  } else {
+    // 二轉 / 三轉：只有當前路線
+    const key = cs.jobPath;
+    const p = bp.paths[key];
+    const newName = tier === 2 ? p.tier2.name : p.tier3.name;
+    const newDesc = tier === 2 ? p.tier2.desc : p.tier3.desc;
+    const skillUnlock = bp.unlocks.find(u => u.type === 'skill' && u.path === key && u.lv === (tier === 2 ? 50 : 75));
+    const sk = skillUnlock ? GAME_DATA.SKILLS[skillUnlock.skill] : null;
+    const opt = document.createElement('div');
+    opt.className = 'path-option';
+    opt.style.gridColumn = 'span 2';
+    opt.innerHTML = `
+      <h4>${newName}</h4>
+      <div class="path-tag">${tier === 2 ? '二轉精修' : '三轉終極'}</div>
+      <div class="path-desc">${newDesc}</div>
+      ${sk ? `<div class="path-skill">解鎖技能：<b>${sk.name}</b> — ${sk.desc}</div>` : ''}
+    `;
+    opt.onclick = () => {
+      GAME_STATE.selectJobPath(cs.jobPath, tier);
+      ov.classList.add('hidden');
+      renderAll();
+    };
+    grid.appendChild(opt);
+  }
+
+  ov.classList.remove('hidden');
+}
+
+// ============================================================================
+// Toast
+// ============================================================================
+window.showChestRewardOverlay = function(result) {
+  const overlay = document.createElement('div');
+  overlay.className = 'chest-reward-overlay';
+  const items = result.rewards.map(r => {
+    const rarityClass = r.rarity || 'N';
+    return `<div class="chest-reward-row bag-item ${rarityClass}">${r.label}</div>`;
+  }).join('');
+  overlay.innerHTML = `
+    <div class="chest-reward-card">
+      <div class="chest-reward-title">✨ ${result.chestName} 已開啟 ✨</div>
+      <div class="chest-reward-list">${items}</div>
+      <button class="primary" id="chestRewardClose" style="margin-top:14px;width:100%">確定</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#chestRewardClose').onclick = close;
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+};
+
+window.showUrDropAnnouncement = function(name) {
+  const overlay = document.createElement('div');
+  overlay.className = 'ur-drop-overlay';
+  overlay.innerHTML = `
+    <div class="ur-drop-card">
+      <div class="ur-drop-label">★ ULTRA RARE ★</div>
+      <div class="ur-drop-name">${name}</div>
+      <div class="ur-drop-sub">3% 概率 · 命運降臨</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.classList.add('fade-out'), 2400);
+  setTimeout(() => overlay.remove(), 3000);
+};
+
+// 詞綴顯示格式化（label + 對應屬性中文 + 數值/百分比）
+const STAT_DISPLAY_NAMES = {
+  atk: '攻擊', def: '防禦', hp: '生命',
+  crit: '暴擊', critDmg: '暴傷', spd: '速度',
+  dmgReduce: '減傷', cdReduce: 'CD減', vsBoss: '對 BOSS', skillDmg: '技能傷害',
+};
+function formatAffix(a) {
+  const isPct = typeof a.value === 'number' && a.value < 1;
+  const valStr = isPct ? (a.value * 100).toFixed(1) + '%' : a.value;
+  const stat = STAT_DISPLAY_NAMES[a.stat] || a.stat;
+  return {
+    label: `${a.label}（${stat}）`,
+    value: valStr,
+    raw: `${a.label} ${stat} +${valStr}`,
+  };
+}
+
+// ============================================================================
+// 戰鬥結算彈窗（襲擊戰通關 / 任何戰敗）
+// ============================================================================
+window.showResultModal = function(lc) {
+  if (!lc) return;
+  const overlay = document.getElementById('resultOverlay');
+  if (!overlay) return;
+
+  const titleEl = document.getElementById('resultTitle');
+  const subEl = document.getElementById('resultSubtitle');
+  const statsEl = document.getElementById('resultStats');
+  const skillsEl = document.getElementById('resultSkills');
+  const lootSection = document.getElementById('resultLootSection');
+  const lootEl = document.getElementById('resultLoot');
+
+  // 標題 / 副標題
+  if (lc.failed) {
+    titleEl.textContent = '✘ 戰敗';
+    titleEl.className = 'result-title fail';
+    subEl.textContent = `${lc.dungeonName}　·　堅持了 ${lc.time.toFixed(1)} 秒`;
+  } else if (lc.isRaid) {
+    titleEl.textContent = '★ 襲擊戰通關 ★';
+    titleEl.className = 'result-title raid';
+    subEl.textContent = `${lc.dungeonName}　·　通關時間 ${lc.time.toFixed(1)} 秒`;
+  } else {
+    titleEl.textContent = '✓ 通關成功';
+    titleEl.className = 'result-title win';
+    subEl.textContent = `${lc.dungeonName}　·　通關時間 ${lc.time.toFixed(1)} 秒`;
+  }
+
+  // 統計
+  const d = lc.damage || { total: 0, hits: 0, crits: 0, bySkill: {} };
+  const dps = lc.time > 0 ? Math.floor(d.total / lc.time) : 0;
+  const critRate = d.hits > 0 ? (d.crits / d.hits * 100).toFixed(1) : '0.0';
+  statsEl.innerHTML = `
+    <div class="result-stat"><span>總傷害</span><b>${Math.floor(d.total).toLocaleString()}</b></div>
+    <div class="result-stat"><span>DPS</span><b>${dps.toLocaleString()}</b></div>
+    <div class="result-stat"><span>命中</span><b>${d.hits}</b></div>
+    <div class="result-stat"><span>暴擊率</span><b>${critRate}%</b></div>
+  `;
+
+  // 區段標題依模式決定
+  const sectionTitleEl = overlay.querySelector('.result-section-title');
+  const entries = Object.entries(d.bySkill || {});
+  if (lc.isRaid) {
+    // 襲擊戰：顯示「玩家貢獻」聚合（我 + 每位隊友），不顯示技能明細
+    if (sectionTitleEl) sectionTitleEl.textContent = '玩家貢獻';
+    const allyEntries = entries.filter(([k]) => k.startsWith('mp-ally:'));
+    const myTotal = entries.filter(([k]) => !k.startsWith('mp-ally:')).reduce((s, [k, v]) => s + v, 0);
+    const myName = GAME_STATE.getPlayerNickname() || '我';
+    const contributors = [
+      { name: myName, total: myTotal, self: true },
+      ...allyEntries.map(([k, v]) => ({ name: k.slice(8), total: v, self: false })),
+    ].sort((a, b) => b.total - a.total);
+    if (contributors.some(c => c.total > 0)) {
+      skillsEl.innerHTML = contributors.map(c => {
+        const pct = d.total > 0 ? (c.total / d.total * 100) : 0;
+        const label = c.self ? `👤 ${c.name}（你）` : `⛺ ${c.name}（隊友）`;
+        return `
+          <div class="result-skill${c.self ? '' : ' ally'}">
+            <div class="result-skill-head">
+              <span>${label}</span>
+              <span>${Math.floor(c.total).toLocaleString()} (${pct.toFixed(1)}%)</span>
+            </div>
+            <div class="result-skill-bar"><div style="width:${Math.min(100, pct)}%"></div></div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      skillsEl.innerHTML = '<div style="color:var(--muted);font-size:11px;text-align:center;padding:6px">本場無輸出紀錄</div>';
+    }
+  } else {
+    // 非襲擊戰（一般戰敗）：顯示技能輸出排行（前 5 名）
+    if (sectionTitleEl) sectionTitleEl.textContent = '技能輸出';
+    const sorted = entries.sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (sorted.length > 0) {
+      skillsEl.innerHTML = sorted.map(([sid, dmg]) => {
+        const sk = GAME_DATA.SKILLS[sid];
+        const name = sk ? sk.name : sid;
+        const pct = d.total > 0 ? (dmg / d.total * 100) : 0;
+        return `
+          <div class="result-skill">
+            <div class="result-skill-head">
+              <span>${name}</span><span>${Math.floor(dmg).toLocaleString()} (${pct.toFixed(1)}%)</span>
+            </div>
+            <div class="result-skill-bar"><div style="width:${Math.min(100, pct)}%"></div></div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      skillsEl.innerHTML = '<div style="color:var(--muted);font-size:11px;text-align:center;padding:6px">本場無輸出紀錄</div>';
+    }
+  }
+
+  // 戰利品（只在通關顯示）
+  if (lc.failed) {
+    lootSection.style.display = 'none';
+  } else {
+    lootSection.style.display = '';
+    const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
+    const matEntries = lc.matDrops ? Object.entries(lc.matDrops) : [];
+    const matHtml = matEntries.map(([n, q]) =>
+      `<span class="result-loot-item" style="color:${TIER_COLOR[n] || 'var(--text)'}">${n} +${q}</span>`
+    ).join('');
+    let chestHtml = '';
+    if (lc.chest && GAME_DATA.CHESTS[lc.chest]) {
+      const c = GAME_DATA.CHESTS[lc.chest];
+      chestHtml = `<span class="result-loot-item" style="color:${c.color}">📦 ${c.name}</span>`;
+    }
+    lootEl.innerHTML = `
+      <span class="result-loot-item exp">經驗 +${lc.exp.toLocaleString()}</span>
+      <span class="result-loot-item gold">金幣 +${lc.gold.toLocaleString()}</span>
+      ${matHtml || ''}
+      ${lc.shard ? `<span class="result-loot-item shard">魂晶 +${lc.shard}</span>` : ''}
+      ${chestHtml}
+      ${lc.gem ? `<span class="result-loot-item">💎 ${lc.gem}</span>` : ''}
+      ${lc.drop ? `<span class="result-loot-item drop">${lc.drop}</span>` : ''}
+    `;
+  }
+
+  overlay.classList.remove('hidden');
+  document.getElementById('resultClose').onclick = () => overlay.classList.add('hidden');
+};
+
+// ============================================================================
+// 多人 - 隊友面板（戰鬥中顯示）
+// 用 DOM diff 避免每次 innerHTML 觸發 CSS 動畫造成閃爍
+// ============================================================================
+function renderAllyPanel() {
+  const root = document.getElementById('allyPanel');
+  if (!root) return;
+  if (!window.MP_API || !MP_API.isConnected()) {
+    if (root._allyKey !== '') { root.innerHTML = ''; root._allyKey = ''; }
+    return;
+  }
+  const players = MP_API.getPlayers();
+  const peerIds = Object.keys(players);
+  if (!peerIds.length) {
+    if (root._allyKey !== '') { root.innerHTML = ''; root._allyKey = ''; }
+    return;
+  }
+  // 結構鍵：只在「玩家加入/離開/暱稱/形態變動」時才重建 DOM
+  const structKey = peerIds.map(pid => {
+    const p = players[pid];
+    return `${pid}:${p.nickname || ''}:${p.charName || ''}:${p.level || 0}:${p.jobPath || ''}${p.jobTier || 0}`;
+  }).join('|');
+  if (structKey !== root._allyKey) {
+    root._allyKey = structKey;
+    let html = '';
+    for (const peerId of peerIds) {
+      const info = players[peerId];
+      const isHostTag = peerId === MP.hostId;
+      // 用同樣的「玩家卡」風格顯示
+      const tierKey = info.jobPath && info.jobTier > 0 ? `${info.jobPath}${info.jobTier}` : 'base';
+      const portraitHtml = window.CHAR_PORTRAIT
+        ? window.CHAR_PORTRAIT(info.blueprintId || 'tsukirin', { tierKey })
+        : '';
+      html += `
+        <div class="fighter-card ally-card" data-peer="${peerId}">
+          <div class="ally-tag-${isHostTag ? 'host' : 'guest'} ally-tag-badge">${isHostTag ? 'HOST' : 'GUEST'}</div>
+          <div class="card-frame ally-frame">${portraitHtml}</div>
+          <div class="card-name ally-nick">${info.nickname || '無名'}</div>
+          <div class="card-sub">${info.charName || '?'} <small>Lv ${info.level || 1}</small> <span class="ally-status"></span></div>
+          <div class="card-hp ally-hp">
+            <div class="hp-fill" style="width:0%"></div>
+            <span class="hp-text">- / -</span>
+          </div>
+          <div class="card-mp ally-mp">
+            <div class="mp-fill" style="width:0%"></div>
+            <span class="mp-text">- / -</span>
+          </div>
+        </div>
+      `;
+    }
+    root.innerHTML = html;
+  }
+  // 更新動態值（不重建 DOM）
+  const myDungeon = BATTLE && BATTLE.charId ? BATTLE.dungeonId : null;
+  root.querySelectorAll('.ally-card').forEach(card => {
+    const peerId = card.dataset.peer;
+    const info = players[peerId];
+    if (!info) return;
+    const bs = info.battleState || {};
+    const sameDungeon = myDungeon && bs.dungeonId === myDungeon;
+    const inBattle = bs.inBattle;
+    // HP 為 0 也視為陣亡（即使 player-dead 訊息漏接，避免 ally 卡看不出來）
+    const isDead = !!bs.dead || (inBattle && bs.maxHp > 0 && bs.hp <= 0);
+    if (card.classList.contains('same') !== !!sameDungeon) card.classList.toggle('same', !!sameDungeon);
+    if (card.classList.contains('far') !== !sameDungeon) card.classList.toggle('far', !sameDungeon);
+    if (card.classList.contains('dead') !== isDead) card.classList.toggle('dead', isDead);
+
+    const statusEl = card.querySelector('.ally-status');
+    let statusText, statusClass;
+    if (!inBattle) { statusText = '待命'; statusClass = 'ally-status-idle'; }
+    else if (sameDungeon) { statusText = '同副本'; statusClass = 'ally-status-ok'; }
+    else { statusText = '他副本'; statusClass = 'ally-status-far'; }
+    if (statusEl.textContent !== statusText) statusEl.textContent = statusText;
+    if (statusEl.className !== 'ally-status ' + statusClass) statusEl.className = 'ally-status ' + statusClass;
+
+    const hpFill = card.querySelector('.card-hp .hp-fill');
+    const hpText = card.querySelector('.card-hp .hp-text');
+    const mpFill = card.querySelector('.card-mp .mp-fill');
+    const mpText = card.querySelector('.card-mp .mp-text');
+    if (inBattle && bs.maxHp) {
+      const hpPct = Math.max(0, bs.hp / bs.maxHp * 100);
+      const mpPct = bs.maxMp ? Math.max(0, bs.mp / bs.maxMp * 100) : 0;
+      hpFill.style.width = hpPct + '%';
+      hpText.textContent = `${bs.hp} / ${bs.maxHp}`;
+      mpFill.style.width = mpPct + '%';
+      mpText.textContent = `${bs.mp} / ${bs.maxMp}`;
+    } else {
+      hpFill.style.width = '0%';
+      hpText.textContent = '- / -';
+      mpFill.style.width = '0%';
+      mpText.textContent = '- / -';
+    }
+  });
+}
+
+function toast(msg, kind) {
+  const root = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast-msg' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+// ============================================================================
+// 多人房間 UI（階段 1：基礎連線測試）
+// ============================================================================
+let _mpChatLog = [];
+
+function playerInfoCard(info, isMe, isHostTag) {
+  const tag = isHostTag ? 'HOST' : 'GUEST';
+  const nickname = info.nickname || '無名旅人';
+  const charLine = info.charName ? `${info.charName}${info.className ? ' · ' + info.className : ''}${info.pathName ? ' · ' + info.pathName : ''}` : '';
+  const lvLine = `Lv ${info.level || 1}` + (info.cp ? `　CP ${info.cp.toLocaleString()}` : '') + (info.graduated ? '　✦ 已畢業' : '');
+  return `
+    <div class="mp-player${isMe ? ' self' : ''}">
+      <span class="mp-player-icon">●</span>
+      <div class="mp-player-info">
+        <div class="mp-player-nick">${nickname}${isMe ? '（你）' : ''}</div>
+        <div class="mp-player-sub">${charLine}</div>
+        <div class="mp-player-meta">${lvLine}</div>
+      </div>
+      <span class="mp-player-tag">${tag}</span>
+    </div>
+  `;
+}
+
+function renderMpRoom() {
+  const root = document.getElementById('tabMpRoom');
+  if (!root) return;
+  const isConnected = MP_API.isConnected();
+  const isHost = MP_API.isHost();
+  const roomCode = MP_API.getRoomCode();
+  const players = MP_API.getPlayers();
+  const playerCount = Object.keys(players).length + (isConnected ? 1 : 0);
+  const myNickname = GAME_STATE.getPlayerNickname() || '';
+
+  let html = '<div class="mp-room">';
+
+  // 暱稱現況（單行顯示 + 修改按鈕）
+  const nickDisplay = myNickname || '<span style="color:var(--hp-enemy)">★ 未設定</span>';
+  html += `
+    <div class="mp-nickname-line">
+      <span class="mp-nick-label">玩家暱稱：</span>
+      <b class="mp-nick-value">${nickDisplay}</b>
+      <button class="ghost small" id="mpNicknameEdit">修改</button>
+    </div>
+  `;
+
+  if (!isConnected) {
+    html += `
+      <div class="mp-section">
+        <div class="mp-section-title">＊ 多人連線（Beta · 階段 1）</div>
+        <div class="mp-hint">此階段只能測試連線與訊息收發。完整襲擊戰同步將在後續階段加入。</div>
+      </div>
+      <div class="mp-actions-grid">
+        <button class="primary big" id="mpHostBtn">建立房間</button>
+        <div style="display:flex;gap:6px">
+          <input id="mpJoinCode" type="text" placeholder="輸入房號（如 ABCD-1234）" maxlength="9" style="flex:1;padding:8px;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:4px;font-family:monospace;text-transform:uppercase">
+          <button class="primary" id="mpJoinBtn">加入</button>
+        </div>
+      </div>
+      <div class="mp-hint" style="margin-top:14px;font-size:10px">
+        ⓘ 使用 WebRTC P2P 直連，信令服務由 PeerJS 公共伺服器提供（免費，無註冊）。<br>
+        ⚠ 約 20% 機率穿不過防火牆 / NAT。若連線失敗，建議雙方都用同一個 WiFi 或行動網路試試。
+      </div>
+    `;
+  } else {
+    const roleText = isHost ? '🏠 房主' : '👥 訪客';
+    html += `
+      <div class="mp-section">
+        <div class="mp-room-header">
+          <div>
+            <div class="mp-section-title">已連線 · ${roleText}</div>
+            <div class="mp-room-code">房號：<b id="mpRoomCode">${roomCode}</b> <button id="mpCopyBtn" class="ghost small">複製</button></div>
+          </div>
+          <button class="danger small" id="mpLeaveBtn">離開房間</button>
+        </div>
+        <div class="mp-hint">分享房號給朋友，叫他在「多人」視窗輸入加入。</div>
+      </div>
+      <div class="mp-section">
+        <div class="mp-section-title">玩家列表（${playerCount}）</div>
+        <div class="mp-player-list">
+    `;
+    // 我自己
+    const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+    const myInfo = cs ? {
+      nickname: myNickname || '無名旅人',
+      charName: cs.name,
+      className: GAME_STATE.getCharacterBlueprint(cs.blueprintId)?.title || '',
+      pathName: cs.pathName || '',
+      level: cs.level,
+      cp: GAME_STATE.combatPower(cs.id),
+      graduated: !!cs.graduated,
+    } : { nickname: myNickname || '無名旅人', charName: '?', level: 1 };
+    html += playerInfoCard(myInfo, true, isHost);
+    for (const [peerId, info] of Object.entries(players)) {
+      html += playerInfoCard(info, false, peerId === MP.hostId);
+    }
+    html += `</div></div>`;
+    // Chat 測試區
+    html += `
+      <div class="mp-section">
+        <div class="mp-section-title">訊息（測試連線用）</div>
+        <div class="mp-chat-log" id="mpChatLog">${_mpChatLog.map(m => `<div><b>${m.who}:</b> ${m.text}</div>`).join('') || '<i style="color:var(--muted)">尚無訊息</i>'}</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input id="mpChatInput" type="text" placeholder="輸入訊息..." style="flex:1;padding:6px;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:4px">
+          <button class="primary" id="mpSendBtn">發送</button>
+        </div>
+      </div>
+    `;
+  }
+
+  html += '</div>';
+  root.innerHTML = html;
+
+  // 綁定按鈕
+  const $ = (id) => document.getElementById(id);
+  // 暱稱修改（簡單 prompt，創角時已主設定）
+  if ($('mpNicknameEdit')) {
+    $('mpNicknameEdit').onclick = () => {
+      const current = GAME_STATE.getPlayerNickname() || '';
+      const input = prompt('修改玩家暱稱（最多 16 字）：', current);
+      if (input == null) return;
+      const newName = input.trim().slice(0, 16);
+      if (!newName) { toast('暱稱不能空白', 'error'); return; }
+      GAME_STATE.setPlayerNickname(newName);
+      toast('暱稱已更新：' + newName, 'gold');
+      if (MP_API.isConnected()) MP_API.broadcastPlayerInfo();
+      renderMpRoom();
+    };
+  }
+  if ($('mpHostBtn')) $('mpHostBtn').onclick = async () => {
+    if (!GAME_STATE.getPlayerNickname()) {
+      toast('請先設定玩家暱稱', 'error');
+      $('mpNicknameInput')?.focus();
+      return;
+    }
+    try {
+      $('mpHostBtn').disabled = true;
+      $('mpHostBtn').textContent = '建立中...';
+      const code = await MP_API.hostRoom();
+      toast(`房間已建立：${code}`, 'gold');
+      hookMpCallbacks();
+      renderMpRoom();
+    } catch (e) {
+      toast('建立失敗：' + e.message, 'error');
+      $('mpHostBtn').disabled = false;
+      $('mpHostBtn').textContent = '建立房間';
+    }
+  };
+  if ($('mpJoinBtn')) $('mpJoinBtn').onclick = async () => {
+    if (!GAME_STATE.getPlayerNickname()) {
+      toast('請先設定玩家暱稱', 'error');
+      $('mpNicknameInput')?.focus();
+      return;
+    }
+    const code = $('mpJoinCode').value.trim().toUpperCase();
+    if (!code || !/^[A-Z]{4}-[0-9]{4}$/.test(code)) {
+      toast('房號格式錯誤（應為 ABCD-1234）', 'error');
+      return;
+    }
+    try {
+      $('mpJoinBtn').disabled = true;
+      $('mpJoinBtn').textContent = '連線中...';
+      hookMpCallbacks();
+      await MP_API.joinRoom(code);
+      toast(`已加入房間 ${code}`, 'gold');
+      renderMpRoom();
+    } catch (e) {
+      toast('加入失敗：' + e.message, 'error');
+      $('mpJoinBtn').disabled = false;
+      $('mpJoinBtn').textContent = '加入';
+    }
+  };
+  if ($('mpLeaveBtn')) $('mpLeaveBtn').onclick = async () => {
+    await MP_API.leaveRoom();
+    _mpChatLog = [];
+    toast('已離開房間');
+    renderMpRoom();
+  };
+  if ($('mpCopyBtn')) $('mpCopyBtn').onclick = () => {
+    navigator.clipboard.writeText(roomCode).then(() => toast('已複製房號', 'gold'));
+  };
+  if ($('mpSendBtn')) {
+    const send = () => {
+      const text = $('mpChatInput').value.trim();
+      if (!text) return;
+      const myName = GAME_STATE.getPlayerNickname() || '我';
+      MP_API.broadcast('chat', { from: myName, text });
+      _mpChatLog.push({ who: myName + ' (你)', text });
+      if (_mpChatLog.length > 30) _mpChatLog.shift();
+      $('mpChatInput').value = '';
+      renderMpRoom();
+    };
+    $('mpSendBtn').onclick = send;
+    $('mpChatInput').onkeydown = (e) => { if (e.key === 'Enter') send(); };
+  }
+}
+
+function hookMpCallbacks() {
+  MP.onMessage = (fromPeerId, type, payload) => {
+    if (type === 'chat') {
+      _mpChatLog.push({ who: payload.from, text: payload.text });
+      if (_mpChatLog.length > 30) _mpChatLog.shift();
+      const win = document.getElementById('winMpRoom');
+      if (win && !win.classList.contains('hidden')) renderMpRoom();
+    } else if (type === 'player-info') {
+      const win = document.getElementById('winMpRoom');
+      if (win && !win.classList.contains('hidden')) renderMpRoom();
+    } else if (type === 'raid-launch') {
+      // 房主開戰 → Guest 自動跟著進
+      const dId = payload.dungeonId;
+      const d = GAME_DATA.getDungeon(dId);
+      if (!d) { toast('房主開的副本找不到', 'error'); return; }
+      const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+      if (!cs || (d.requiredLv && cs.level < d.requiredLv)) {
+        toast(`你的等級不足（需 Lv ${d.requiredLv}），無法跟團`, 'error');
+        return;
+      }
+      // 關閉所有副本相關視窗
+      ['winRaidPreview', 'winDungeon'].forEach(id => {
+        const w = document.getElementById(id);
+        if (w) { w.style.display = ''; w.classList.add('hidden'); }
+      });
+      toast(`房主開戰：${d.name}`, 'gold');
+      PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
+      startBattle(d.id, GAME_STATE.state.activeCharId);
+    }
+  };
+  MP.onPlayerJoined = () => {
+    toast('朋友已加入', 'gold');
+    const win = document.getElementById('winMpRoom');
+    if (win && !win.classList.contains('hidden')) renderMpRoom();
+  };
+  MP.onPlayerLeft = () => {
+    toast('對方離開房間');
+    const win = document.getElementById('winMpRoom');
+    if (win && !win.classList.contains('hidden')) renderMpRoom();
+  };
+}
