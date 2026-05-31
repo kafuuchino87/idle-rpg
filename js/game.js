@@ -266,14 +266,16 @@ function bindGlobalEvents() {
           `金幣 ${parsedState.gold || 0}\n` +
           `已畢業 ${parsedState.characters?.tsukirin?.graduated ? '是' : '否'}\n` +
           `存檔字串大小 ${Math.round(data.save.length / 1024)} KB`)) return;
-        // 先停所有遊戲邏輯，避免 scheduleSave 把舊 STATE 寫回覆蓋掉匯入
+        // 停所有遊戲邏輯
         if (window.BATTLE) {
           BATTLE.running = false;
           BATTLE.paused = true;
         }
+        // 保留原始 setItem reference
+        const realSetItem = localStorage.setItem.bind(localStorage);
         try {
-          localStorage.setItem('veilreach.save.v4', data.save);
-          if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
+          realSetItem('veilreach.save.v4', data.save);
+          if (data.nickname) realSetItem('veilreach.nickname', data.nickname);
         } catch (e) {
           alert('寫入 localStorage 失敗：' + e.message + '\n（可能存檔太大超過瀏覽器配額）');
           return;
@@ -284,7 +286,15 @@ function bindGlobalEvents() {
           alert('寫入驗證失敗：localStorage 內容跟匯入的不一致！');
           return;
         }
-        // 立即 reload（不能 setTimeout 否則會被 scheduleSave 800ms 覆蓋）
+        // 攔截後續 setItem，避免 scheduleSave 在 reload 完成前再寫一次 STATE 覆蓋
+        localStorage.setItem = function(key, value) {
+          if (key === 'veilreach.save.v4' || key === 'veilreach.nickname') {
+            console.warn('[import] blocked setItem during reload:', key);
+            return;
+          }
+          return realSetItem(key, value);
+        };
+        // 立即 reload
         location.reload();
       },
     });
