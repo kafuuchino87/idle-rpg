@@ -176,9 +176,20 @@ function reportDamageDealt(enemyIdx, dmg, isCrit) {
 // ===== 廣播自己的戰鬥狀態（給隊友顯示） =====
 function broadcastBattleState() {
   if (MP.role === 'solo') return;
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  const cp = cs ? GAME_STATE.combatPower(cs.id) : 0;
+  // 不在戰鬥也要帶 level/cp/jobPath/jobTier，這樣 ally panel 能即時跟著對方升級 / 轉職更新
+  const base = {
+    level: cs ? cs.level : 1,
+    cp: cp,
+    graduated: cs ? !!cs.graduated : false,
+    jobPath: cs ? (cs.jobPath || '') : '',
+    jobTier: cs ? (cs.jobTier || 0) : 0,
+    pathName: cs && cs.pathName ? cs.pathName : '',
+  };
   const b = window.BATTLE;
   if (!b || !b.charId) {
-    broadcast('player-state', { inBattle: false });
+    broadcast('player-state', { inBattle: false, ...base });
     return;
   }
   broadcast('player-state', {
@@ -189,6 +200,7 @@ function broadcastBattleState() {
     dungeonId: b.dungeonId,
     inBattle: true,
     paused: !!b.paused,
+    ...base,
   });
 }
 

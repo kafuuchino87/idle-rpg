@@ -2932,10 +2932,14 @@ function renderAllyPanel() {
     if (root._allyKey !== '') { root.innerHTML = ''; root._allyKey = ''; }
     return;
   }
-  // 結構鍵：只在「玩家加入/離開/暱稱/形態變動」時才重建 DOM
+  // 結構鍵：玩家加入/離開、暱稱改、轉職時才重建 DOM
+  // level 不放 structKey（每升一級都重建會閃）；jobPath/jobTier 要用最新 battleState 的（轉職會變）
   const structKey = peerIds.map(pid => {
     const p = players[pid];
-    return `${pid}:${p.nickname || ''}:${p.charName || ''}:${p.level || 0}:${p.jobPath || ''}${p.jobTier || 0}`;
+    const bs = p.battleState || {};
+    const jobPath = bs.jobPath != null ? bs.jobPath : (p.jobPath || '');
+    const jobTier = bs.jobTier != null ? bs.jobTier : (p.jobTier || 0);
+    return `${pid}:${p.nickname || ''}:${p.charName || ''}:${jobPath}${jobTier}`;
   }).join('|');
   if (structKey !== root._allyKey) {
     root._allyKey = structKey;
@@ -2943,8 +2947,11 @@ function renderAllyPanel() {
     for (const peerId of peerIds) {
       const info = players[peerId];
       const isHostTag = peerId === MP.hostId;
-      // 用同樣的「玩家卡」風格顯示
-      const tierKey = info.jobPath && info.jobTier > 0 ? `${info.jobPath}${info.jobTier}` : 'base';
+      // 立繪用最新轉職資料（battleState 優先，否則 fallback 用 info 連線時的版本）
+      const bs = info.battleState || {};
+      const effJobPath = bs.jobPath != null ? bs.jobPath : info.jobPath;
+      const effJobTier = bs.jobTier != null ? bs.jobTier : info.jobTier;
+      const tierKey = effJobPath && effJobTier > 0 ? `${effJobPath}${effJobTier}` : 'base';
       const portraitHtml = window.CHAR_PORTRAIT
         ? window.CHAR_PORTRAIT(info.blueprintId || 'tsukirin', { tierKey })
         : '';
@@ -2953,7 +2960,7 @@ function renderAllyPanel() {
           <div class="ally-tag-${isHostTag ? 'host' : 'guest'} ally-tag-badge">${isHostTag ? 'HOST' : 'GUEST'}</div>
           <div class="card-frame ally-frame">${portraitHtml}</div>
           <div class="card-name ally-nick">${info.nickname || '無名'}</div>
-          <div class="card-sub">${info.charName || '?'} <small>Lv ${info.level || 1}</small> <span class="ally-status"></span></div>
+          <div class="card-sub">${info.charName || '?'} <small class="ally-lv">Lv ${info.level || 1}</small> <span class="ally-status"></span></div>
           <div class="card-hp ally-hp">
             <div class="hp-fill" style="width:0%"></div>
             <span class="hp-text">- / -</span>
@@ -2989,6 +2996,15 @@ function renderAllyPanel() {
     else { statusText = '他副本'; statusClass = 'ally-status-far'; }
     if (statusEl.textContent !== statusText) statusEl.textContent = statusText;
     if (statusEl.className !== 'ally-status ' + statusClass) statusEl.className = 'ally-status ' + statusClass;
+
+    // Lv 數字動態更新（優先用 battleState 內 level，否則 fallback 用 player-info 內 level）
+    const lvEl = card.querySelector('.ally-lv');
+    if (lvEl) {
+      const effLv = (bs.level != null ? bs.level : info.level) || 1;
+      const effGrad = bs.graduated != null ? bs.graduated : info.graduated;
+      const lvText = effGrad ? 'Lv Max' : 'Lv ' + effLv;
+      if (lvEl.textContent !== lvText) lvEl.textContent = lvText;
+    }
 
     const hpFill = card.querySelector('.card-hp .hp-fill');
     const hpText = card.querySelector('.card-hp .hp-text');
