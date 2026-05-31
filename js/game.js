@@ -3143,10 +3143,11 @@ function renderMpRoom() {
     `;
     // 我自己
     const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+    const myBp = cs ? GAME_STATE.getCharacterBlueprint(cs.blueprintId) : null;
     const myInfo = cs ? {
       nickname: myNickname || '無名旅人',
-      charName: cs.name,
-      className: GAME_STATE.getCharacterBlueprint(cs.blueprintId)?.title || '',
+      charName: cs.customName || (myBp ? myBp.name : '?'),
+      className: myBp ? myBp.title : '',
       pathName: cs.pathName || '',
       level: cs.level,
       cp: GAME_STATE.combatPower(cs.id),

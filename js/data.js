@@ -165,7 +165,7 @@ const SKILLS = {
 // --------------------------------------------------------------------------
 const PASSIVES = {
   'fox-eye':    { name: '狐眼',       desc: '暴擊 +5%、攻擊速度 +5%。',                 apply: s => { s.crit += 0.05; s.spd *= 1.05; } },
-  'wind-seal':  { name: '疾風之印',   desc: '連擊每段疊加 5% 攻擊（最多 5 層）。',      apply: s => { s.atk *= 1.10; } }, // 簡化：常駐 +10%
+  'wind-seal':  { name: '疾風之印',   desc: '攻擊力 +10%（戰鬥中常駐生效）。',           apply: s => { s.atk *= 1.10; } },
   'pact-seal':  { name: '契約之印',   desc: '召喚物傷害 +50%。',                         apply: s => { s.summonMul = (s.summonMul || 1) * 1.5; } },
   'traceless':  { name: '無痕',       desc: '受到傷害 -15%。',                           apply: s => { s.dmgReduce = (s.dmgReduce || 0) + 0.15; } },
   'oracle':     { name: '神諭',       desc: '所有技能冷卻 -15%。',                       apply: s => { s.cdReduce = (s.cdReduce || 0) + 0.15; } },

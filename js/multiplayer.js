@@ -117,7 +117,7 @@ function buildPlayerInfo() {
   return {
     peerId: MP.myId,
     nickname: GAME_STATE.state.playerNickname || '無名旅人',
-    charName: cs ? cs.name : '?',                            // 角色名（玩家輸入，預設「月凜」）
+    charName: cs ? (cs.customName || (blueprint ? blueprint.name : '?')) : '?',  // 角色名（如「月凜」）
     className: blueprint ? blueprint.title : '?',             // 職業（如「銀月狐巫」）
     pathName: cs && cs.pathName ? cs.pathName : '',           // 轉職分支
     blueprintId: cs ? cs.blueprintId : 'tsukirin',
