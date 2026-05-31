@@ -49,16 +49,22 @@ function initPeer(desiredId = null) {
       MP.peer = peer;
       MP.myId = id;
       console.log('[MP] 連到信令伺服器，我的 ID:', id);
-      // 監聽其他人主動連我（host 模式）
+      // 監聽其他人主動連我（host 接受 guest，guest 也可能接受其他 guest 的 mesh 連線）
       peer.on('connection', (conn) => {
         console.log('[MP] 收到連線:', conn.peer);
         setupConnection(conn);
-        // host 端：等 conn open 才送 player-info
-        if (conn.open) {
+        const handleOpen = () => {
           onConnectionOpen(conn);
-        } else {
-          conn.on('open', () => onConnectionOpen(conn));
-        }
+          // Host 額外：把現有玩家 list 告訴新進來的，讓他自己 mesh 連其他人
+          if (MP.role === 'host') {
+            const otherPeers = Object.keys(MP.connections).filter(id => id !== conn.peer);
+            if (otherPeers.length > 0) {
+              sendTo(conn.peer, 'peer-list', { peers: otherPeers });
+            }
+          }
+        };
+        if (conn.open) handleOpen();
+        else conn.on('open', handleOpen);
       });
       peer.on('disconnected', () => {
         console.warn('[MP] 信令伺服器斷線');
@@ -196,6 +202,20 @@ function handleMessage(fromPeerId, data) {
   console.log('[MP] 收到', data.type, 'from', fromPeerId, data.payload);
 
   // 內建訊息處理
+  // Host 告訴新訪客其他訪客的 peerId 清單 → 主動 mesh 連
+  if (data.type === 'peer-list' && Array.isArray(data.payload.peers)) {
+    for (const peerId of data.payload.peers) {
+      if (peerId === MP.myId) continue;
+      if (MP.connections[peerId]) continue;  // 已連
+      console.log('[MP] mesh 主動連:', peerId);
+      const conn = MP.peer.connect(peerId, { reliable: true });
+      conn.on('open', () => {
+        setupConnection(conn);
+        onConnectionOpen(conn);
+      });
+      conn.on('error', err => console.error('[MP] mesh connect error:', err));
+    }
+  }
   if (data.type === 'player-info') {
     // 保留現有的 battleState（避免被覆蓋）
     const prevBattleState = MP.players[fromPeerId] && MP.players[fromPeerId].battleState;
