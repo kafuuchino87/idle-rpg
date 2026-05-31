@@ -250,12 +250,38 @@ function bindGlobalEvents() {
         if (!data || data.version !== 'veilreach-export-v1' || !data.save) {
           toast('這不是有效的存檔', 'error'); return;
         }
-        if (!confirm('匯入會覆蓋當前進度（無法復原），確定？')) return;
-        localStorage.setItem('veilreach.save.v4', data.save);
-        if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
+        // 預先驗證內層 STATE 是否能正確解析
+        let parsedState;
+        try { parsedState = JSON.parse(data.save); }
+        catch (e) {
+          alert('存檔內層 JSON 解析失敗：\n' + e.message + '\n\n字串前 200 字：\n' + data.save.slice(0, 200));
+          return;
+        }
+        if (parsedState.version !== 4) {
+          alert('存檔版本錯誤：預期 4，實際是 ' + JSON.stringify(parsedState.version));
+          return;
+        }
+        if (!confirm('匯入會覆蓋當前進度（無法復原），確定？\n\n存檔詳情：\n' +
+          `角色等級 Lv ${parsedState.characters?.tsukirin?.level || '?'}\n` +
+          `金幣 ${parsedState.gold || 0}\n` +
+          `已畢業 ${parsedState.characters?.tsukirin?.graduated ? '是' : '否'}\n` +
+          `存檔字串大小 ${Math.round(data.save.length / 1024)} KB`)) return;
+        try {
+          localStorage.setItem('veilreach.save.v4', data.save);
+          if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
+        } catch (e) {
+          alert('寫入 localStorage 失敗：' + e.message + '\n（可能存檔太大超過瀏覽器配額）');
+          return;
+        }
+        // 寫入後讀回驗證
+        const verify = localStorage.getItem('veilreach.save.v4');
+        if (verify !== data.save) {
+          alert('寫入驗證失敗：localStorage 內容跟匯入的不一致！');
+          return;
+        }
         closeIoModal();
-        toast('存檔已匯入，正在重新載入...', 'gold');
-        setTimeout(() => location.reload(), 800);
+        toast('已匯入 (' + Math.round(data.save.length / 1024) + ' KB)，重新載入中...', 'gold');
+        setTimeout(() => location.reload(), 1000);
       },
     });
   };
