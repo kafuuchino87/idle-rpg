@@ -217,48 +217,47 @@ function bindGlobalEvents() {
     GAME_STATE.scheduleSave();
   };
   document.getElementById('btnSave').onclick = () => { GAME_STATE.saveState(); toast('已存檔', 'gold'); };
-  document.getElementById('btnExport').onclick = async () => {
-    // 把整個存檔 + 暱稱包成一個 JSON 字串
-    GAME_STATE.saveState();  // 確保最新
+  document.getElementById('btnExport').onclick = () => {
+    GAME_STATE.saveState();
     const data = {
       save: localStorage.getItem('veilreach.save.v4'),
       nickname: localStorage.getItem('veilreach.nickname'),
       version: 'veilreach-export-v1',
-      exportedAt: 0,  // 不用 Date.now() 避免 sandbox 限制；資訊性
     };
     const str = JSON.stringify(data);
-    try {
-      await navigator.clipboard.writeText(str);
-      toast('存檔已複製到剪貼簿（' + Math.round(str.length / 1024) + ' KB）', 'gold');
-    } catch (e) {
-      // fallback：跳出讓玩家手動複製
-      const win = prompt('已產生存檔字串。請手動 Ctrl+A 全選後 Ctrl+C 複製：', str);
-    }
+    openIoModal({
+      title: '匯出存檔',
+      hint: '下面這串就是你的存檔。請在文字框內按 Ctrl+A 全選 → Ctrl+C 複製，貼到網頁版「匯入」即可。',
+      value: str,
+      readonly: true,
+      confirmText: '完成',
+      onConfirm: () => { closeIoModal(); toast('已關閉，記得複製存檔字串', 'gold'); },
+    });
   };
-  document.getElementById('btnImport').onclick = async () => {
-    let raw = '';
-    try {
-      raw = await navigator.clipboard.readText();
-    } catch (e) {
-      raw = prompt('請貼上存檔字串：') || '';
-    }
-    if (!raw.trim()) return;
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (e) {
-      toast('存檔格式錯誤（不是有效 JSON）', 'error');
-      return;
-    }
-    if (!data || data.version !== 'veilreach-export-v1' || !data.save) {
-      toast('這不是有效的存檔', 'error');
-      return;
-    }
-    if (!confirm('匯入會覆蓋當前進度（無法復原），確定？')) return;
-    localStorage.setItem('veilreach.save.v4', data.save);
-    if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
-    toast('存檔已匯入，正在重新載入...', 'gold');
-    setTimeout(() => location.reload(), 800);
+  document.getElementById('btnImport').onclick = () => {
+    openIoModal({
+      title: '匯入存檔',
+      hint: '在下方文字框 Ctrl+V 貼上你的存檔字串，再按「匯入」。',
+      value: '',
+      readonly: false,
+      confirmText: '匯入',
+      onConfirm: () => {
+        const raw = document.getElementById('ioTextarea').value.trim();
+        if (!raw) { toast('請先貼上存檔字串', 'error'); return; }
+        let data;
+        try { data = JSON.parse(raw); }
+        catch (e) { toast('存檔格式錯誤（不是有效 JSON）', 'error'); return; }
+        if (!data || data.version !== 'veilreach-export-v1' || !data.save) {
+          toast('這不是有效的存檔', 'error'); return;
+        }
+        if (!confirm('匯入會覆蓋當前進度（無法復原），確定？')) return;
+        localStorage.setItem('veilreach.save.v4', data.save);
+        if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
+        closeIoModal();
+        toast('存檔已匯入，正在重新載入...', 'gold');
+        setTimeout(() => location.reload(), 800);
+      },
+    });
   };
   document.getElementById('btnReset').onclick = () => {
     if (confirm('確定要重設所有進度嗎？此動作無法復原。')) {
@@ -2969,6 +2968,32 @@ function renderAllyPanel() {
       mpText.textContent = '- / -';
     }
   });
+}
+
+// ============================================================================
+// 存檔匯出 / 匯入 textarea modal
+// ============================================================================
+function openIoModal(opts) {
+  const overlay = document.getElementById('ioOverlay');
+  if (!overlay) return;
+  document.getElementById('ioTitle').textContent = opts.title || '存檔工具';
+  document.getElementById('ioHint').textContent = opts.hint || '';
+  const ta = document.getElementById('ioTextarea');
+  ta.value = opts.value || '';
+  ta.readOnly = !!opts.readonly;
+  document.getElementById('ioConfirm').textContent = opts.confirmText || '確定';
+  overlay.classList.remove('hidden');
+  // 自動全選（匯出模式時方便玩家複製）
+  setTimeout(() => {
+    ta.focus();
+    if (opts.readonly) ta.select();
+  }, 50);
+  document.getElementById('ioCancel').onclick = closeIoModal;
+  document.getElementById('ioConfirm').onclick = opts.onConfirm || closeIoModal;
+}
+function closeIoModal() {
+  const overlay = document.getElementById('ioOverlay');
+  if (overlay) overlay.classList.add('hidden');
 }
 
 function toast(msg, kind) {

@@ -211,6 +211,19 @@
     </div>
   </div>
 
+  <!-- 存檔匯出 / 匯入 textarea 視窗 -->
+  <div id="ioOverlay" class="overlay hidden">
+    <div class="overlay-card small">
+      <h3 id="ioTitle">存檔工具</h3>
+      <p id="ioHint" class="overlay-sub" style="margin-bottom:10px"></p>
+      <textarea id="ioTextarea" rows="10" style="width:100%;font-family:monospace;font-size:11px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:8px;resize:vertical;box-sizing:border-box" placeholder=""></textarea>
+      <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="ghost" id="ioCancel">取消</button>
+        <button class="primary" id="ioConfirm">確定</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 戰鬥結算彈窗（襲擊戰通關 / 失敗時跳） -->
   <div id="resultOverlay" class="overlay hidden">
     <div class="overlay-card result-card">
@@ -241,12 +254,12 @@
   </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/data.js?v=126"></script>
-<script src="js/state.js?v=126"></script>
-<script src="js/pixel.js?v=126"></script>
-<script src="js/procedural.js?v=126"></script>
-<script src="js/battle.js?v=126"></script>
-<script src="js/multiplayer.js?v=126"></script>
-<script src="js/game.js?v=126"></script>
+<script src="js/data.js?v=127"></script>
+<script src="js/state.js?v=127"></script>
+<script src="js/pixel.js?v=127"></script>
+<script src="js/procedural.js?v=127"></script>
+<script src="js/battle.js?v=127"></script>
+<script src="js/multiplayer.js?v=127"></script>
+<script src="js/game.js?v=127"></script>
 </body>
 </html>
