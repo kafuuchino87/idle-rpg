@@ -217,6 +217,49 @@ function bindGlobalEvents() {
     GAME_STATE.scheduleSave();
   };
   document.getElementById('btnSave').onclick = () => { GAME_STATE.saveState(); toast('已存檔', 'gold'); };
+  document.getElementById('btnExport').onclick = async () => {
+    // 把整個存檔 + 暱稱包成一個 JSON 字串
+    GAME_STATE.saveState();  // 確保最新
+    const data = {
+      save: localStorage.getItem('veilreach.save.v4'),
+      nickname: localStorage.getItem('veilreach.nickname'),
+      version: 'veilreach-export-v1',
+      exportedAt: 0,  // 不用 Date.now() 避免 sandbox 限制；資訊性
+    };
+    const str = JSON.stringify(data);
+    try {
+      await navigator.clipboard.writeText(str);
+      toast('存檔已複製到剪貼簿（' + Math.round(str.length / 1024) + ' KB）', 'gold');
+    } catch (e) {
+      // fallback：跳出讓玩家手動複製
+      const win = prompt('已產生存檔字串。請手動 Ctrl+A 全選後 Ctrl+C 複製：', str);
+    }
+  };
+  document.getElementById('btnImport').onclick = async () => {
+    let raw = '';
+    try {
+      raw = await navigator.clipboard.readText();
+    } catch (e) {
+      raw = prompt('請貼上存檔字串：') || '';
+    }
+    if (!raw.trim()) return;
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      toast('存檔格式錯誤（不是有效 JSON）', 'error');
+      return;
+    }
+    if (!data || data.version !== 'veilreach-export-v1' || !data.save) {
+      toast('這不是有效的存檔', 'error');
+      return;
+    }
+    if (!confirm('匯入會覆蓋當前進度（無法復原），確定？')) return;
+    localStorage.setItem('veilreach.save.v4', data.save);
+    if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
+    toast('存檔已匯入，正在重新載入...', 'gold');
+    setTimeout(() => location.reload(), 800);
+  };
   document.getElementById('btnReset').onclick = () => {
     if (confirm('確定要重設所有進度嗎？此動作無法復原。')) {
       GAME_STATE.resetState();
