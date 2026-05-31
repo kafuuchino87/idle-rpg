@@ -266,6 +266,11 @@ function bindGlobalEvents() {
           `金幣 ${parsedState.gold || 0}\n` +
           `已畢業 ${parsedState.characters?.tsukirin?.graduated ? '是' : '否'}\n` +
           `存檔字串大小 ${Math.round(data.save.length / 1024)} KB`)) return;
+        // 先停所有遊戲邏輯，避免 scheduleSave 把舊 STATE 寫回覆蓋掉匯入
+        if (window.BATTLE) {
+          BATTLE.running = false;
+          BATTLE.paused = true;
+        }
         try {
           localStorage.setItem('veilreach.save.v4', data.save);
           if (data.nickname) localStorage.setItem('veilreach.nickname', data.nickname);
@@ -279,9 +284,8 @@ function bindGlobalEvents() {
           alert('寫入驗證失敗：localStorage 內容跟匯入的不一致！');
           return;
         }
-        closeIoModal();
-        toast('已匯入 (' + Math.round(data.save.length / 1024) + ' KB)，重新載入中...', 'gold');
-        setTimeout(() => location.reload(), 1000);
+        // 立即 reload（不能 setTimeout 否則會被 scheduleSave 800ms 覆蓋）
+        location.reload();
       },
     });
   };
