@@ -92,6 +92,9 @@ function enterGame() {
   setInterval(() => GAME_STATE.saveState(), 30000);
   window.addEventListener('beforeunload', () => GAME_STATE.saveState());
 
+  bindLeftChat();
+  renderLeftChat();
+
   toast(`歡迎回來，旅人。`);
 }
 
@@ -2792,6 +2795,87 @@ function formatAffix(a) {
 }
 
 // ============================================================================
+// 左欄聊天框（隊伍頻道 + 在線人數）
+// ============================================================================
+function renderLeftChat() {
+  const log = document.getElementById('chatLog');
+  const onlineEl = document.getElementById('chatOnline');
+  const input = document.getElementById('chatInputMain');
+  const sendBtn = document.getElementById('chatSendMain');
+  if (!log) return;
+
+  const connected = window.MP_API && MP_API.isConnected();
+  const playerCount = connected ? (Object.keys(MP_API.getPlayers()).length + 1) : 1;
+
+  // 在線人數標記
+  if (onlineEl) {
+    onlineEl.textContent = connected ? `在線 ${playerCount}` : '未連線';
+    onlineEl.classList.toggle('off', !connected);
+  }
+
+  // 輸入框啟用狀態
+  if (input) {
+    input.disabled = !connected;
+    input.placeholder = connected ? '輸入訊息（Enter 送出）' : '未連線時無法傳訊';
+  }
+  if (sendBtn) sendBtn.disabled = !connected;
+
+  // 訊息列表（用 structKey 避免閃爍）
+  const sig = _mpChatLog.length + (connected ? ':on' : ':off');
+  if (log._sig !== sig) {
+    log._sig = sig;
+    log.innerHTML = _mpChatLog.length === 0
+      ? `<div class="chat-msg sys">${connected ? '隊伍頻道 — 開始聊天' : '尚未連線，建房 / 加房後可聊天'}</div>`
+      : _mpChatLog.map(m => `
+        <div class="chat-msg ${m.sys ? 'sys' : (m.self ? 'self' : '')}">
+          ${m.sys ? '' : `<span class="chat-from">${m.who}:</span>`}
+          ${m.text}
+        </div>
+      `).join('');
+    // 自動滾到底
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+// 對外：加一則系統訊息（如「智乃 加入房間」）
+window.addSystemChat = function(text) {
+  _mpChatLog.push({ sys: true, text });
+  if (_mpChatLog.length > 100) _mpChatLog.shift();
+  renderLeftChat();
+};
+
+function bindLeftChat() {
+  const input = document.getElementById('chatInputMain');
+  const sendBtn = document.getElementById('chatSendMain');
+  if (!input || !sendBtn) return;
+  const send = () => {
+    if (!MP_API || !MP_API.isConnected()) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const myName = GAME_STATE.getPlayerNickname() || '我';
+    MP_API.broadcast('chat', { from: myName, text });
+    _mpChatLog.push({ who: myName, text, self: true });
+    if (_mpChatLog.length > 100) _mpChatLog.shift();
+    input.value = '';
+    renderLeftChat();
+  };
+  sendBtn.onclick = send;
+  input.onkeydown = (e) => { if (e.key === 'Enter') send(); };
+
+  // tab 切換（世界鎖住，只能 click team）
+  document.querySelectorAll('.chat-tab').forEach(btn => {
+    btn.onclick = () => {
+      if (btn.classList.contains('disabled')) {
+        toast('世界頻道需要中央伺服器，未開放', 'error');
+        return;
+      }
+      document.querySelectorAll('.chat-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
+}
+
+// ============================================================================
 // 戰鬥結算彈窗（襲擊戰通關 / 任何戰敗）
 // ============================================================================
 window.showResultModal = function(lc) {
@@ -3203,6 +3287,8 @@ function renderMpRoom() {
       toast(`房間已建立：${code}`, 'gold');
       hookMpCallbacks();
       renderMpRoom();
+      addSystemChat(`★ 房間建立成功 · 房號 ${code}`);
+      renderLeftChat();
     } catch (e) {
       toast('建立失敗：' + e.message, 'error');
       $('mpHostBtn').disabled = false;
@@ -3227,6 +3313,8 @@ function renderMpRoom() {
       await MP_API.joinRoom(code);
       toast(`已加入房間 ${code}`, 'gold');
       renderMpRoom();
+      addSystemChat(`★ 已加入房間 ${code}`);
+      renderLeftChat();
     } catch (e) {
       toast('加入失敗：' + e.message, 'error');
       $('mpJoinBtn').disabled = false;
@@ -3238,6 +3326,7 @@ function renderMpRoom() {
     _mpChatLog = [];
     toast('已離開房間');
     renderMpRoom();
+    renderLeftChat();
   };
   if ($('mpCopyBtn')) $('mpCopyBtn').onclick = () => {
     navigator.clipboard.writeText(roomCode).then(() => toast('已複製房號', 'gold'));
@@ -3262,9 +3351,10 @@ function hookMpCallbacks() {
   MP.onMessage = (fromPeerId, type, payload) => {
     if (type === 'chat') {
       _mpChatLog.push({ who: payload.from, text: payload.text });
-      if (_mpChatLog.length > 30) _mpChatLog.shift();
+      if (_mpChatLog.length > 100) _mpChatLog.shift();
       const win = document.getElementById('winMpRoom');
       if (win && !win.classList.contains('hidden')) renderMpRoom();
+      renderLeftChat();  // 左欄聊天框也即時更新
     } else if (type === 'player-info') {
       const win = document.getElementById('winMpRoom');
       if (win && !win.classList.contains('hidden')) renderMpRoom();
@@ -3288,14 +3378,22 @@ function hookMpCallbacks() {
       startBattle(d.id, GAME_STATE.state.activeCharId);
     }
   };
-  MP.onPlayerJoined = () => {
+  MP.onPlayerJoined = (peerId) => {
     toast('朋友已加入', 'gold');
     const win = document.getElementById('winMpRoom');
     if (win && !win.classList.contains('hidden')) renderMpRoom();
+    setTimeout(() => {
+      const info = MP.players[peerId];
+      const nick = info && info.nickname ? info.nickname : '某位旅人';
+      addSystemChat(`★ ${nick} 加入了房間`);
+    }, 300);
   };
-  MP.onPlayerLeft = () => {
-    toast('對方離開房間');
+  MP.onPlayerLeft = (peerId) => {
+    const info = MP.players[peerId];
+    const nick = info && info.nickname ? info.nickname : '隊友';
+    toast(`${nick} 離開房間`);
     const win = document.getElementById('winMpRoom');
     if (win && !win.classList.contains('hidden')) renderMpRoom();
+    addSystemChat(`✘ ${nick} 離開了房間`);
   };
 }

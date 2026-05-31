@@ -38,6 +38,19 @@
       <div id="charList"></div>
       <button id="btnCreateChar" class="primary" style="margin-top:10px;width:100%">＋ 建立新英靈</button>
       <div class="left-hint" id="leftHint">點上方角色卡切換 · 多名英靈共享共鳴等級</div>
+
+      <div id="chatPanel">
+        <div class="chat-tabs">
+          <button class="chat-tab active" data-ch="team">隊伍</button>
+          <button class="chat-tab disabled" data-ch="world" title="需中央伺服器，未開放">世界 🔒</button>
+          <span class="chat-online" id="chatOnline">在線 1</span>
+        </div>
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-input-row">
+          <input id="chatInputMain" type="text" placeholder="未連線時無法傳訊" maxlength="200" disabled>
+          <button id="chatSendMain" class="primary small" disabled>發</button>
+        </div>
+      </div>
     </section>
 
     <section id="centerPanel" class="panel">
@@ -254,12 +267,12 @@
   </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/data.js?v=135"></script>
-<script src="js/state.js?v=135"></script>
-<script src="js/pixel.js?v=135"></script>
-<script src="js/procedural.js?v=135"></script>
-<script src="js/battle.js?v=135"></script>
-<script src="js/multiplayer.js?v=135"></script>
-<script src="js/game.js?v=135"></script>
+<script src="js/data.js?v=136"></script>
+<script src="js/state.js?v=136"></script>
+<script src="js/pixel.js?v=136"></script>
+<script src="js/procedural.js?v=136"></script>
+<script src="js/battle.js?v=136"></script>
+<script src="js/multiplayer.js?v=136"></script>
+<script src="js/game.js?v=136"></script>
 </body>
 </html>
