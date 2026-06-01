@@ -266,6 +266,32 @@ function handleMessage(fromPeerId, data) {
   // Guest 收到 Host 廣播的敵人狀態 → 直接以 Host 為準
   if (data.type === 'enemy-sync' && MP.role === 'guest') {
     const b = window.BATTLE;
+    // Wave 29.2：guest 沒在 host 的副本 → 自動跟上（解決後加入的 guest 沒收到 raid-launch 的問題）
+    const hostDungeonId = data.payload.dungeonId;
+    const notInRightDungeon = !b || !b.dungeonId || b.dungeonId !== hostDungeonId || b._mpMode !== 'guest';
+    if (notInRightDungeon && typeof window.startBattle === 'function') {
+      // 防抖：800ms 內不要重複進入（避免每 200ms 一次 enemy-sync 反覆觸發）
+      const now = Date.now();
+      if (!MP._lastAutoJoin || now - MP._lastAutoJoin > 800) {
+        MP._lastAutoJoin = now;
+        const d = (typeof GAME_DATA !== 'undefined') && GAME_DATA.getDungeon(hostDungeonId);
+        const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+        if (d && cs && (!d.requiredLv || cs.level >= d.requiredLv)) {
+          console.log('[Wave 29.2] 自動跟上 host 副本：' + hostDungeonId);
+          if (typeof toast === 'function') toast('自動跟上隊伍：' + d.name, 'gold');
+          if (typeof PIXEL !== 'undefined') {
+            try { PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id }); } catch (_) {}
+          }
+          // 關掉副本選擇/襲擊戰預覽視窗
+          ['winRaidPreview', 'winDungeon'].forEach(id => {
+            const w = document.getElementById(id);
+            if (w) { w.style.display = ''; w.classList.add('hidden'); }
+          });
+          window.startBattle(hostDungeonId, GAME_STATE.state.activeCharId);
+        }
+      }
+      return;  // 等下一次 enemy-sync 再做實際同步（此時 b 還沒準備好）
+    }
     if (b && b._mpMode === 'guest' && b.dungeonId === data.payload.dungeonId) {
       const hostEnemies = data.payload.enemies || [];
       const hostWaveIdx = data.payload.waveIdx;

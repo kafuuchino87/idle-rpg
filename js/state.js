@@ -159,6 +159,8 @@ function loadState() {
     if (parsed.version === 4) {
       migrateV4toV5(parsed);
     }
+    // Wave 29.1：每次載入都做一次自癒（防止舊存檔殘留問題）
+    selfHealEquipment(parsed);
     return parsed;
   } catch (e) {
     console.warn('讀取存檔失敗', e);
@@ -166,7 +168,7 @@ function loadState() {
   }
 }
 
-// v4 → v5：把 STATE 上的 bag/clearedDungeons/pendingUnlocks/pendingJobChoice 搬到「第一隻角色」
+// v4 → v5：把 STATE 上的 bag/clearedDungeons/pendingUnlocks/pendingJobChoice 搬到「每角色獨立」
 function migrateV4toV5(p) {
   const charIds = Object.keys(p.characters || {});
   // 取「沒 # 後綴」的當主角，否則最早建的（按 slot 編號排序）
@@ -186,27 +188,76 @@ function migrateV4toV5(p) {
     if (!cs.pendingUnlocks) cs.pendingUnlocks = [];
     if (cs.pendingJobChoice == null) cs.pendingJobChoice = 0;
   }
-  // 把舊全域資料搬給主角
+
+  const oldBag = p.bag || {};
+  const oldEquipment = oldBag.equipment || {};
+
+  // 步驟 1：每個角色穿戴中的裝備 → 移到他自己 cs.bag.equipment
+  // 這樣 cs.equip[slot] 指向的 instance 永遠在 cs.bag 裡
+  for (const cid of charIds) {
+    const cs = p.characters[cid];
+    if (!cs.equip) continue;
+    for (const slot of Object.keys(cs.equip)) {
+      const instId = cs.equip[slot];
+      if (!instId) continue;
+      if (oldEquipment[instId]) {
+        cs.bag.equipment[instId] = oldEquipment[instId];
+        delete oldEquipment[instId];  // 從共用 bag 移除
+      }
+    }
+  }
+
+  // 步驟 2：剩下的（沒人穿的閒置裝備、材料、寶石、藥水、寶箱、券）→ 都歸主角
   if (primary) {
     const cs = p.characters[primary];
-    const oldBag = p.bag || {};
-    cs.bag.materials = oldBag.materials || cs.bag.materials || {};
-    cs.bag.equipment = oldBag.equipment || cs.bag.equipment || {};
-    cs.bag.gems = oldBag.gems || cs.bag.gems || {};
-    cs.bag.potions = oldBag.potions || cs.bag.potions || {};
-    cs.bag.chests = oldBag.chests || cs.bag.chests || {};
-    cs.bag.rerollTokens = oldBag.rerollTokens || cs.bag.rerollTokens || 0;
+    Object.assign(cs.bag.materials, oldBag.materials || {});
+    Object.assign(cs.bag.equipment, oldEquipment);  // 剩下的閒置裝備
+    Object.assign(cs.bag.gems, oldBag.gems || {});
+    Object.assign(cs.bag.potions, oldBag.potions || {});
+    Object.assign(cs.bag.chests, oldBag.chests || {});
+    cs.bag.rerollTokens = (cs.bag.rerollTokens || 0) + (oldBag.rerollTokens || 0);
     cs.clearedDungeons = { ...(p.clearedDungeons || {}), ...cs.clearedDungeons };
     cs.pendingUnlocks = (p.pendingUnlocks || []).concat(cs.pendingUnlocks || []);
     cs.pendingJobChoice = p.pendingJobChoice || cs.pendingJobChoice || 0;
   }
+
   // 移除舊欄位
   delete p.bag;
   delete p.clearedDungeons;
   delete p.pendingUnlocks;
   delete p.pendingJobChoice;
   p.version = 5;
-  console.log('[Wave 29] 存檔 v4 → v5 遷移完成，所有資源已歸到主角', primary);
+  console.log('[Wave 29] 存檔 v4 → v5 遷移完成，主角=' + primary + '，已將每角色穿戴中的裝備分發到自己 bag');
+}
+
+// Wave 29.1：自癒檢查 — 若某角色 cs.equip[slot] 指向的 instance 不在自己 cs.bag 裡，
+// 嘗試從其他角色的 bag 偷過來（這通常代表存檔遷移時被漏掉）
+function selfHealEquipment(p) {
+  for (const cid in p.characters) {
+    const cs = p.characters[cid];
+    if (!cs.equip || !cs.bag || !cs.bag.equipment) continue;
+    for (const slot of Object.keys(cs.equip)) {
+      const instId = cs.equip[slot];
+      if (!instId) continue;
+      if (cs.bag.equipment[instId]) continue;  // 已在自己 bag
+      // 從其他角色找
+      for (const ocid in p.characters) {
+        if (ocid === cid) continue;
+        const other = p.characters[ocid];
+        if (other.bag && other.bag.equipment && other.bag.equipment[instId]) {
+          cs.bag.equipment[instId] = other.bag.equipment[instId];
+          delete other.bag.equipment[instId];
+          console.log(`[Wave 29.1] 自癒：${instId} 從 ${ocid} 移到 ${cid}`);
+          break;
+        }
+      }
+      // 若還是找不到，instId 失效 → 清空槽位避免 UI 崩
+      if (!cs.bag.equipment[instId]) {
+        console.warn(`[Wave 29.1] cs.equip[${slot}]=${instId} 在任何 bag 都找不到，清空槽位`);
+        cs.equip[slot] = null;
+      }
+    }
+  }
 }
 function saveState() {
   STATE.lastSaved = Date.now();

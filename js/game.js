@@ -2493,7 +2493,11 @@ function renderBag() {
         <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${statStr}</div>
         ${affixStr}
         ${isEquipped
-          ? '<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">[裝備中]</div>'
+          ? `<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">[裝備中]</div>
+             <div class="bag-cell-actions">
+              <button class="ghost small" data-unequip="${slot}" title="卸下此裝備（卸下後可分解）">卸下</button>
+              <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
+            </div>`
           : `<div class="bag-cell-actions">
               <button data-equip="${slot}:${instId}">裝備</button>
               <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
@@ -2608,6 +2612,18 @@ function renderBag() {
       const nowLocked = GAME_STATE.toggleEquipLock(id);
       toast(nowLocked ? '🔒 已鎖定（批次分解會跳過）' : '🔓 已解鎖', 'gold');
       renderBag();
+    };
+  });
+  root.querySelectorAll('button[data-unequip]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const slot = btn.dataset.unequip;
+      const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+      if (!cs || !cs.equip) return;
+      cs.equip[slot] = null;
+      toast('已卸下，可以分解或裝其他裝備', 'gold');
+      GAME_STATE.scheduleSave();
+      renderBag(); renderHud(); renderCharDetail(); renderCharList(); renderForge();
     };
   });
 }
