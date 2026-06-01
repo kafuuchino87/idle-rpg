@@ -2621,12 +2621,16 @@ function renderBag() {
       if (!c) continue;
       const cell = document.createElement('div');
       cell.className = `bag-item ${c.rarity}`;
+      const tenLabel = qty >= 10 ? '開 10' : `開 ${qty}`;
       cell.innerHTML = `
         <div class="iname" style="color:${c.color}">${c.name}</div>
         <div class="itag">${c.rarity}</div>
         <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${c.desc}</div>
         <div class="qty">${qty}</div>
-        <button class="primary small" style="margin-top:6px;width:100%" data-openchest="${cid}">開啟</button>
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <button class="primary small" style="flex:1" data-openchest="${cid}">開 1</button>
+          <button class="primary small" style="flex:1" data-openchest10="${cid}" ${qty < 2 ? 'disabled' : ''}>${tenLabel}</button>
+        </div>
       `;
       cGrid.appendChild(cell);
     }
@@ -2827,6 +2831,16 @@ function renderBag() {
       const r = GAME_STATE.openChest(cid);
       if (!r.ok) return toast(r.reason, 'error');
       // 顯示開箱結果
+      showChestRewardOverlay(r);
+      renderBag(); renderHud();
+    };
+  });
+  root.querySelectorAll('button[data-openchest10]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const cid = btn.dataset.openchest10;
+      const r = GAME_STATE.openChestBatch(cid, 10);
+      if (!r.ok) return toast(r.reason, 'error');
       showChestRewardOverlay(r);
       renderBag(); renderHud();
     };
@@ -3207,9 +3221,10 @@ window.showChestRewardOverlay = function(result) {
     const rarityClass = r.rarity || 'N';
     return `<div class="chest-reward-row bag-item ${rarityClass}">${r.label}</div>`;
   }).join('');
+  const countLabel = (result.opened && result.opened > 1) ? ` ×${result.opened}` : '';
   overlay.innerHTML = `
     <div class="chest-reward-card">
-      <div class="chest-reward-title">✨ ${result.chestName} 已開啟 ✨</div>
+      <div class="chest-reward-title">✨ ${result.chestName}${countLabel} 已開啟 ✨</div>
       <div class="chest-reward-list">${items}</div>
       <button class="primary" id="chestRewardClose" style="margin-top:14px;width:100%">確定</button>
     </div>

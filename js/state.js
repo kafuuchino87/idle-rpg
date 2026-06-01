@@ -1100,6 +1100,68 @@ function openChest(chestId) {
   return { ok: true, rewards: granted, chestName: GAME_DATA.findChest(chestId)?.name };
 }
 
+// 批次開箱：連開 n 次（最多開到擁有量），合併同類獎勵
+function openChestBatch(chestId, n) {
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const have = bag.chests?.[chestId] || 0;
+  if (have < 1) return { ok: false, reason: '沒有此寶箱' };
+  const actualN = Math.min(n, have);
+  const accum = { gold: 0, shard: 0, materials: {}, potions: {}, passes: {}, gems: [], equips: [] };
+  let opened = 0;
+  for (let i = 0; i < actualN; i++) {
+    if (!consumeChest(chestId, 1)) break;
+    opened += 1;
+    const rewards = GAME_DATA.rollChestRewards(chestId);
+    for (const r of rewards) {
+      if (r.kind === 'gold') { gainGold(r.qty); accum.gold += r.qty; }
+      else if (r.kind === 'shard') { gainShard(r.qty); accum.shard += r.qty; }
+      else if (r.kind === 'material') { gainMaterial(r.name, r.qty); accum.materials[r.name] = (accum.materials[r.name] || 0) + r.qty; }
+      else if (r.kind === 'potion') { gainPotion(r.id, r.qty); accum.potions[r.id] = (accum.potions[r.id] || 0) + r.qty; }
+      else if (r.kind === 'pass') { gainPass(r.id, r.qty); accum.passes[r.id] = (accum.passes[r.id] || 0) + r.qty; }
+      else if (r.kind === 'gem-random') {
+        const [tMin, tMax] = r.tier;
+        const pool = GAME_DATA.GEMS.filter(g => g.tier >= tMin && g.tier <= tMax);
+        const picked = pool[Math.floor(Math.random() * pool.length)];
+        if (picked) { gainGem(picked.id, 1); accum.gems.push({ name: picked.name, rarity: picked.rarity }); }
+      } else if (r.kind === 'equip-rarity') {
+        const pool = GAME_DATA.ITEMS.equipment.filter(e => e.rarity === r.rarity && e.tier > 0);
+        const cs = STATE.characters[STATE.activeCharId];
+        const filtered = pool.filter(e => !e.owner || (cs && e.owner === cs.blueprintId));
+        const picked = filtered[Math.floor(Math.random() * filtered.length)];
+        if (picked) {
+          const instId = createEquipInstance(picked.id, true);
+          accum.equips.push({ name: picked.name, rarity: picked.rarity, instId });
+        }
+      }
+    }
+  }
+  // 合併產出 rewards 陣列（同類合併數量；寶石按 name 合併；裝備個別列）
+  const granted = [];
+  if (accum.gold) granted.push({ label: `金 +${accum.gold.toLocaleString()}`, kind: 'gold' });
+  if (accum.shard) granted.push({ label: `魂晶 +${accum.shard.toLocaleString()}`, kind: 'shard' });
+  for (const [name, qty] of Object.entries(accum.materials)) granted.push({ label: `${name} +${qty}`, kind: 'material' });
+  for (const [id, qty] of Object.entries(accum.potions)) {
+    const p = GAME_DATA.findPotion(id);
+    granted.push({ label: `${p ? p.name : id} +${qty}`, kind: 'potion', rarity: p?.rarity });
+  }
+  for (const [id, qty] of Object.entries(accum.passes)) {
+    const p = GAME_DATA.findPass(id);
+    granted.push({ label: `${p ? p.name : id} ×${qty}`, kind: 'pass', rarity: p?.rarity || 'SSR' });
+  }
+  const gemGroup = {};
+  for (const g of accum.gems) {
+    const k = `${g.name}|${g.rarity}`;
+    gemGroup[k] = (gemGroup[k] || 0) + 1;
+  }
+  for (const [k, qty] of Object.entries(gemGroup)) {
+    const [name, rarity] = k.split('|');
+    granted.push({ label: `${name} ×${qty}`, kind: 'gem', rarity });
+  }
+  for (const e of accum.equips) granted.push({ label: `[${e.rarity}] ${e.name}`, kind: 'equip', rarity: e.rarity, instId: e.instId });
+  return { ok: true, rewards: granted, chestName: GAME_DATA.findChest(chestId)?.name, opened };
+}
+
 // ========== 裝備分解 ==========
 // 依稀有度回饋對應材料與金錢；強化等級加倍返還
 function toggleEquipLock(instId) {
@@ -1484,7 +1546,7 @@ window.GAME_STATE = {
   gainGem, consumeGem, socketGem, unsocketGem, sellGem, sellGemsBatch,
   gainPotion, consumePotion, buyPotion, setPotionSlot, setPotionThreshold,
   getGlobalBuffMod, activateGlobalBuff,
-  gainChest, consumeChest, openChest,
+  gainChest, consumeChest, openChest, openChestBatch,
   gainPass, consumePass,
   disassembleEquipment, batchDisassemble, toggleEquipLock,
   smithEquip, restoreSmithHits,
