@@ -311,11 +311,13 @@ function handleMessage(fromPeerId, data) {
         if (b.waves.length > hostTotalWaves) b.waves.length = hostTotalWaves;
       }
 
-      // 對齊 waveIdx 並重建敵人陣容（直接以 Host 為權威，不跑 onEnemyDown 副作用）
+      // Wave 32：判斷 guest 是否處於「空 wave」狀態（等待中）
+      // 若是，無論 names 是否變 都要強制重建
+      const guestWaiting = !b.enemy || !b.currentWave || b.currentWave.length === 0;
       const waveChanged = b.currentWaveIdx !== hostWaveIdx;
       const hostNames = hostEnemies.map(e => `${e.name}@${e.maxHp}`).join(',');
       const localNames = (b.currentWave || []).map(e => `${e.name}@${e.maxHp}`).join(',');
-      if (waveChanged || hostNames !== localNames) {
+      if (guestWaiting || waveChanged || hostNames !== localNames) {
         b.currentWaveIdx = hostWaveIdx;
         b.currentWave = hostEnemies.map(e => ({
           name: e.name,

@@ -767,17 +767,16 @@ function onEnemyDown() {
   // 從目前 wave 中移除死掉的
   BATTLE.currentWave = (BATTLE.currentWave || []).filter(e => e.hp > 0);
   if (BATTLE.currentWave.length === 0) {
-    // Guest 端：本地也推進 wave（避免卡住），但不主動 onDungeonClear（等 host 廣播 cleared）
+    // Wave 32：Guest 端「殺光當前 wave」→ 完全等 host 廣播下一波 enemy-sync
+    // 之前會自己 spawnNextWave，但本地 BATTLE.waves 是 enemy-sync 補的空 stub
+    // 結果 currentWave=[] / enemy=undefined → tickBattle 跳過 → 整場不動
     if (BATTLE._mpMode === 'guest') {
-      BATTLE.currentWaveIdx++;
+      BATTLE.enemy = null;
+      BATTLE.currentWave = [];
       BATTLE.freezes = 0;
-      if (BATTLE.currentWaveIdx >= (BATTLE.waves || []).length) {
-        // 本地以為通關 → 等 host 廣播 cleared:true 才真結算
-        BATTLE.enemy = null;
-        if (BATTLE.onUpdate) BATTLE.onUpdate();
-        return;
-      }
-      spawnNextWave();
+      // 不推 currentWaveIdx — 等 host enemy-sync 帶來新 idx + enemies
+      // 200ms 內就會有下一個 enemy-sync 把 guest 拉到正確狀態
+      if (BATTLE.onUpdate) BATTLE.onUpdate();
       return;
     }
     // Host 端：加 wave 切換 600ms 過渡（避免「一閃過」，給玩家看到擊殺反應）
