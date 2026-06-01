@@ -313,9 +313,11 @@ function selfHealEquipment(p) {
   }
 }
 
-// Wave 30.1：補救「完全裸體」的角色 — 沒穿任何裝備 + bag 也沒任何裝備
-// 這通常發生在 Wave 29.x 時期 selfHealEquipment 拉鋸 bug 把分身的 starter 清空後留下的空殼
-// 若偵測到 → 補發 starter 練習裝（跟新創角色一樣）
+// Wave 30.2：補救「缺特定 slot 裝備」的角色 — 每個 slot 獨立判斷
+// 觸發條件（per slot）：
+//   1. cs.equip[slot] 為空（沒穿）
+//   2. cs.bag 裡也沒有任何同 slot 的裝備（玩家不是故意卸下放著）
+// → 補該 slot 的 starter 練習裝
 function healMissingStarterGear(p) {
   if (!p.characters) return;
   const STARTER_MAP = {
@@ -328,19 +330,29 @@ function healMissingStarterGear(p) {
     if (!cs.bag) cs.bag = makeEmptyBag();
     if (!cs.bag.equipment) cs.bag.equipment = {};
 
-    const hasAnyEquip = Object.values(cs.equip).some(v => v);
-    const hasAnyInBag = Object.keys(cs.bag.equipment).length > 0;
-
-    if (hasAnyEquip || hasAnyInBag) continue;  // 至少有一件 → 不補
-
-    console.log(`[Wave 30.1] ${cid} 完全沒裝備，補發 starter 練習裝`);
-    for (const [slot, itemId] of Object.entries(STARTER_MAP)) {
-      const def = GAME_DATA.findEquipment(itemId);
+    for (const [slot, starterId] of Object.entries(STARTER_MAP)) {
+      if (cs.equip[slot]) continue;  // 該位有穿 → 跳過
+      // 檢查 bag 裡是否已有同 slot 任何裝備（即使是高階沒穿著的）
+      let hasAnyForSlot = false;
+      for (const instId in cs.bag.equipment) {
+        const inst = cs.bag.equipment[instId];
+        const def = GAME_DATA.findEquipment(inst.itemId);
+        if (def && def.slot === slot) {
+          // 武器位額外檢查 owner — 不是自己 blueprint 的武器不算
+          if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) continue;
+          hasAnyForSlot = true;
+          break;
+        }
+      }
+      if (hasAnyForSlot) continue;  // bag 已有此 slot 裝備（玩家卸下放著）→ 不補
+      // 補發 starter
+      const def = GAME_DATA.findEquipment(starterId);
       if (!def) continue;
       const instId = 'inst_' + (p.nextInstId || 1);
       p.nextInstId = (p.nextInstId || 1) + 1;
-      cs.bag.equipment[instId] = { itemId, forge: 0, affixes: [] };
+      cs.bag.equipment[instId] = { itemId: starterId, forge: 0, affixes: [] };
       cs.equip[slot] = instId;
+      console.log(`[Wave 30.2] ${cid} 缺 ${slot} 裝備，補發 ${starterId}（${def.name}）`);
     }
   }
 }
