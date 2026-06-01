@@ -804,13 +804,13 @@ function onDungeonClear() {
   }
   const d = GAME_DATA.getDungeon(BATTLE.dungeonId);
   const r = GAME_DATA.getRegionByDungeon(BATTLE.dungeonId);
-  // 副本通關進度：寫到 active 角色（每角色獨立）
-  {
-    const _cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
-    if (_cs) {
-      if (!_cs.clearedDungeons) _cs.clearedDungeons = {};
-      _cs.clearedDungeons[d.id] = true;
-    }
+  // Wave 30：戰利品全部歸到「戰鬥角色」cs.bag（不是 UI active 角色）
+  // 這樣玩家在戰鬥中切到別角色看背包時，戰利品仍會記到正確角色
+  const _battleCharId = BATTLE.charId;
+  const _battleCs = GAME_STATE.state.characters[_battleCharId];
+  if (_battleCs) {
+    if (!_battleCs.clearedDungeons) _battleCs.clearedDungeons = {};
+    _battleCs.clearedDungeons[d.id] = true;
   }
 
   // 特殊副本倍率
@@ -818,8 +818,7 @@ function onDungeonClear() {
   let specialSSROnly = false;  // 特殊副本掉裝備時強制 SSR
   if (d.special === 'exp') { expMul = 3.5; goldMul = 0.3; equipDropChance = 0.008; specialSSROnly = true; }
   else if (d.special === 'mat') { expMul = 0.3; matMul = 6; equipDropChance = 0.008; specialSSROnly = true; }
-  // 'forge' special 已棄用（合併進 mat 神窟），保留判斷以防舊存檔殘留
-  if (d.isRaid) { equipDropChance = 0.03; goldMul = 1.5; expMul = 1.5; }  // UR 武器：3% 掉率
+  if (d.isRaid) { equipDropChance = 0.03; goldMul = 1.5; expMul = 1.5; }
 
   // 全域 buff 加成（卷軸）
   const expBuff = GAME_STATE.getGlobalBuffMod('expMul');
@@ -828,25 +827,25 @@ function onDungeonClear() {
   expMul *= (1 + expBuff);
   goldMul *= (1 + goldBuff);
   equipDropChance *= (1 + dropBuff);
-  matMul *= (1 + dropBuff);  // 幸運神符同時加成材料掉落數量
+  matMul *= (1 + dropBuff);
 
   const goldDrop = Math.floor(d.goldBase * (0.9 + Math.random() * 0.3) * goldMul);
   const expDrop = Math.floor(d.expBase * (0.9 + Math.random() * 0.3) * expMul);
-  GAME_STATE.gainGold(goldDrop);
-  GAME_STATE.gainExp(expDrop);
+  GAME_STATE.gainGold(goldDrop);             // 共用，無需指定角色
+  GAME_STATE.gainExp(expDrop, _battleCharId); // 經驗給戰鬥角色
 
-  // 多材料掉落系統：每次副本 roll 5 階材料各一次，低階機率高
+  // 多材料掉落系統
   const matDrops = rollMaterialDrops(d, matMul);
   const matMsgs = [];
   for (const [name, qty] of Object.entries(matDrops)) {
-    GAME_STATE.gainMaterial(name, qty);
+    GAME_STATE.gainMaterial(name, qty, _battleCharId);  // 材料給戰鬥角色
     matMsgs.push(`${name} +${qty}`);
   }
-  const mat = matMsgs[0] ? matMsgs[0].split(' ')[0] : '粗鋼';  // for lastClear summary backward-compat
+  const mat = matMsgs[0] ? matMsgs[0].split(' ')[0] : '粗鋼';
   const matRoll = Object.values(matDrops).reduce((a, b) => a + b, 0);
 
   const shardDrop = Math.random() < 0.15 ? (1 + Math.floor(Math.random() * 3)) : 0;
-  if (shardDrop) GAME_STATE.gainShard(shardDrop);
+  if (shardDrop) GAME_STATE.gainShard(shardDrop);  // 共用
 
   const clearTimeMs = BATTLE.startTime ? (performance.now() - BATTLE.startTime) : 0;
 
@@ -895,9 +894,8 @@ function onDungeonClear() {
         roll -= weights[i];
         if (roll <= 0) { picked = pool[i]; break; }
       }
-      const instId = GAME_STATE.createEquipInstance(picked.id, true);
-      const _csInst = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
-      const inst = _csInst && _csInst.bag && _csInst.bag.equipment ? _csInst.bag.equipment[instId] : null;
+      const instId = GAME_STATE.createEquipInstance(picked.id, true, _battleCharId);
+      const inst = _battleCs && _battleCs.bag && _battleCs.bag.equipment ? _battleCs.bag.equipment[instId] : null;
       const affixDesc = (inst && inst.affixes && inst.affixes.length)
         ? '【' + inst.affixes.map(a => `${a.label}+${a.value}`).join('/') + '】'
         : '';
@@ -934,7 +932,7 @@ function onDungeonClear() {
         roll -= weights[i];
         if (roll <= 0) { picked = pool[i]; break; }
       }
-      GAME_STATE.gainGem(picked.id, 1);
+      GAME_STATE.gainGem(picked.id, 1, _battleCharId);  // 魔法石給戰鬥角色
       gemDropMsg = ` <span class="lg-gem">[${picked.rarity}] ${picked.name} ×1</span>`;
       gemDropLabel = picked.name;
     }
@@ -944,7 +942,7 @@ function onDungeonClear() {
   let chestMsg = '';
   const chest = rollChestDrop(d);
   if (chest) {
-    GAME_STATE.gainChest(chest, 1);
+    GAME_STATE.gainChest(chest, 1, _battleCharId);  // 寶箱給戰鬥角色
     const c = GAME_DATA.findChest(chest);
     chestMsg = ` <span class="lg-chest">獲得 ${c.name}（背包點開）</span>`;
   }
@@ -956,6 +954,9 @@ function onDungeonClear() {
     isRaid: !!d.isRaid,
     failed: false,
     time: clearTimeMs / 1000,
+    // Wave 30：記錄戰利品歸屬，UI 結算彈窗可顯示「→ 月凜的背包」
+    awardedToCharId: _battleCharId,
+    awardedToCharName: _battleCs ? (_battleCs.customName || _battleCs.id) : '?',
     exp: expDrop,
     gold: goldDrop,
     matName: mat,

@@ -98,14 +98,16 @@ function makeCharacterState(blueprintId, customName, slotIdx) {
   };
 }
 
-// 建一個裝備 instance，回傳 instId（寫到 active 角色的 bag）
-function createEquipInstance(itemId, withAffixes) {
+// 建一個裝備 instance，回傳 instId
+// Wave 30：加 charId 參數 — 戰利品掉落時可指定目標角色（不指定則寫到 active）
+function createEquipInstance(itemId, withAffixes, charId) {
   const def = GAME_DATA.findEquipment(itemId);
   if (!def) return null;
-  const bag = activeBag();
-  if (!bag) return null;
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return null;
+  if (!cs.bag) cs.bag = makeEmptyBag();
   const instId = 'inst_' + (STATE.nextInstId++);
-  bag.equipment[instId] = {
+  cs.bag.equipment[instId] = {
     itemId,
     forge: 0,
     affixes: withAffixes ? GAME_DATA.rollAffixes(def.rarity) : [],
@@ -193,7 +195,8 @@ function migrateV4toV5(p) {
   const oldEquipment = oldBag.equipment || {};
 
   // 步驟 1：每個角色穿戴中的裝備 → 移到他自己 cs.bag.equipment
-  // 這樣 cs.equip[slot] 指向的 instance 永遠在 cs.bag 裡
+  // Wave 30：若多個角色 cs.equip 指向同一 instance（v4 髒數據），為後處理者深拷貝
+  // 確保兩個角色都能保有獨立的「自己穿著的那件」
   for (const cid of charIds) {
     const cs = p.characters[cid];
     if (!cs.equip) continue;
@@ -201,8 +204,30 @@ function migrateV4toV5(p) {
       const instId = cs.equip[slot];
       if (!instId) continue;
       if (oldEquipment[instId]) {
+        // 第一個遇到的角色 → 拿原 instance
         cs.bag.equipment[instId] = oldEquipment[instId];
-        delete oldEquipment[instId];  // 從共用 bag 移除
+        delete oldEquipment[instId];
+      } else {
+        // 已被前面角色拿走 → 為當前角色 deep clone 一份，並改 cs.equip 指向新 instId
+        let source = null;
+        for (const ocid of charIds) {
+          if (ocid === cid) break;
+          const other = p.characters[ocid];
+          if (other.bag && other.bag.equipment && other.bag.equipment[instId]) {
+            source = other.bag.equipment[instId];
+            break;
+          }
+        }
+        if (source) {
+          const newId = 'inst_' + (p.nextInstId || 1);
+          p.nextInstId = (p.nextInstId || 1) + 1;
+          cs.bag.equipment[newId] = JSON.parse(JSON.stringify(source));
+          cs.equip[slot] = newId;
+          console.log(`[Wave 30 migrate] 共享 instance ${instId} → 為 ${cid} 複製成 ${newId}`);
+        } else {
+          // 找不到來源 → 清空 slot
+          cs.equip[slot] = null;
+        }
       }
     }
   }
@@ -230,30 +255,56 @@ function migrateV4toV5(p) {
   console.log('[Wave 29] 存檔 v4 → v5 遷移完成，主角=' + primary + '，已將每角色穿戴中的裝備分發到自己 bag');
 }
 
-// Wave 29.1：自癒檢查 — 若某角色 cs.equip[slot] 指向的 instance 不在自己 cs.bag 裡，
-// 嘗試從其他角色的 bag 偷過來（這通常代表存檔遷移時被漏掉）
+// Wave 30：自癒檢查 — 共享 instance 改為「複製」而非「搶」
+// 流程：
+// 1. 掃描所有角色 cs.equip → 找出 (cid, slot, instId) 三元組
+// 2. 對於某 instId 被多個角色指向：找到「真正擁有者」（cs.bag 有它的人），其他角色 deep clone
+// 3. 對於某 instId 任何 bag 都沒有：清空 slot（無法救回）
 function selfHealEquipment(p) {
+  if (!p.characters) return;
+
+  // Phase A：建立「instId → 真正擁有者 cid」對應表
+  const realOwner = {};  // instId → cid
   for (const cid in p.characters) {
     const cs = p.characters[cid];
-    if (!cs.equip || !cs.bag || !cs.bag.equipment) continue;
+    if (!cs.bag || !cs.bag.equipment) continue;
+    for (const instId in cs.bag.equipment) {
+      if (!realOwner[instId]) {
+        realOwner[instId] = cid;
+      } else {
+        // 同個 instId 同時在多個 bag 裡？
+        // 這不應該發生（v5 結構保證 instId 唯一歸屬）
+        // 若真發生，保留第一個發現的當主，後續的會被清掉
+        console.warn(`[Wave 30] instance ${instId} 同時在 ${realOwner[instId]} 和 ${cid} 的 bag — 清理重複`);
+        delete cs.bag.equipment[instId];
+      }
+    }
+  }
+
+  // Phase B：檢查每個 cs.equip 指向，必要時複製
+  for (const cid in p.characters) {
+    const cs = p.characters[cid];
+    if (!cs.equip) continue;
+    if (!cs.bag) cs.bag = makeEmptyBag();
+    if (!cs.bag.equipment) cs.bag.equipment = {};
     for (const slot of Object.keys(cs.equip)) {
       const instId = cs.equip[slot];
       if (!instId) continue;
-      if (cs.bag.equipment[instId]) continue;  // 已在自己 bag
-      // 從其他角色找
-      for (const ocid in p.characters) {
-        if (ocid === cid) continue;
-        const other = p.characters[ocid];
-        if (other.bag && other.bag.equipment && other.bag.equipment[instId]) {
-          cs.bag.equipment[instId] = other.bag.equipment[instId];
-          delete other.bag.equipment[instId];
-          console.log(`[Wave 29.1] 自癒：${instId} 從 ${ocid} 移到 ${cid}`);
-          break;
+      if (cs.bag.equipment[instId]) continue;  // 自己已有 → OK
+      const owner = realOwner[instId];
+      if (owner && owner !== cid) {
+        // 別人有 → 為自己複製一份（不搶走）
+        const sourceInst = p.characters[owner].bag.equipment[instId];
+        if (sourceInst) {
+          const newId = 'inst_' + (p.nextInstId || 1);
+          p.nextInstId = (p.nextInstId || 1) + 1;
+          cs.bag.equipment[newId] = JSON.parse(JSON.stringify(sourceInst));
+          cs.equip[slot] = newId;
+          console.log(`[Wave 30] 共享 instance ${instId} → 為 ${cid} 複製成 ${newId}`);
         }
-      }
-      // 若還是找不到，instId 失效 → 清空槽位避免 UI 崩
-      if (!cs.bag.equipment[instId]) {
-        console.warn(`[Wave 29.1] cs.equip[${slot}]=${instId} 在任何 bag 都找不到，清空槽位`);
+      } else {
+        // 沒人有 → instance 失效，清空 slot
+        console.warn(`[Wave 30] cs.equip[${slot}]=${instId} 在任何 bag 都找不到，清空槽位（${cid}）`);
         cs.equip[slot] = null;
       }
     }
@@ -465,8 +516,9 @@ function selectJobPath(pathId, tier) {
 // --------------------------------------------------------------------------
 // 經驗 / 等級
 // --------------------------------------------------------------------------
-function gainExp(n) {
-  const cs = STATE.characters[STATE.activeCharId];
+// Wave 30：加 charId 參數 — 戰利品 gainExp 應該給戰鬥角色（BATTLE.charId），不是 UI 角色
+function gainExp(n, charId) {
+  const cs = STATE.characters[charId || STATE.activeCharId];
   if (!cs) return;
   if (!cs.pendingUnlocks) cs.pendingUnlocks = [];
   n = Math.floor(n);
@@ -787,10 +839,12 @@ function rerollAffixes(instId) {
   scheduleSave();
   return { ok: true, name: def.name, newAffixes: inst.affixes };
 }
-function gainMaterial(name, n) {
-  const bag = activeBag();
-  if (!bag) return;
-  bag.materials[name] = (bag.materials[name] || 0) + n;
+// Wave 30：加 charId 參數 — 戰利品掉落可指定目標角色
+function gainMaterial(name, n, charId) {
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  cs.bag.materials[name] = (cs.bag.materials[name] || 0) + n;
 }
 function consumeMaterial(name, n) {
   const bag = activeBag();
@@ -804,11 +858,13 @@ function consumeMaterial(name, n) {
 // 已被 createEquipInstance 取代
 
 // ========== 寶箱 ==========
-function gainChest(chestId, n = 1) {
-  const bag = activeBag();
-  if (!bag) return;
-  if (!bag.chests) bag.chests = {};
-  bag.chests[chestId] = (bag.chests[chestId] || 0) + n;
+// Wave 30：加 charId 參數
+function gainChest(chestId, n = 1, charId) {
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  if (!cs.bag.chests) cs.bag.chests = {};
+  cs.bag.chests[chestId] = (cs.bag.chests[chestId] || 0) + n;
 }
 function consumeChest(chestId, n = 1) {
   const bag = activeBag();
@@ -946,11 +1002,13 @@ function batchDisassemble(criteria) {
 }
 
 // ========== 藥水 ==========
-function gainPotion(pid, n = 1) {
-  const bag = activeBag();
-  if (!bag) return;
-  if (!bag.potions) bag.potions = {};
-  bag.potions[pid] = (bag.potions[pid] || 0) + n;
+// Wave 30：加 charId 參數
+function gainPotion(pid, n = 1, charId) {
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  if (!cs.bag.potions) cs.bag.potions = {};
+  cs.bag.potions[pid] = (cs.bag.potions[pid] || 0) + n;
 }
 function consumePotion(pid, n = 1) {
   const bag = activeBag();
@@ -1049,11 +1107,13 @@ function sellGemsBatch(maxRarity) {
   return { count, gold: totalGold };
 }
 
-function gainGem(gemId, n = 1) {
-  const bag = activeBag();
-  if (!bag) return;
-  if (!bag.gems) bag.gems = {};
-  bag.gems[gemId] = (bag.gems[gemId] || 0) + n;
+// Wave 30：加 charId 參數
+function gainGem(gemId, n = 1, charId) {
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  if (!cs.bag.gems) cs.bag.gems = {};
+  cs.bag.gems[gemId] = (cs.bag.gems[gemId] || 0) + n;
 }
 function consumeGem(gemId, n = 1) {
   const bag = activeBag();

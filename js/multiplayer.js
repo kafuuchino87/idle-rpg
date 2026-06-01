@@ -110,8 +110,12 @@ function onConnectionOpen(conn) {
 }
 
 // ===== 組合自己的 player-info（給對方看） =====
+// Wave 30：戰鬥中以 BATTLE.charId 為準（玩家可能切到別角色看 UI，但廣播給隊友的應該是戰鬥角色）
 function buildPlayerInfo() {
-  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  const b = window.BATTLE;
+  const battleCharId = (b && b.charId) ? b.charId : null;
+  const charId = battleCharId || GAME_STATE.state.activeCharId;
+  const cs = GAME_STATE.state.characters[charId];
   const blueprint = cs ? GAME_STATE.getCharacterBlueprint(cs.blueprintId) : null;
   const cp = cs ? GAME_STATE.combatPower(cs.id) : 0;
   return {
@@ -176,9 +180,13 @@ function reportDamageDealt(enemyIdx, dmg, isCrit) {
 }
 
 // ===== 廣播自己的戰鬥狀態（給隊友顯示） =====
+// Wave 30：戰鬥中以 BATTLE.charId 為準
 function broadcastBattleState() {
   if (MP.role === 'solo') return;
-  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  const b = window.BATTLE;
+  const battleCharId = (b && b.charId) ? b.charId : null;
+  const charId = battleCharId || GAME_STATE.state.activeCharId;
+  const cs = GAME_STATE.state.characters[charId];
   const cp = cs ? GAME_STATE.combatPower(cs.id) : 0;
   // 不在戰鬥也要帶 level/cp/jobPath/jobTier，這樣 ally panel 能即時跟著對方升級 / 轉職更新
   const base = {
