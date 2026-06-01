@@ -222,10 +222,13 @@ function bindGlobalEvents() {
   document.getElementById('btnSave').onclick = () => { GAME_STATE.saveState(); toast('已存檔', 'gold'); };
   document.getElementById('btnExport').onclick = () => {
     GAME_STATE.saveState();
+    // v2 格式：save 直接是物件（不是字串），避免內層 quotes escape 在轉送過程被破壞
+    let saveObj = null;
+    try { saveObj = JSON.parse(localStorage.getItem('veilreach.save.v4')); } catch (e) {}
     const data = {
-      save: localStorage.getItem('veilreach.save.v4'),
+      save: saveObj,
       nickname: localStorage.getItem('veilreach.nickname'),
-      version: 'veilreach-export-v1',
+      version: 'veilreach-export-v2',
     };
     const str = JSON.stringify(data);
     openIoModal({
@@ -260,16 +263,26 @@ function bindGlobalEvents() {
             + '3. 存檔包含特殊字元被破壞');
           return;
         }
-        if (!data || data.version !== 'veilreach-export-v1' || !data.save) {
-          alert('這不是有效的存檔字串。\n\n預期：{"save":"...","nickname":"...","version":"veilreach-export-v1"}\n\n收到的內容：\n'
+        if (!data || !data.version || !data.save) {
+          alert('這不是有效的存檔字串。\n\n預期：{"save":{...},"nickname":"...","version":"veilreach-export-v2"}\n\n收到的內容：\n'
             + raw.slice(0, 200));
           return;
         }
-        // 預先驗證內層 STATE 是否能正確解析
+        // 同時支援 v1（save 是字串）和 v2（save 是物件，避免 escape 問題）
         let parsedState;
-        try { parsedState = JSON.parse(data.save); }
-        catch (e) {
-          alert('存檔內層 JSON 解析失敗：\n' + e.message + '\n\n字串前 200 字：\n' + data.save.slice(0, 200));
+        let saveStrForStorage;
+        if (data.version === 'veilreach-export-v2') {
+          parsedState = data.save;  // 已是物件
+          saveStrForStorage = JSON.stringify(data.save);
+        } else if (data.version === 'veilreach-export-v1') {
+          try { parsedState = JSON.parse(data.save); }
+          catch (e) {
+            alert('存檔內層 JSON 解析失敗（v1 格式）：\n' + e.message + '\n\n字串前 200 字：\n' + String(data.save).slice(0, 200));
+            return;
+          }
+          saveStrForStorage = data.save;
+        } else {
+          alert('存檔版本不支援：' + data.version);
           return;
         }
         if (parsedState.version !== 4) {
@@ -280,7 +293,7 @@ function bindGlobalEvents() {
           `角色等級 Lv ${parsedState.characters?.tsukirin?.level || '?'}\n` +
           `金幣 ${parsedState.gold || 0}\n` +
           `已畢業 ${parsedState.characters?.tsukirin?.graduated ? '是' : '否'}\n` +
-          `存檔字串大小 ${Math.round(data.save.length / 1024)} KB`)) return;
+          `存檔字串大小 ${Math.round(saveStrForStorage.length / 1024)} KB`)) return;
         // 停所有遊戲邏輯
         if (window.BATTLE) {
           BATTLE.running = false;
@@ -289,7 +302,7 @@ function bindGlobalEvents() {
         // 保留原始 setItem reference
         const realSetItem = localStorage.setItem.bind(localStorage);
         try {
-          realSetItem('veilreach.save.v4', data.save);
+          realSetItem('veilreach.save.v4', saveStrForStorage);
           if (data.nickname) realSetItem('veilreach.nickname', data.nickname);
         } catch (e) {
           alert('寫入 localStorage 失敗：' + e.message + '\n（可能存檔太大超過瀏覽器配額）');
@@ -297,7 +310,7 @@ function bindGlobalEvents() {
         }
         // 寫入後讀回驗證
         const verify = localStorage.getItem('veilreach.save.v4');
-        if (verify !== data.save) {
+        if (verify !== saveStrForStorage) {
           alert('寫入驗證失敗：localStorage 內容跟匯入的不一致！');
           return;
         }
