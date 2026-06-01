@@ -129,32 +129,32 @@ const SKILLS = {
   },
   'endless-night': {
     name: '永夜千華舞', tag: '★大招★', kind: 'physical', path: 'A', requireTier: 3,
-    desc: '【終極奧義】十二段月華舞踏 AOE，全段必爆，總 1500% 攻擊力（末段 300% 強擊）。施放後自身攻擊 +40% 持續 8 秒。CD 25s。',
+    desc: '【終極奧義】十二段月華舞踏 AOE，全段必爆，總 1500% 攻擊力（末段 300% 強擊）。施放後自身攻擊 +50% 持續 8 秒。CD 25s。',
     mult: [0.7, 0.7, 0.8, 0.9, 1.0, 1.0, 1.1, 1.2, 1.3, 1.5, 2.0, 3.0],
-    aoe: true, alwaysCrit: true, buff: { atk: 0.4, dur: 8 },
+    aoe: true, alwaysCrit: true, buff: { atk: 0.5, dur: 8 },
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
-  // ── 路線 B：靈契禦狐 ──
+  // ── 路線 B：靈契禦狐（持續輸出 + AOE 控制，定位「穩定 DPS + 召喚物」）──
   'fox-mirage': {
     name: '狐影分身', tag: '召喚', kind: 'arcane', path: 'B',
-    desc: '召喚雪狐分身：即發 80% + 持續 8 秒每秒 80% 攻擊力（合計 720%）。CD 10s。',
-    mult: 0.8, summon: { dps: 0.8, dur: 8 }, cd: 10, mpCost: 90, costTier: 'light',
+    desc: '召喚雪狐分身：即發 100% + 持續 8 秒每 0.5 秒攻擊（單次 50% × 16 次 = 800%）。可暴擊。CD 10s。',
+    mult: 1.0, summon: { dps: 0.5, dur: 8 }, cd: 10, mpCost: 90, costTier: 'light',
   },
   'frostfall': {
     name: '凝霜降臨', tag: '冰封', kind: 'frost', path: 'B',
-    desc: '霜氣降下：250% 攻擊力 AOE 傷害 + 凍結敵人 2.5 秒（敵方停止行動）。CD 9s。',
-    mult: 2.5, aoe: true, freeze: 2.5, cd: 9, mpCost: 90, costTier: 'light',
+    desc: '霜氣降下：350% 攻擊力 AOE 傷害 + 凍結敵人 2.5 秒（敵方停止行動）。CD 9s。',
+    mult: 3.5, aoe: true, freeze: 2.5, cd: 9, mpCost: 90, costTier: 'light',
   },
   'mist-seal': {
     name: '白霧封印', tag: '弱化', kind: 'arcane', path: 'B', requireTier: 2,
-    desc: '撕裂霧封印：450% 攻擊力，對 BOSS 額外 +80%（合計 810% vs BOSS）。CD 12s。',
-    mult: 4.5, vsBossBonus: 0.8, cd: 12, mpCost: 180, costTier: 'medium',
+    desc: '撕裂霧封印：550% 攻擊力，對 BOSS 額外 +90%（合計 1045% vs BOSS）。CD 12s。',
+    mult: 5.5, vsBossBonus: 0.9, cd: 12, mpCost: 180, costTier: 'medium',
   },
   'fox-god-descend': {
     name: '狐神降世', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】九尾狐神降臨：即發 500% 攻擊力 AOE 傷害 + 持續 12 秒每秒 200% 攻擊力召喚（總 2900%）。對 BOSS 額外 +50%。CD 30s。',
-    mult: 5.0, aoe: true, summon: { dps: 2.0, dur: 12 }, vsBossBonus: 0.5,
+    desc: '【終極奧義】九尾狐神降臨：即發 550% AOE + 持續 12 秒每 0.5 秒（單次 120% × 24 次 = 2880% 召喚），總 3430%。對 BOSS 額外 +50%。召喚物可暴擊。CD 30s。',
+    mult: 5.5, aoe: true, summon: { dps: 1.2, dur: 12 }, vsBossBonus: 0.5,
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
@@ -291,7 +291,7 @@ const REGIONS = [
     dungeons: [
       { id: 'raid-calamity', name: '災厄·虛影鏡之主宰', cp: 80000, unlock: 'abyss-mirror', requiredLv: 99,
         isRaid: true, baseTime: 90, expBase: 30000, goldBase: 50000,
-        difficultyMul: 3.5,  // 敵人 HP / atk × 3.5
+        difficultyMul: 7.8,  // BOSS HP ~400 萬，atk 仍 cap 2.0 不秒殺玩家
         lore: [
           '反射迴廊的最深處，倒影深淵的盡頭。',
           '鏡之主宰的本體在虛影封印破裂之夜降臨。',

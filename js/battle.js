@@ -137,6 +137,7 @@ function startBattle(dungeonId, charId) {
   BATTLE._cleared = false;  // 重置通關旗標
   BATTLE._dead = false;     // 重置陣亡旗標（組隊用）
   BATTLE._teamWipeFired = false;  // 重置全隊滅旗標
+  BATTLE._wavePending = false;  // 重置 wave 切換 pending 旗標
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
   // 多人模式判定：襲擊戰 + 已連線 → host / guest，其他 → solo
   BATTLE._mpMode = 'solo';
@@ -513,13 +514,17 @@ function tickSummons(dt) {
   BATTLE.summons = BATTLE.summons.filter(s => {
     s.dur -= dt;
     s.acc += dt;
-    while (s.acc >= 0.8) {
-      s.acc -= 0.8;
+    // 攻擊頻率 0.5 秒（從 0.8 加快 60%）
+    while (s.acc >= 0.5) {
+      s.acc -= 0.5;
       if (BATTLE.enemy) {
-        const dmg = computeDamage(s.dps * BATTLE.player.summonMul, false);
+        // 召喚物吃玩家暴擊率，可暴擊
+        const effCrit = BATTLE.player.crit + getBuffMod('crit');
+        const isCrit = Math.random() < effCrit;
+        const dmg = computeDamage(s.dps * BATTLE.player.summonMul, isCrit);
         BATTLE.enemy.hp -= dmg;
-        trackDamage(dmg, s.sourceId, false);
-        if (window.floatDamage) floatDamage('🦊 ' + dmg, 'summon');
+        trackDamage(dmg, s.sourceId, isCrit);
+        if (window.floatDamage) floatDamage('🦊 ' + (isCrit ? 'CRIT! ' : '') + dmg, isCrit ? 'crit' : 'summon');
         if (BATTLE.enemy.hp <= 0) { onEnemyDown(); return false; }
       }
     }
@@ -791,11 +796,19 @@ function onEnemyDown() {
       if (BATTLE.onUpdate) BATTLE.onUpdate();
       return;
     }
-    // 換下一波
-    BATTLE.currentWaveIdx++;
-    BATTLE.freezes = 0;
-    if (BATTLE.currentWaveIdx >= BATTLE.waves.length) onDungeonClear();
-    else spawnNextWave();
+    // 加 wave 切換 600ms 過渡（避免「一閃過」，給玩家看到擊殺反應）
+    if (BATTLE._wavePending) return;  // 已 pending 不再排
+    BATTLE._wavePending = true;
+    BATTLE.enemy = null;
+    if (BATTLE.onUpdate) BATTLE.onUpdate();
+    setTimeout(() => {
+      BATTLE._wavePending = false;
+      if (!BATTLE.running) return;  // 戰鬥已停（離開 / 重打）就跳過
+      BATTLE.currentWaveIdx++;
+      BATTLE.freezes = 0;
+      if (BATTLE.currentWaveIdx >= BATTLE.waves.length) onDungeonClear();
+      else spawnNextWave();
+    }, 600);
   } else {
     // 還有怪 → 切到下一個目標
     BATTLE.enemy = BATTLE.currentWave[0];
