@@ -299,7 +299,12 @@ function bindGlobalEvents() {
           BATTLE.running = false;
           BATTLE.paused = true;
         }
-        // 保留原始 setItem reference
+        // 關鍵：先把記憶體中的 STATE 物件整個替換成匯入的內容
+        // 這樣即使有 race condition（scheduleSave 在 reload 前 fire），寫的也是新 STATE 而非舊的
+        if (window.GAME_STATE && GAME_STATE.replaceState) {
+          GAME_STATE.replaceState(parsedState);
+        }
+        // 寫入 localStorage
         const realSetItem = localStorage.setItem.bind(localStorage);
         try {
           realSetItem('veilreach.save.v4', saveStrForStorage);
@@ -314,7 +319,7 @@ function bindGlobalEvents() {
           alert('寫入驗證失敗：localStorage 內容跟匯入的不一致！');
           return;
         }
-        // 攔截後續 setItem，避免 scheduleSave 在 reload 完成前再寫一次 STATE 覆蓋
+        // 攔截後續 setItem 三重保險
         localStorage.setItem = function(key, value) {
           if (key === 'veilreach.save.v4' || key === 'veilreach.nickname') {
             console.warn('[import] blocked setItem during reload:', key);

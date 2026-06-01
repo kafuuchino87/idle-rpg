@@ -875,6 +875,16 @@ function unsocketGem(instId, slotIdx) {
 // 取出並清空一個 pending unlock
 function dequeueUnlock() { return STATE.pendingUnlocks.shift(); }
 
+// 完全替換 STATE 內容（匯入存檔用，避免 race condition）
+function replaceState(newState) {
+  if (!newState || typeof newState !== 'object') return false;
+  // 清掉現有所有 properties
+  Object.keys(STATE).forEach(k => { delete STATE[k]; });
+  // 複製新內容
+  Object.assign(STATE, newState);
+  return true;
+}
+
 // 玩家暱稱（跨角色共用）
 // 用獨立 localStorage key 儲存（雙保險）— 主存檔被覆寫或損壞時仍能找回
 const NICKNAME_KEY = 'veilreach.nickname';
@@ -927,7 +937,7 @@ window.addEventListener('storage', (e) => {
 
 window.GAME_STATE = {
   get state() { return STATE; },
-  saveState, scheduleSave, resetState,
+  saveState, scheduleSave, resetState, replaceState,
   createCharacter, selectJobPath, MAX_CHARACTERS,
   setPlayerNickname, getPlayerNickname,
   effectiveStats, combatPower,
