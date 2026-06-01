@@ -138,8 +138,8 @@ const SKILLS = {
   // ── 路線 B：靈契禦狐（持續輸出 + AOE 控制，定位「穩定 DPS + 召喚物」）──
   'fox-mirage': {
     name: '狐影分身', tag: '召喚', kind: 'arcane', path: 'B',
-    desc: '召喚雪狐分身：即發 100% + 持續 8 秒每 0.5 秒攻擊（單次 50% × 16 次 = 800%）。可暴擊。CD 10s。',
-    mult: 1.0, summon: { dps: 0.5, dur: 8 }, cd: 10, mpCost: 90, costTier: 'light',
+    desc: '召喚雪狐分身：即發 120% + 持續 8 秒每 0.35 秒攻擊（單次 70% × ~23 次 ≈ 1610%）。可暴擊，無敵人時暫停。CD 10s。',
+    mult: 1.2, summon: { dps: 0.7, dur: 8 }, cd: 10, mpCost: 90, costTier: 'light',
   },
   'frostfall': {
     name: '凝霜降臨', tag: '冰封', kind: 'frost', path: 'B',
@@ -153,7 +153,7 @@ const SKILLS = {
   },
   'fox-god-descend': {
     name: '狐神降世', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】九尾狐神降臨：即發 550% AOE + 持續 12 秒每 0.5 秒（單次 120% × 24 次 = 2880% 召喚），總 3430%。對 BOSS 額外 +50%。召喚物可暴擊。CD 30s。',
+    desc: '【終極奧義】九尾狐神降臨：即發 550% AOE + 持續 12 秒每 0.35 秒（單次 120% × ~34 次 ≈ 4080% 召喚），總 4630%。對 BOSS 額外 +50%。召喚物可暴擊，無敵人時暫停。CD 30s。',
     mult: 5.5, aoe: true, summon: { dps: 1.2, dur: 12 }, vsBossBonus: 0.5,
     cd: 30, mpCost: 270, costTier: 'heavy',
   },

@@ -511,21 +511,27 @@ function applyPotion(pid) {
 window.applyPotion = applyPotion;
 
 function tickSummons(dt) {
+  // Wave 31：召喚物攻擊頻率 0.5s → 0.35s（8 秒可打 23 次而非 16 次）
+  // Wave 31：無敵人時 dur 暫停（避免 wave 切換期間白白消耗秒數）
+  const TICK_INTERVAL = 0.35;
   BATTLE.summons = BATTLE.summons.filter(s => {
+    if (!BATTLE.enemy) {
+      // 沒目標 → 暫停一切倒數（acc 也不累積，避免敵人剛出現就連續打）
+      s.acc = Math.min(s.acc, TICK_INTERVAL);
+      return s.dur > 0;
+    }
     s.dur -= dt;
     s.acc += dt;
-    // 攻擊頻率 0.5 秒（從 0.8 加快 60%）
-    while (s.acc >= 0.5) {
-      s.acc -= 0.5;
+    while (s.acc >= TICK_INTERVAL) {
+      s.acc -= TICK_INTERVAL;
       if (BATTLE.enemy) {
-        // 召喚物吃玩家暴擊率，可暴擊
         const effCrit = BATTLE.player.crit + getBuffMod('crit');
         const isCrit = Math.random() < effCrit;
         const dmg = computeDamage(s.dps * BATTLE.player.summonMul, isCrit);
         BATTLE.enemy.hp -= dmg;
         trackDamage(dmg, s.sourceId, isCrit);
         if (window.floatDamage) floatDamage('🦊 ' + (isCrit ? 'CRIT! ' : '') + dmg, isCrit ? 'crit' : 'summon');
-        if (BATTLE.enemy.hp <= 0) { onEnemyDown(); return false; }
+        if (BATTLE.enemy.hp <= 0) { onEnemyDown(); return s.dur > 0; }
       }
     }
     return s.dur > 0;
