@@ -319,22 +319,24 @@ function selfHealEquipment(p) {
   }
 }
 
-// Wave 30.3：補救「缺特定 slot 裝備」的角色 — 每個 slot 獨立判斷
-// 觸發條件（per slot）：cs.equip[slot] 為空 且 bag 裡也沒同 slot 裝備 → 補 starter
+// Wave 30.4：補救「缺特定 slot 裝備」的角色 — 三層邏輯
+// 第 1 層：cs.equip[slot] 指向不存在的 inst → 清空
+// 第 2 層：cs.equip[slot] 為空 + bag 有同 slot 裝備 → 自動穿上最高階一件
+// 第 3 層：cs.equip[slot] 為空 + bag 沒同 slot 裝備 → 補發 starter
 function healMissingStarterGear(p) {
   if (!p.characters) return;
   const STARTER_MAP = {
     weapon: 'eq-weap-prac', head: 'eq-head-prac', top: 'eq-top-prac',
     bottom: 'eq-bot-prac', feet: 'eq-feet-prac',
   };
-  console.log('[Wave 30.3] healMissingStarterGear 開始檢查');
+  console.log('[Wave 30.4] healMissingStarterGear 開始檢查');
   for (const cid in p.characters) {
     const cs = p.characters[cid];
     if (!cs.equip) cs.equip = { weapon: null, head: null, top: null, bottom: null, feet: null };
     if (!cs.bag) cs.bag = makeEmptyBag();
     if (!cs.bag.equipment) cs.bag.equipment = {};
 
-    // 印出當前角色狀態，方便診斷
+    // 印出當前角色狀態
     const bagItemSlots = {};
     for (const instId in cs.bag.equipment) {
       const inst = cs.bag.equipment[instId];
@@ -342,46 +344,50 @@ function healMissingStarterGear(p) {
       const sl = def ? def.slot : '?';
       bagItemSlots[sl] = (bagItemSlots[sl] || 0) + 1;
     }
-    console.log(`[Wave 30.3] ${cid} 狀態：cs.equip=`, JSON.parse(JSON.stringify(cs.equip)),
+    console.log(`[Wave 30.4] ${cid} 狀態：cs.equip=`, JSON.parse(JSON.stringify(cs.equip)),
       ' bag-slot-counts=', bagItemSlots);
 
     for (const [slot, starterId] of Object.entries(STARTER_MAP)) {
-      if (cs.equip[slot]) {
-        // 但要驗證指向的 instance 真的存在於自己 bag
-        if (!cs.bag.equipment[cs.equip[slot]]) {
-          console.warn(`[Wave 30.3] ${cid} cs.equip[${slot}]=${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
-          cs.equip[slot] = null;
-        } else {
-          continue;  // 真的有穿
-        }
+      // ── 第 1 層：清空指向不存在的 inst ──
+      if (cs.equip[slot] && !cs.bag.equipment[cs.equip[slot]]) {
+        console.warn(`[Wave 30.4] ${cid} cs.equip[${slot}]=${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
+        cs.equip[slot] = null;
       }
-      // 檢查 bag 裡是否已有同 slot 裝備（不限階）
-      let hasAnyForSlot = false;
+      if (cs.equip[slot]) continue;  // 有穿著的真實 instance → OK
+
+      // ── 第 2 層：bag 裡找同 slot 最高階自動穿上 ──
+      let bestInstId = null;
+      let bestTier = -1;
       for (const instId in cs.bag.equipment) {
         const inst = cs.bag.equipment[instId];
         const def = GAME_DATA.findEquipment(inst.itemId);
-        if (def && def.slot === slot) {
-          // 武器位額外檢查 owner
-          if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) continue;
-          hasAnyForSlot = true;
-          break;
+        if (!def || def.slot !== slot) continue;
+        // 武器位額外檢查 owner
+        if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) continue;
+        const tier = def.tier || 0;
+        if (tier > bestTier) {
+          bestTier = tier;
+          bestInstId = instId;
         }
       }
-      if (hasAnyForSlot) {
-        console.log(`[Wave 30.3] ${cid} ${slot} 位 bag 已有裝備（沒穿著）→ 不補發`);
+      if (bestInstId) {
+        cs.equip[slot] = bestInstId;
+        const def = GAME_DATA.findEquipment(cs.bag.equipment[bestInstId].itemId);
+        console.log(`[Wave 30.4] ${cid} ${slot} 位自動穿上 ${def ? def.name : bestInstId}（tier ${bestTier}）`);
         continue;
       }
-      // 補發 starter
+
+      // ── 第 3 層：bag 完全沒同 slot 裝備 → 補發 starter ──
       const def = GAME_DATA.findEquipment(starterId);
       if (!def) {
-        console.warn(`[Wave 30.3] starter ${starterId} 找不到`);
+        console.warn(`[Wave 30.4] starter ${starterId} 找不到`);
         continue;
       }
       const instId = 'inst_' + (p.nextInstId || 1);
       p.nextInstId = (p.nextInstId || 1) + 1;
       cs.bag.equipment[instId] = { itemId: starterId, forge: 0, affixes: [] };
       cs.equip[slot] = instId;
-      console.log(`[Wave 30.3] ✓ ${cid} 缺 ${slot} 裝備，補發 ${starterId}（${def.name}）→ ${instId}`);
+      console.log(`[Wave 30.4] ✓ ${cid} 補發 ${slot} starter → ${def.name}（${instId}）`);
     }
   }
 }
