@@ -157,6 +157,25 @@ function loadState() {
         ];
       }
     }
+    // ===== Wave 30.7：確保 nextInstId 永遠有效（修「新角武器消失」的根因）=====
+    // 若 nextInstId 不是有效數字 → createEquipInstance 會生 'inst_NaN'，5 件裝備互相覆蓋
+    if (typeof parsed.nextInstId !== 'number' || isNaN(parsed.nextInstId) || parsed.nextInstId < 1) {
+      // 掃描所有已存在的 instId，從最大值+1 開始
+      let maxId = 0;
+      const scanBag = (bag) => {
+        if (!bag || !bag.equipment) return;
+        for (const instId in bag.equipment) {
+          const m = String(instId).match(/^inst_(\d+)$/);
+          if (m) maxId = Math.max(maxId, parseInt(m[1], 10));
+        }
+      };
+      if (parsed.bag) scanBag(parsed.bag);  // v4 全域 bag
+      if (parsed.characters) {
+        for (const cid in parsed.characters) scanBag(parsed.characters[cid].bag);
+      }
+      parsed.nextInstId = maxId + 1;
+      console.warn(`[Wave 30.7] nextInstId 異常，重設為 ${parsed.nextInstId}（掃描現有最大 instId）`);
+    }
     // ===== Wave 29：v4 → v5 遷移（背包/副本/解鎖通知/轉職選擇 → 每角色獨立） =====
     if (parsed.version === 4) {
       migrateV4toV5(parsed);
@@ -426,16 +445,22 @@ function resetState() {
 function createCharacter(blueprintId, customName) {
   const count = Object.keys(STATE.characters).length;
   if (count >= MAX_CHARACTERS) return null;
-  // 找下一個空編號
-  let slot = 1;
-  while (STATE.characters[slot === 1 ? blueprintId : `${blueprintId}#${slot}`]) slot++;
-  const cs = makeCharacterState(blueprintId, customName, slot);
+  // 找下一個空編號（用 slotIdx 避免跟下面的裝備 slot 名稱衝突）
+  let slotIdx = 1;
+  while (STATE.characters[slotIdx === 1 ? blueprintId : `${blueprintId}#${slotIdx}`]) slotIdx++;
+  const cs = makeCharacterState(blueprintId, customName, slotIdx);
   STATE.characters[cs.id] = cs;
   STATE.activeCharId = cs.id;
   STATE.hasCharacter = true;
   if (count === 0) STATE.gold = 200;
 
-  // 給整套練習裝（無詞綴）並穿上
+  // Wave 30.7：再次保險 — 確保 nextInstId 是有效數字
+  if (typeof STATE.nextInstId !== 'number' || isNaN(STATE.nextInstId) || STATE.nextInstId < 1) {
+    console.warn('[Wave 30.7] createCharacter 偵測 nextInstId 異常:', STATE.nextInstId, '→ 重設為 1');
+    STATE.nextInstId = 1;
+  }
+
+  // 給整套練習裝（無詞綴）並穿上 — 用 slotKey 命名避免跟外層衝突
   const starterMap = {
     weapon: 'eq-weap-prac',
     head:   'eq-head-prac',
@@ -443,9 +468,24 @@ function createCharacter(blueprintId, customName) {
     bottom: 'eq-bot-prac',
     feet:   'eq-feet-prac',
   };
-  for (const [slot, itemId] of Object.entries(starterMap)) {
-    const instId = createEquipInstance(itemId, false);
-    cs.equip[slot] = instId;
+  // Wave 30.7：直接寫入 cs.bag 而不依賴 createEquipInstance（避免 active 切換 race）
+  for (const [slotKey, itemId] of Object.entries(starterMap)) {
+    const def = GAME_DATA.findEquipment(itemId);
+    if (!def) {
+      console.error(`[Wave 30.7] starter ${itemId} 定義找不到`);
+      continue;
+    }
+    const instId = 'inst_' + (STATE.nextInstId++);
+    cs.bag.equipment[instId] = { itemId, forge: 0, affixes: [] };
+    cs.equip[slotKey] = instId;
+    console.log(`[Wave 30.7] 創角 ${cs.id} 穿上 ${slotKey} = ${instId}（${def.name}）`);
+  }
+
+  // 防呆驗證：5 件 starter 都成功穿上才繼續
+  for (const slotKey of Object.keys(starterMap)) {
+    if (!cs.equip[slotKey] || !cs.bag.equipment[cs.equip[slotKey]]) {
+      console.error(`[Wave 30.7] ❌ 創角驗證失敗 ${cs.id}.${slotKey}=${cs.equip[slotKey]}`);
+    }
   }
 
   // 1 級解鎖

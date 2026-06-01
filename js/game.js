@@ -2459,7 +2459,9 @@ function renderBag() {
     const instances = Object.entries(_activeBag().equipment).filter(([id, inst]) => {
       const def = GAME_DATA.findEquipment(inst.itemId);
       if (!def || def.slot !== slot) return false;
-      if (slot === 'weapon' && def.owner && def.owner !== cs.id) return false;
+      // Wave 30.8：武器 owner 比對「藍圖 ID」（cs.blueprintId='tsukirin'），不是 cs.id（可能是 'tsukirin#2'）
+      const bpId = cs.blueprintId || (cs.id || '').split('#')[0];
+      if (slot === 'weapon' && def.owner && def.owner !== bpId) return false;
       return true;
     });
     // 排序：1) 裝備中優先 2) 稀有度高 3) 強化等級高 4) 詞綴多
