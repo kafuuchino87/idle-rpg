@@ -761,20 +761,27 @@ function onEnemyDown() {
   // 從目前 wave 中移除死掉的
   BATTLE.currentWave = (BATTLE.currentWave || []).filter(e => e.hp > 0);
   if (BATTLE.currentWave.length === 0) {
-    // Guest 端不主動推進 wave，等 Host 廣播 enemy-sync 來對齊（避免兩邊小怪不同步）
+    // Guest 端：本地也推進 wave（避免卡住），但不主動 onDungeonClear（等 host 廣播 cleared）
     if (BATTLE._mpMode === 'guest') {
-      BATTLE.enemy = null;
-      if (BATTLE.onUpdate) BATTLE.onUpdate();
+      BATTLE.currentWaveIdx++;
+      BATTLE.freezes = 0;
+      if (BATTLE.currentWaveIdx >= (BATTLE.waves || []).length) {
+        // 本地以為通關 → 等 host 廣播 cleared:true 才真結算
+        BATTLE.enemy = null;
+        if (BATTLE.onUpdate) BATTLE.onUpdate();
+        return;
+      }
+      spawnNextWave();
       return;
     }
-    // 加 wave 切換 600ms 過渡（避免「一閃過」，給玩家看到擊殺反應）
-    if (BATTLE._wavePending) return;  // 已 pending 不再排
+    // Host 端：加 wave 切換 600ms 過渡（避免「一閃過」，給玩家看到擊殺反應）
+    if (BATTLE._wavePending) return;
     BATTLE._wavePending = true;
     BATTLE.enemy = null;
     if (BATTLE.onUpdate) BATTLE.onUpdate();
     setTimeout(() => {
       BATTLE._wavePending = false;
-      if (!BATTLE.running) return;  // 戰鬥已停（離開 / 重打）就跳過
+      if (!BATTLE.running) return;
       BATTLE.currentWaveIdx++;
       BATTLE.freezes = 0;
       if (BATTLE.currentWaveIdx >= BATTLE.waves.length) onDungeonClear();

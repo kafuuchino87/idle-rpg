@@ -146,6 +146,8 @@ function broadcastEnemySync() {
   if (MP.role !== 'host') return;
   const b = window.BATTLE;
   if (!b || !b.currentWave || !b.dungeonId) return;
+  // wave 切換過渡期（600ms）不廣播，避免空 wave 覆寫 Guest 端
+  if (b._wavePending) return;
   broadcast('enemy-sync', {
     dungeonId: b.dungeonId,
     waveIdx: b.currentWaveIdx,
