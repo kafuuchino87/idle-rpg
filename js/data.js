@@ -694,14 +694,14 @@ const SETS = {
 };
 function findSet(id) { return SETS[id]; }
 
-// 計算角色身上各套裝穿戴件數
+// 計算角色身上各套裝穿戴件數（每角色獨立背包：用 cs.bag）
 function countSetPieces(cs) {
   const counts = {};
   if (!cs || !cs.equip) return counts;
   for (const slot of EQUIPMENT_SLOTS) {
     const instId = cs.equip[slot];
     if (!instId) continue;
-    const inst = window.GAME_STATE && GAME_STATE.state.bag.equipment[instId];
+    const inst = cs.bag && cs.bag.equipment ? cs.bag.equipment[instId] : null;
     if (!inst) continue;
     const def = findEquipment(inst.itemId);
     if (def && def.setId) counts[def.setId] = (counts[def.setId] || 0) + 1;

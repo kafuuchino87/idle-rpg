@@ -452,7 +452,7 @@ function tickPotions(dt) {
     if (!slot || !slot.potionId) continue;
     if (BATTLE.potionCDs[i] > 0) continue;   // CD 中跳過
     const pid = slot.potionId;
-    const have = (GAME_STATE.state.bag.potions && GAME_STATE.state.bag.potions[pid]) || 0;
+    const have = (cs.bag && cs.bag.potions && cs.bag.potions[pid]) || 0;
     if (have <= 0) continue;
     const p = GAME_DATA.findPotion(pid);
     if (!p) continue;
@@ -804,7 +804,14 @@ function onDungeonClear() {
   }
   const d = GAME_DATA.getDungeon(BATTLE.dungeonId);
   const r = GAME_DATA.getRegionByDungeon(BATTLE.dungeonId);
-  GAME_STATE.state.clearedDungeons[d.id] = true;
+  // 副本通關進度：寫到 active 角色（每角色獨立）
+  {
+    const _cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+    if (_cs) {
+      if (!_cs.clearedDungeons) _cs.clearedDungeons = {};
+      _cs.clearedDungeons[d.id] = true;
+    }
+  }
 
   // 特殊副本倍率
   let expMul = 1, goldMul = 1, matMul = 1, equipDropChance = 0.30;
@@ -889,8 +896,9 @@ function onDungeonClear() {
         if (roll <= 0) { picked = pool[i]; break; }
       }
       const instId = GAME_STATE.createEquipInstance(picked.id, true);
-      const inst = GAME_STATE.state.bag.equipment[instId];
-      const affixDesc = inst.affixes.length
+      const _csInst = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+      const inst = _csInst && _csInst.bag && _csInst.bag.equipment ? _csInst.bag.equipment[instId] : null;
+      const affixDesc = (inst && inst.affixes && inst.affixes.length)
         ? '【' + inst.affixes.map(a => `${a.label}+${a.value}`).join('/') + '】'
         : '';
       dropMsg = `<span class="lg-drop">獲得 [${picked.rarity}] ${picked.name}${affixDesc}</span>`;
@@ -971,7 +979,9 @@ function onDungeonClear() {
     const did = BATTLE.dungeonId;
     const isRaid = GAME_DATA.getDungeon(did)?.isRaid;
     // 襲擊戰打完即停止自動戰鬥（玩家確認結算後才能再次手動進入）
-    if (GAME_STATE.state.autoRun && !BATTLE.paused && !GAME_STATE.state.pendingJobChoice && !isRaid) {
+    const _autoCs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+    const _pendingJob = _autoCs ? (_autoCs.pendingJobChoice || 0) : 0;
+    if (GAME_STATE.state.autoRun && !BATTLE.paused && !_pendingJob && !isRaid) {
       startBattle(did, BATTLE.charId);
     } else {
       stopBattle();

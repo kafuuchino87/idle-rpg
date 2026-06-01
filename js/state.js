@@ -2,11 +2,13 @@
 // 狀態管理與存檔（v2：含創角、等級解鎖、轉職、共鳴）
 // ===========================================================================
 
-const SAVE_KEY = 'veilreach.save.v4';
+const SAVE_KEY = 'veilreach.save.v4';  // 沿用 key，但內部 version=5
 
+// Wave 29：bag/clearedDungeons/pendingUnlocks/pendingJobChoice 改成「每角色獨立」
+// 共用：gold、shard、globalBuffs、共鳴、playerNickname
 function makeInitialState() {
   return {
-    version: 4,
+    version: 5,
     createdAt: Date.now(),
     lastSaved: Date.now(),
 
@@ -15,6 +17,7 @@ function makeInitialState() {
     selectedDungeonId: 'sleep-forest',
     autoRun: true,
 
+    // ===== 共用資源 =====
     gold: 200,
     shard: 0,
 
@@ -24,32 +27,41 @@ function makeInitialState() {
     // 玩家暱稱（跨所有角色共用，多人連線顯示用；非角色名）
     playerNickname: '',
 
+    // ===== 共鳴（共用，畢業後共同累積）=====
     resonance: 0,
     resonanceExp: 0,
     resonanceUnlocked: false,
     resonancePoints: { atk: 0, def: 0, hp: 0, crit: 0, critDmg: 0, spd: 0, dmgReduce: 0, cdReduce: 0, vsBoss: 0, skillDmg: 0, maxMp: 0 },
 
-    clearedDungeons: {},
-
-    pendingUnlocks: [],
-    pendingJobChoice: 0,
-
-    // 背包：材料 + 裝備（裝備用唯一 instance id 索引，記錄 itemId + forge + affixes）
-    bag: {
-      materials: { '粗鋼': 5 },
-      equipment: {},
-      gems: {},  // { 'gem-atk-1': 3, ... }
-      potions: {},  // { 'pot-hp-s': 5, ... }
-      chests: {},  // { 'chest-wood': 3, ... }
-      rerollTokens: 0,  // 詞綴重抽券
-    },
-
     // 全域 buff（卷軸類，戰鬥內外都計時，存到存檔以 expiresAt 為準）
     globalBuffs: [],  // [{ potionId, stat, value, expiresAt }]
 
-    // 唯一 ID 計數器（給裝備 instance 用）
+    // 唯一 ID 計數器（給裝備 instance 用，跨角色不重複）
     nextInstId: 1,
   };
+}
+
+// 預設「空 bag」 — 給每個新角色用
+function makeEmptyBag() {
+  return {
+    materials: {},
+    equipment: {},
+    gems: {},
+    potions: {},
+    chests: {},
+    rerollTokens: 0,
+  };
+}
+
+// 取目前角色 / 目前角色的 bag — 所有「來自當前 UI 操作」的 helper 都用這個
+function activeChar() {
+  return STATE.characters[STATE.activeCharId] || null;
+}
+function activeBag() {
+  const cs = activeChar();
+  if (!cs) return null;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  return cs.bag;
 }
 
 const SKILL_SLOTS = 5;
@@ -78,15 +90,22 @@ function makeCharacterState(blueprintId, customName, slotIdx) {
       { potionId: null, threshold: 0.3 },  // MP slot (MP <= 30% 時自動喝)
       { potionId: null, threshold: 0 },    // Buff slot (持續時間結束時自動喝)
     ],
+    // Wave 29：每角色獨立的資料
+    bag: { materials: { '粗鋼': 5 }, equipment: {}, gems: {}, potions: {}, chests: {}, rerollTokens: 0 },
+    clearedDungeons: {},
+    pendingUnlocks: [],
+    pendingJobChoice: 0,
   };
 }
 
-// 建一個裝備 instance，回傳 instId
+// 建一個裝備 instance，回傳 instId（寫到 active 角色的 bag）
 function createEquipInstance(itemId, withAffixes) {
   const def = GAME_DATA.findEquipment(itemId);
   if (!def) return null;
+  const bag = activeBag();
+  if (!bag) return null;
   const instId = 'inst_' + (STATE.nextInstId++);
-  STATE.bag.equipment[instId] = {
+  bag.equipment[instId] = {
     itemId,
     forge: 0,
     affixes: withAffixes ? GAME_DATA.rollAffixes(def.rarity) : [],
@@ -117,7 +136,7 @@ function loadState() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed.version !== 4) return null;
+    if (parsed.version !== 4 && parsed.version !== 5) return null;
     // 補欄位：舊存檔可能缺 blueprintId
     if (parsed.characters) {
       for (const id in parsed.characters) {
@@ -125,11 +144,6 @@ function loadState() {
         if (!cs.blueprintId) cs.blueprintId = id.split('#')[0];
       }
     }
-    // 補欄位：背包 gems / potions / chests
-    if (parsed.bag && !parsed.bag.gems) parsed.bag.gems = {};
-    if (parsed.bag && !parsed.bag.potions) parsed.bag.potions = {};
-    if (parsed.bag && !parsed.bag.chests) parsed.bag.chests = {};
-    if (parsed.bag && parsed.bag.rerollTokens == null) parsed.bag.rerollTokens = 0;
     if (!parsed.globalBuffs) parsed.globalBuffs = [];
     if (parsed.characters) {
       for (const id in parsed.characters) {
@@ -141,11 +155,58 @@ function loadState() {
         ];
       }
     }
+    // ===== Wave 29：v4 → v5 遷移（背包/副本/解鎖通知/轉職選擇 → 每角色獨立） =====
+    if (parsed.version === 4) {
+      migrateV4toV5(parsed);
+    }
     return parsed;
   } catch (e) {
     console.warn('讀取存檔失敗', e);
     return null;
   }
+}
+
+// v4 → v5：把 STATE 上的 bag/clearedDungeons/pendingUnlocks/pendingJobChoice 搬到「第一隻角色」
+function migrateV4toV5(p) {
+  const charIds = Object.keys(p.characters || {});
+  // 取「沒 # 後綴」的當主角，否則最早建的（按 slot 編號排序）
+  let primary = charIds.find(id => !id.includes('#'));
+  if (!primary && charIds.length > 0) {
+    primary = charIds.sort((a, b) => {
+      const aN = parseInt(a.split('#')[1] || '1', 10);
+      const bN = parseInt(b.split('#')[1] || '1', 10);
+      return aN - bN;
+    })[0];
+  }
+  // 補各角色預設欄位
+  for (const cid of charIds) {
+    const cs = p.characters[cid];
+    if (!cs.bag) cs.bag = { materials: {}, equipment: {}, gems: {}, potions: {}, chests: {}, rerollTokens: 0 };
+    if (!cs.clearedDungeons) cs.clearedDungeons = {};
+    if (!cs.pendingUnlocks) cs.pendingUnlocks = [];
+    if (cs.pendingJobChoice == null) cs.pendingJobChoice = 0;
+  }
+  // 把舊全域資料搬給主角
+  if (primary) {
+    const cs = p.characters[primary];
+    const oldBag = p.bag || {};
+    cs.bag.materials = oldBag.materials || cs.bag.materials || {};
+    cs.bag.equipment = oldBag.equipment || cs.bag.equipment || {};
+    cs.bag.gems = oldBag.gems || cs.bag.gems || {};
+    cs.bag.potions = oldBag.potions || cs.bag.potions || {};
+    cs.bag.chests = oldBag.chests || cs.bag.chests || {};
+    cs.bag.rerollTokens = oldBag.rerollTokens || cs.bag.rerollTokens || 0;
+    cs.clearedDungeons = { ...(p.clearedDungeons || {}), ...cs.clearedDungeons };
+    cs.pendingUnlocks = (p.pendingUnlocks || []).concat(cs.pendingUnlocks || []);
+    cs.pendingJobChoice = p.pendingJobChoice || cs.pendingJobChoice || 0;
+  }
+  // 移除舊欄位
+  delete p.bag;
+  delete p.clearedDungeons;
+  delete p.pendingUnlocks;
+  delete p.pendingJobChoice;
+  p.version = 5;
+  console.log('[Wave 29] 存檔 v4 → v5 遷移完成，所有資源已歸到主角', primary);
 }
 function saveState() {
   STATE.lastSaved = Date.now();
@@ -230,9 +291,9 @@ function applyLevelUnlocks(cs, lv, queue) {
         }
       }
     } else if (u.type === 'job') {
-      // 只設「下一階」轉職；高於下一階的留待後續
-      if (u.tier === cs.jobTier + 1 && STATE.pendingJobChoice === 0) {
-        STATE.pendingJobChoice = u.tier;
+      // 只設「下一階」轉職；高於下一階的留待後續（每角色獨立）
+      if (u.tier === cs.jobTier + 1 && (cs.pendingJobChoice || 0) === 0) {
+        cs.pendingJobChoice = u.tier;
       }
       queue.push({ kind: 'job', tier: u.tier, lv });
     } else if (u.type === 'graduate') {
@@ -309,9 +370,10 @@ function fixJobPath(cs, keepPath) {
 function selectJobPath(pathId, tier) {
   const cs = STATE.characters[STATE.activeCharId];
   if (!cs) return;
+  if (!cs.pendingUnlocks) cs.pendingUnlocks = [];
   if (tier === 1) cs.jobPath = pathId;
   cs.jobTier = tier;
-  STATE.pendingJobChoice = 0;
+  cs.pendingJobChoice = 0;
 
   // 補解鎖：所有等級 <= 當前等級、路線符合的內容
   const newQueue = [];
@@ -338,13 +400,13 @@ function selectJobPath(pathId, tier) {
       }
     }
   }
-  STATE.pendingUnlocks.push(...newQueue);
+  cs.pendingUnlocks.push(...newQueue);
 
   // 若已超過下一階轉職等級，立刻排隊下一階選擇
   const nextTierLv = tier === 1 ? 50 : tier === 2 ? 75 : 999;
   if (cs.level >= nextTierLv && cs.jobTier < tier + 1) {
-    STATE.pendingJobChoice = tier + 1;
-    STATE.pendingUnlocks.push({ kind: 'job', tier: tier + 1, lv: nextTierLv });
+    cs.pendingJobChoice = tier + 1;
+    cs.pendingUnlocks.push({ kind: 'job', tier: tier + 1, lv: nextTierLv });
   }
   saveState();
 }
@@ -355,14 +417,16 @@ function selectJobPath(pathId, tier) {
 function gainExp(n) {
   const cs = STATE.characters[STATE.activeCharId];
   if (!cs) return;
+  if (!cs.pendingUnlocks) cs.pendingUnlocks = [];
   n = Math.floor(n);
   if (cs.graduated) {
-    // 進入共鳴等級
+    // 進入共鳴等級（共鳴依然共用）
     STATE.resonanceExp += n;
     while (STATE.resonanceExp >= resonanceExpFor(STATE.resonance)) {
       STATE.resonanceExp -= resonanceExpFor(STATE.resonance);
       STATE.resonance += 1;
-      STATE.pendingUnlocks.push({ kind: 'resonance', lv: STATE.resonance });
+      // 共鳴升級通知掛在當前 active 角色
+      cs.pendingUnlocks.push({ kind: 'resonance', lv: STATE.resonance });
     }
     return;
   }
@@ -372,7 +436,7 @@ function gainExp(n) {
     cs.exp -= GAME_DATA.expForLevel(cs.level);
     cs.level += 1;
     leveled = true;
-    applyLevelUnlocks(cs, cs.level, STATE.pendingUnlocks);
+    applyLevelUnlocks(cs, cs.level, cs.pendingUnlocks);
   }
   if (cs.level >= GAME_DATA.MAX_LEVEL) {
     cs.exp = 0;
@@ -445,7 +509,7 @@ function effectiveStats(charId) {
   for (const slot of GAME_DATA.EQUIPMENT_SLOTS) {
     const instId = cs.equip ? cs.equip[slot] : null;
     if (!instId) continue;
-    const inst = STATE.bag.equipment[instId];
+    const inst = cs.bag && cs.bag.equipment ? cs.bag.equipment[instId] : null;
     if (!inst) continue;
     const def = GAME_DATA.findEquipment(inst.itemId);
     if (!def) continue;
@@ -595,7 +659,8 @@ function isDungeonUnlocked(dungeonId) {
   const d = GAME_DATA.getDungeon(dungeonId);
   if (!d) return false;
   if (d.unlock === 0) return true;
-  return !!STATE.clearedDungeons[d.unlock];
+  const cs = activeChar();
+  return !!(cs && cs.clearedDungeons && cs.clearedDungeons[d.unlock]);
 }
 
 // --------------------------------------------------------------------------
@@ -604,19 +669,21 @@ function isDungeonUnlocked(dungeonId) {
 function gainGold(n) { STATE.gold = Math.max(0, Math.floor(STATE.gold + n)); }
 function gainShard(n) { STATE.shard = Math.max(0, Math.floor(STATE.shard + n)); }
 
-// 材料升階合成
+// 材料升階合成（使用 active 角色的背包）
 function craftMaterial(recipeId, qty) {
   qty = qty || 1;
   const rec = GAME_DATA.findMaterialRecipe(recipeId);
   if (!rec) return { ok: false, reason: '找不到配方' };
   const cs = STATE.characters[STATE.activeCharId];
   if (cs && cs.level < (rec.requiredLv || 0)) return { ok: false, reason: `需要 Lv ${rec.requiredLv}` };
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
   // 檢查材料 / 金錢
   const totalGold = rec.gold * qty;
   if (STATE.gold < totalGold) return { ok: false, reason: '金幣不足' };
   for (const [m, n] of Object.entries(rec.from)) {
     const need = n * qty;
-    if ((STATE.bag.materials[m] || 0) < need) return { ok: false, reason: `${m} 不足（需 ${need}）` };
+    if ((bag.materials[m] || 0) < need) return { ok: false, reason: `${m} 不足（需 ${need}）` };
   }
   // 扣除 + 給材料
   gainGold(-totalGold);
@@ -646,7 +713,8 @@ function exchangeShard(exchangeId) {
       label = picked.name;
     }
   } else if (r.kind === 'reroll-token') {
-    STATE.bag.rerollTokens = (STATE.bag.rerollTokens || 0) + r.qty;
+    const bag = activeBag();
+    if (bag) bag.rerollTokens = (bag.rerollTokens || 0) + r.qty;
     label = `詞綴重抽券 ×${r.qty}`;
   }
   scheduleSave();
@@ -655,37 +723,49 @@ function exchangeShard(exchangeId) {
 
 // 詞綴重抽（消耗一張券）
 function rerollAffixes(instId) {
-  const inst = STATE.bag.equipment[instId];
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[instId];
   if (!inst) return { ok: false, reason: '找不到裝備' };
   const def = GAME_DATA.findEquipment(inst.itemId);
   if (!def) return { ok: false, reason: '裝備資料異常' };
   if (def.rarity === 'N') return { ok: false, reason: '練習裝無詞綴可重抽' };
-  if ((STATE.bag.rerollTokens || 0) < 1) return { ok: false, reason: '缺重抽券（商店可兌換）' };
-  STATE.bag.rerollTokens -= 1;
+  if ((bag.rerollTokens || 0) < 1) return { ok: false, reason: '缺重抽券（商店可兌換）' };
+  bag.rerollTokens -= 1;
   inst.affixes = GAME_DATA.rollAffixes(def.rarity);
   scheduleSave();
   return { ok: true, name: def.name, newAffixes: inst.affixes };
 }
-function gainMaterial(name, n) { STATE.bag.materials[name] = (STATE.bag.materials[name] || 0) + n; }
+function gainMaterial(name, n) {
+  const bag = activeBag();
+  if (!bag) return;
+  bag.materials[name] = (bag.materials[name] || 0) + n;
+}
 function consumeMaterial(name, n) {
-  const cur = STATE.bag.materials[name] || 0;
+  const bag = activeBag();
+  if (!bag) return false;
+  const cur = bag.materials[name] || 0;
   if (cur < n) return false;
-  STATE.bag.materials[name] = cur - n;
-  if (STATE.bag.materials[name] <= 0) delete STATE.bag.materials[name];
+  bag.materials[name] = cur - n;
+  if (bag.materials[name] <= 0) delete bag.materials[name];
   return true;
 }
 // 已被 createEquipInstance 取代
 
 // ========== 寶箱 ==========
 function gainChest(chestId, n = 1) {
-  if (!STATE.bag.chests) STATE.bag.chests = {};
-  STATE.bag.chests[chestId] = (STATE.bag.chests[chestId] || 0) + n;
+  const bag = activeBag();
+  if (!bag) return;
+  if (!bag.chests) bag.chests = {};
+  bag.chests[chestId] = (bag.chests[chestId] || 0) + n;
 }
 function consumeChest(chestId, n = 1) {
-  const cur = (STATE.bag.chests && STATE.bag.chests[chestId]) || 0;
+  const bag = activeBag();
+  if (!bag || !bag.chests) return false;
+  const cur = bag.chests[chestId] || 0;
   if (cur < n) return false;
-  STATE.bag.chests[chestId] = cur - n;
-  if (STATE.bag.chests[chestId] <= 0) delete STATE.bag.chests[chestId];
+  bag.chests[chestId] = cur - n;
+  if (bag.chests[chestId] <= 0) delete bag.chests[chestId];
   return true;
 }
 // 開箱：抽獎並實際發放，回傳 [{ kind, label, qty/inst }]
@@ -734,7 +814,9 @@ function openChest(chestId) {
 // ========== 裝備分解 ==========
 // 依稀有度回饋對應材料與金錢；強化等級加倍返還
 function toggleEquipLock(instId) {
-  const inst = STATE.bag.equipment[instId];
+  const bag = activeBag();
+  if (!bag) return false;
+  const inst = bag.equipment[instId];
   if (!inst) return false;
   inst.locked = !inst.locked;
   scheduleSave();
@@ -742,18 +824,18 @@ function toggleEquipLock(instId) {
 }
 
 function disassembleEquipment(instId) {
-  const inst = STATE.bag.equipment[instId];
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[instId];
   if (!inst) return { ok: false, reason: '找不到裝備' };
   const def = GAME_DATA.findEquipment(inst.itemId);
   if (!def) return { ok: false, reason: '裝備資料缺失' };
   // 鎖定中不可分解
   if (inst.locked) return { ok: false, reason: '裝備已鎖定（請先解鎖）' };
-  // 裝備中不可分解
-  for (const cid in STATE.characters) {
-    const cs = STATE.characters[cid];
-    if (cs.equip && Object.values(cs.equip).includes(instId)) {
-      return { ok: false, reason: `${cs.customName} 裝備中，請先卸下` };
-    }
+  // 裝備中不可分解（只檢查 active 角色，因為背包獨立了，instId 只屬於 active）
+  const cs = activeChar();
+  if (cs && cs.equip && Object.values(cs.equip).includes(instId)) {
+    return { ok: false, reason: `${cs.customName} 裝備中，請先卸下` };
   }
   // 取下鑲嵌寶石（退回背包）
   let gemsReturned = [];
@@ -772,29 +854,28 @@ function disassembleEquipment(instId) {
   };
   const r = REWARDS[def.rarity] || REWARDS.N;
   const forge = inst.forge || 0;
-  const matQty = r.mq + Math.ceil(forge * 0.5);   // 強化每級多 0.5 件材料（向上取整）
+  const matQty = r.mq + Math.ceil(forge * 0.5);
   const goldRet = Math.floor(r.gold * (1 + forge * 0.3));
   gainMaterial(r.mat, matQty);
   gainGold(goldRet);
   // 移除 instance
-  delete STATE.bag.equipment[instId];
+  delete bag.equipment[instId];
   return { ok: true, name: def.name, mat: r.mat, matQty, gold: goldRet, gems: gemsReturned };
 }
 
-// 批次分解：依條件挑出未裝備裝備一次分解
-// criteria: { maxRarity: 'R', uptoTier: 1 }  → 分解 R 階及以下未裝備裝備
+// 批次分解：依條件挑出未裝備裝備一次分解（只動 active 角色）
 function batchDisassemble(criteria) {
   const RARITY_ORDER = { N: 0, R: 1, SR: 2, SSR: 3, UR: 4 };
   const maxRarityVal = RARITY_ORDER[criteria.maxRarity] ?? -1;
+  const bag = activeBag();
+  const cs = activeChar();
+  if (!bag || !cs) return { count: 0, mats: {}, gold: 0, gems: 0 };
   const equippedSet = new Set();
-  for (const cid in STATE.characters) {
-    const cs = STATE.characters[cid];
-    if (cs.equip) for (const v of Object.values(cs.equip)) if (v) equippedSet.add(v);
-  }
+  if (cs.equip) for (const v of Object.values(cs.equip)) if (v) equippedSet.add(v);
   const toDis = [];
-  for (const [instId, inst] of Object.entries(STATE.bag.equipment)) {
+  for (const [instId, inst] of Object.entries(bag.equipment)) {
     if (equippedSet.has(instId)) continue;
-    if (inst.locked) continue;  // 已鎖定的不分解
+    if (inst.locked) continue;
     const def = GAME_DATA.findEquipment(inst.itemId);
     if (!def) continue;
     if (RARITY_ORDER[def.rarity] > maxRarityVal) continue;
@@ -815,28 +896,33 @@ function batchDisassemble(criteria) {
 
 // ========== 藥水 ==========
 function gainPotion(pid, n = 1) {
-  if (!STATE.bag.potions) STATE.bag.potions = {};
-  STATE.bag.potions[pid] = (STATE.bag.potions[pid] || 0) + n;
+  const bag = activeBag();
+  if (!bag) return;
+  if (!bag.potions) bag.potions = {};
+  bag.potions[pid] = (bag.potions[pid] || 0) + n;
 }
 function consumePotion(pid, n = 1) {
-  const cur = (STATE.bag.potions && STATE.bag.potions[pid]) || 0;
+  const bag = activeBag();
+  if (!bag || !bag.potions) return false;
+  const cur = bag.potions[pid] || 0;
   if (cur < n) return false;
-  STATE.bag.potions[pid] = cur - n;
-  if (STATE.bag.potions[pid] <= 0) delete STATE.bag.potions[pid];
+  bag.potions[pid] = cur - n;
+  if (bag.potions[pid] <= 0) delete bag.potions[pid];
   return true;
 }
 function buyPotion(pid, qty = 1) {
   const p = GAME_DATA.findPotion(pid);
   if (!p) return { ok: false, reason: '找不到該藥水' };
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
   const totalGold = p.cost.gold * qty;
   if (STATE.gold < totalGold) return { ok: false, reason: '金幣不足' };
   if (p.cost.mats) {
     for (const [name, q] of Object.entries(p.cost.mats)) {
       const need = q * qty;
-      if ((STATE.bag.materials[name] || 0) < need) return { ok: false, reason: `${name} 不足 (需 ${need})` };
+      if ((bag.materials[name] || 0) < need) return { ok: false, reason: `${name} 不足 (需 ${need})` };
     }
   }
-  // 扣費
   gainGold(-totalGold);
   if (p.cost.mats) for (const [name, q] of Object.entries(p.cost.mats)) consumeMaterial(name, q * qty);
   gainPotion(pid, qty);
@@ -884,22 +970,24 @@ function activateGlobalBuff(potionId) {
 function sellGem(gemId, n = 1) {
   const gem = GAME_DATA.findGem(gemId);
   if (!gem) return { ok: false, reason: '找不到此魔法石' };
-  const cur = (STATE.bag.gems && STATE.bag.gems[gemId]) || 0;
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const cur = (bag.gems && bag.gems[gemId]) || 0;
   if (cur < n) return { ok: false, reason: '數量不足' };
-  // 售價：tier × 等級遞增
   const PRICES = { 1: 10, 2: 60, 3: 280, 4: 1500, 5: 8000 };
   const price = (PRICES[gem.tier] || 10) * n;
   consumeGem(gemId, n);
   gainGold(price);
   return { ok: true, gold: price, name: gem.name };
 }
-// 批次出售：依稀有度上限
 function sellGemsBatch(maxRarity) {
   const RARITY_ORDER = { N: 0, R: 1, SR: 2, SSR: 3, UR: 4 };
   const cap = RARITY_ORDER[maxRarity] ?? -1;
+  const bag = activeBag();
+  if (!bag) return { count: 0, gold: 0 };
   let totalGold = 0;
   let count = 0;
-  const gems = { ...(STATE.bag.gems || {}) };
+  const gems = { ...(bag.gems || {}) };
   for (const [gid, qty] of Object.entries(gems)) {
     const g = GAME_DATA.findGem(gid);
     if (!g) continue;
@@ -910,43 +998,53 @@ function sellGemsBatch(maxRarity) {
   return { count, gold: totalGold };
 }
 
-// 魔法石操作
 function gainGem(gemId, n = 1) {
-  if (!STATE.bag.gems) STATE.bag.gems = {};
-  STATE.bag.gems[gemId] = (STATE.bag.gems[gemId] || 0) + n;
+  const bag = activeBag();
+  if (!bag) return;
+  if (!bag.gems) bag.gems = {};
+  bag.gems[gemId] = (bag.gems[gemId] || 0) + n;
 }
 function consumeGem(gemId, n = 1) {
-  const cur = (STATE.bag.gems && STATE.bag.gems[gemId]) || 0;
+  const bag = activeBag();
+  if (!bag || !bag.gems) return false;
+  const cur = bag.gems[gemId] || 0;
   if (cur < n) return false;
-  STATE.bag.gems[gemId] = cur - n;
-  if (STATE.bag.gems[gemId] <= 0) delete STATE.bag.gems[gemId];
+  bag.gems[gemId] = cur - n;
+  if (bag.gems[gemId] <= 0) delete bag.gems[gemId];
   return true;
 }
 function socketGem(instId, slotIdx, gemId) {
-  const inst = STATE.bag.equipment[instId];
+  const bag = activeBag();
+  if (!bag) return false;
+  const inst = bag.equipment[instId];
   if (!inst) return false;
   const def = GAME_DATA.findEquipment(inst.itemId);
   if (!def) return false;
   const maxSockets = GAME_DATA.socketsForRarity(def.rarity);
   if (slotIdx < 0 || slotIdx >= maxSockets) return false;
   if (!inst.sockets) inst.sockets = new Array(maxSockets).fill(null);
-  if (inst.sockets[slotIdx]) return false; // 已有寶石需先取下
+  if (inst.sockets[slotIdx]) return false;
   if (!consumeGem(gemId, 1)) return false;
   inst.sockets[slotIdx] = gemId;
   return true;
 }
 function unsocketGem(instId, slotIdx) {
-  const inst = STATE.bag.equipment[instId];
+  const bag = activeBag();
+  if (!bag) return false;
+  const inst = bag.equipment[instId];
   if (!inst || !inst.sockets) return false;
   const gemId = inst.sockets[slotIdx];
   if (!gemId) return false;
-  // 取下：魔法石直接銷毀（不退回背包），完全免費
   inst.sockets[slotIdx] = null;
   return { ok: true };
 }
 
 // 取出並清空一個 pending unlock
-function dequeueUnlock() { return STATE.pendingUnlocks.shift(); }
+function dequeueUnlock() {
+  const cs = activeChar();
+  if (!cs || !cs.pendingUnlocks) return undefined;
+  return cs.pendingUnlocks.shift();
+}
 
 // 完全替換 STATE 內容（匯入存檔用，避免 race condition）
 function replaceState(newState) {

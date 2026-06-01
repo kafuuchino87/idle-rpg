@@ -2,6 +2,23 @@
 // 主邏輯：創角、UI、主迴圈、解鎖通知、轉職
 // ===========================================================================
 
+// Wave 29：背包每角色獨立 — UI 透過這兩個 helper 取當前角色 / 背包
+function _activeCs() {
+  return GAME_STATE.state.characters[GAME_STATE.state.activeCharId] || null;
+}
+function _activeBag() {
+  const c = _activeCs();
+  if (!c) return { materials: {}, equipment: {}, gems: {}, potions: {}, chests: {}, rerollTokens: 0 };
+  if (!c.bag) c.bag = { materials: {}, equipment: {}, gems: {}, potions: {}, chests: {}, rerollTokens: 0 };
+  return c.bag;
+}
+function _activeClearedDungeons() {
+  const c = _activeCs();
+  if (!c) return {};
+  if (!c.clearedDungeons) c.clearedDungeons = {};
+  return c.clearedDungeons;
+}
+
 window.addEventListener('DOMContentLoaded', init);
 
 function init() {
@@ -754,10 +771,10 @@ function renderCraft() {
       if (!def) return '';
       const lvOk = cs.level >= (rec.requiredLv || 0);
       const goldOk = st.gold >= rec.cost.gold;
-      const matsOk = Object.entries(rec.cost.mats).every(([n, q]) => (st.bag.materials[n] || 0) >= q);
+      const matsOk = Object.entries(rec.cost.mats).every(([n, q]) => (_activeBag().materials[n] || 0) >= q);
       const canMake = lvOk && goldOk && matsOk;
       const matsStr = Object.entries(rec.cost.mats).map(([n, q]) => {
-        const have = st.bag.materials[n] || 0;
+        const have = _activeBag().materials[n] || 0;
         const ok = have >= q;
         return `<span class="${ok ? 'ok' : 'no'}">${n} ${have}/${q}</span>`;
       }).join(' ');
@@ -789,16 +806,16 @@ function renderCraft() {
     const rows = GAME_DATA.MATERIAL_RECIPES.map(rec => {
       const lvOk = cs.level >= (rec.requiredLv || 0);
       const goldOk = st.gold >= rec.gold;
-      const matsOk = Object.entries(rec.from).every(([n, q]) => (st.bag.materials[n] || 0) >= q);
+      const matsOk = Object.entries(rec.from).every(([n, q]) => (_activeBag().materials[n] || 0) >= q);
       const canMake = lvOk && goldOk && matsOk;
       const fromStr = Object.entries(rec.from).map(([n, q]) => {
-        const have = st.bag.materials[n] || 0;
+        const have = _activeBag().materials[n] || 0;
         return `<span class="${have >= q ? 'ok' : 'no'}">${n} ${have}/${q}</span>`;
       }).join(' ');
       // 計算可以做的最大量（min of available / cost ratio）
       let maxMake = Math.floor(st.gold / rec.gold);
       for (const [n, q] of Object.entries(rec.from)) {
-        maxMake = Math.min(maxMake, Math.floor((st.bag.materials[n] || 0) / q));
+        maxMake = Math.min(maxMake, Math.floor((_activeBag().materials[n] || 0) / q));
       }
       maxMake = Math.max(0, maxMake);
       return `
@@ -870,12 +887,12 @@ function renderShop() {
       <div class="shop-section-title">${s.title}<span class="shop-section-desc">${s.desc}</span></div>
       <div class="shop-grid">`;
     for (const p of items) {
-      const have = (st.bag.potions && st.bag.potions[p.id]) || 0;
+      const have = (_activeBag().potions && _activeBag().potions[p.id]) || 0;
       const goldOk = st.gold >= p.cost.gold;
-      const matsOk = !p.cost.mats || Object.entries(p.cost.mats).every(([n, q]) => (st.bag.materials[n] || 0) >= q);
+      const matsOk = !p.cost.mats || Object.entries(p.cost.mats).every(([n, q]) => (_activeBag().materials[n] || 0) >= q);
       const ok = goldOk && matsOk;
       const matsStr = p.cost.mats ? Object.entries(p.cost.mats).map(([n, q]) => {
-        const h = st.bag.materials[n] || 0;
+        const h = _activeBag().materials[n] || 0;
         return `<span class="${h >= q ? 'ok' : 'no'}">${n} ${h}/${q}</span>`;
       }).join(' ') : '';
       html += `<div class="shop-row ${ok ? '' : 'locked'}">
@@ -1038,7 +1055,7 @@ function renderPotionSlotBar() {
   const gbs = (st.globalBuffs || []).filter(b => b.expiresAt > Date.now());
   const structKey = cs.potionSlots.map((s, i) => {
     const pid = s.potionId;
-    const have = pid ? ((st.bag.potions && st.bag.potions[pid]) || 0) : 0;
+    const have = pid ? ((_activeBag().potions && _activeBag().potions[pid]) || 0) : 0;
     return `${pid || '_'}|${have}|${s.threshold}`;
   }).join('||') + '/' + gbs.map(g => g.potionId).join(',');
 
@@ -1049,7 +1066,7 @@ function renderPotionSlotBar() {
     for (let i = 0; i < 3; i++) {
       const slot = cs.potionSlots[i];
       const pid = slot.potionId;
-      const have = pid ? ((st.bag.potions && st.bag.potions[pid]) || 0) : 0;
+      const have = pid ? ((_activeBag().potions && _activeBag().potions[pid]) || 0) : 0;
       const p = pid ? GAME_DATA.findPotion(pid) : null;
       const thresholdText = (i < 2 && pid) ? `≤${Math.round(slot.threshold * 100)}%` : '';
       html += `<button type="button" class="potion-slot ${pid ? 'filled' : 'empty'}" data-pslot="${i}" onclick="openPotionConfig(${i})">
@@ -1155,7 +1172,7 @@ function renderPotionConfig() {
 
   // 此槽接受的類別
   const acceptedTypes = slotIdx === 0 ? ['hp_heal'] : slotIdx === 1 ? ['mp_heal'] : ['buff'];
-  const owned = Object.entries(st.bag.potions || {}).filter(([, q]) => q > 0)
+  const owned = Object.entries(_activeBag().potions || {}).filter(([, q]) => q > 0)
     .map(([id, q]) => ({ id, q, p: GAME_DATA.findPotion(id) }))
     .filter(o => o.p && acceptedTypes.includes(o.p.type) && (slotIdx !== 2 || o.p.kind === 'combat'));
 
@@ -1222,7 +1239,7 @@ function doCraft(recipeId) {
   if (cs.level < (rec.requiredLv || 0)) return toast(`需要 Lv ${rec.requiredLv}`, 'error');
   if (GAME_STATE.state.gold < rec.cost.gold) return toast('金幣不足', 'error');
   for (const [n, q] of Object.entries(rec.cost.mats)) {
-    if ((GAME_STATE.state.bag.materials[n] || 0) < q) return toast(`${n} 不足`, 'error');
+    if (((cs.bag && cs.bag.materials && cs.bag.materials[n]) || 0) < q) return toast(`${n} 不足`, 'error');
   }
   // 扣費 + 產生 instance
   GAME_STATE.gainGold(-rec.cost.gold);
@@ -1306,7 +1323,7 @@ function renderResonance() {
 function renderEquipDetail(instId) {
   const root = document.getElementById('tabEquip');
   if (!root) return;
-  const inst = GAME_STATE.state.bag.equipment[instId];
+  const inst = _activeBag().equipment[instId];
   if (!inst) { root.innerHTML = '<div style="color:var(--muted)">無</div>'; return; }
   const def = GAME_DATA.findEquipment(inst.itemId);
   if (!def) return;
@@ -1405,7 +1422,7 @@ function renderEquipDetail(instId) {
     }
   }
 
-  const tokens = GAME_STATE.state.bag.rerollTokens || 0;
+  const tokens = _activeBag().rerollTokens || 0;
   const canReroll = def.rarity !== 'N' && inst.affixes && inst.affixes.length > 0;
   const rerollBtn = canReroll
     ? `<button class="ghost small" data-reroll="${instId}" ${tokens > 0 ? '' : 'disabled'}>重抽詞綴（券 ×${tokens}）</button>`
@@ -1460,7 +1477,7 @@ function renderEquipDetail(instId) {
           // 第一次點擊：標記、變色提示
           window._pendingUnsocket = key;
           el.classList.add('unsocket-pending');
-          const gemId = GAME_STATE.state.bag.equipment[instId]?.sockets?.[slotIdx];
+          const gemId = _activeBag().equipment[instId]?.sockets?.[slotIdx];
           const gem = gemId ? GAME_DATA.findGem(gemId) : null;
           const name = gem ? gem.name : '魔法石';
           toast(`⚠ 再點一次以銷毀「${name}」（3 秒內）`, 'error');
@@ -1481,7 +1498,7 @@ function renderEquipDetail(instId) {
 function openGemPicker(instId, slotIdx) {
   const root = document.getElementById('gemPicker_' + instId);
   if (!root) return;
-  const gems = GAME_STATE.state.bag.gems || {};
+  const gems = _activeBag().gems || {};
   const owned = Object.entries(gems).filter(([id, q]) => q > 0);
   if (!owned.length) {
     root.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px;text-align:center">背包無魔法石。請至特殊副本（強化試煉）或襲擊戰取得。</div>';
@@ -2142,7 +2159,7 @@ function renderDungeonList() {
         ? `<span style="font-size:10px;color:${lvOk ? 'var(--muted)' : 'var(--hp-enemy)'};margin-left:4px">${d.requiredLv >= 99 ? '需畢業' : `需 Lv${d.requiredLv}`}</span>`
         : '';
       row.innerHTML = `
-        <div class="dungeon-name">${d.name}${typeTag}${lvTag}${GAME_STATE.state.clearedDungeons[d.id] ? ' <span style="color:var(--hp-self);font-size:10px">已通</span>' : ''}</div>
+        <div class="dungeon-name">${d.name}${typeTag}${lvTag}${_activeClearedDungeons()[d.id] ? ' <span style="color:var(--hp-self);font-size:10px">已通</span>' : ''}</div>
         <div class="${cpClass}">CP ${d.cp}</div>
       `;
       if (unlocked) {
@@ -2184,7 +2201,7 @@ function renderForge() {
       root.appendChild(empty);
       continue;
     }
-    const inst = GAME_STATE.state.bag.equipment[instId];
+    const inst = _activeBag().equipment[instId];
     const def = GAME_DATA.findEquipment(inst.itemId);
     if (!def) continue;
     const lvl = inst.forge || 0;
@@ -2204,7 +2221,7 @@ function renderForge() {
     } else {
       const cost = GAME_DATA.forgeCost(lvl);
       const goldOk = GAME_STATE.state.gold >= cost.goldCost;
-      const matOk = (GAME_STATE.state.bag.materials[cost.mat] || 0) >= cost.matCost;
+      const matOk = (_activeBag().materials[cost.mat] || 0) >= cost.matCost;
       bottom = `
         <div class="forge-cost">
           <span class="${goldOk ? 'ok' : 'no'}">金 ${cost.goldCost.toLocaleString()}</span>
@@ -2240,11 +2257,11 @@ function statLabel(k, v, forge) {
 }
 
 function doForge(instId) {
-  const inst = GAME_STATE.state.bag.equipment[instId];
+  const inst = _activeBag().equipment[instId];
   if (!inst) return;
   const cost = GAME_DATA.forgeCost(inst.forge || 0);
   if (GAME_STATE.state.gold < cost.goldCost) return toast('金幣不足', 'error');
-  if ((GAME_STATE.state.bag.materials[cost.mat] || 0) < cost.matCost) return toast(`${cost.mat} 不足`, 'error');
+  if ((_activeBag().materials[cost.mat] || 0) < cost.matCost) return toast(`${cost.mat} 不足`, 'error');
   GAME_STATE.gainGold(-cost.goldCost);
   GAME_STATE.consumeMaterial(cost.mat, cost.matCost);
   if (Math.random() < cost.successRate) {
@@ -2319,19 +2336,19 @@ function renderBag() {
   matSec.innerHTML = `<h4>材料</h4>`;
   const matGrid = document.createElement('div');
   matGrid.className = 'bag-grid';
-  for (const [name, qty] of Object.entries(st.bag.materials)) {
+  for (const [name, qty] of Object.entries(_activeBag().materials)) {
     const def = GAME_DATA.ITEMS.materials[name] || { rarity: 'N' };
     const cell = document.createElement('div');
     cell.className = `bag-item ${def.rarity}`;
     cell.innerHTML = `<div class="iname">${name}</div><div class="itag">${def.rarity}</div><div class="qty">${qty}</div>`;
     matGrid.appendChild(cell);
   }
-  if (Object.keys(st.bag.materials).length === 0) matGrid.innerHTML = '<div style="color:var(--muted);font-size:11px">無</div>';
+  if (Object.keys(_activeBag().materials).length === 0) matGrid.innerHTML = '<div style="color:var(--muted);font-size:11px">無</div>';
   matSec.appendChild(matGrid);
   root.appendChild(matSec);
 
   // ===== 寶箱 =====
-  const chests = st.bag.chests || {};
+  const chests = _activeBag().chests || {};
   const chestEntries = Object.entries(chests).filter(([, q]) => q > 0);
   if (chestEntries.length > 0) {
     const cSec = document.createElement('div');
@@ -2358,7 +2375,7 @@ function renderBag() {
   }
 
   // ===== 藥水 / 卷軸 =====
-  const potions = st.bag.potions || {};
+  const potions = _activeBag().potions || {};
   const potionEntries = Object.entries(potions).filter(([, q]) => q > 0);
   if (potionEntries.length > 0) {
     const potSec = document.createElement('div');
@@ -2388,7 +2405,7 @@ function renderBag() {
   }
 
   // ===== 魔法石 =====
-  const gems = st.bag.gems || {};
+  const gems = _activeBag().gems || {};
   const gemEntries = Object.entries(gems).filter(([, q]) => q > 0);
   if (gemEntries.length > 0) {
     const gemSec = document.createElement('div');
@@ -2439,7 +2456,7 @@ function renderBag() {
     sec.innerHTML = `<h4>${label}</h4>`;
     const grid = document.createElement('div');
     grid.className = 'bag-grid';
-    const instances = Object.entries(st.bag.equipment).filter(([id, inst]) => {
+    const instances = Object.entries(_activeBag().equipment).filter(([id, inst]) => {
       const def = GAME_DATA.findEquipment(inst.itemId);
       if (!def || def.slot !== slot) return false;
       if (slot === 'weapon' && def.owner && def.owner !== cs.id) return false;
@@ -2511,7 +2528,7 @@ function renderBag() {
       e.stopPropagation();
       const gid = btn.dataset.sellgem;
       const sellAll = btn.dataset.all === '1';
-      const cur = (GAME_STATE.state.bag.gems && GAME_STATE.state.bag.gems[gid]) || 0;
+      const cur = (_activeBag().gems && _activeBag().gems[gid]) || 0;
       const qty = sellAll ? cur : 1;
       const g = GAME_DATA.findGem(gid);
       // 高階確認
@@ -2569,7 +2586,7 @@ function renderBag() {
     btn.onclick = (e) => {
       e.stopPropagation();
       const id = btn.dataset.disasm;
-      const inst = GAME_STATE.state.bag.equipment[id];
+      const inst = _activeBag().equipment[id];
       const def = inst && GAME_DATA.findEquipment(inst.itemId);
       if (!def) return;
       if (def.tier >= 3) {
@@ -2774,38 +2791,36 @@ function renderSkills() {
 }
 
 // ============================================================================
-// 解鎖通知 / 轉職彈窗（從 STATE.pendingUnlocks 取出）
+// 解鎖通知 / 轉職彈窗（從 active 角色的 pendingUnlocks 取出）
 // ============================================================================
 function flushPendingNotifications() {
-  const st = GAME_STATE.state;
-  const cs = st.characters[st.activeCharId];
+  const cs = _activeCs();
+  if (!cs) return;
+  if (!cs.pendingUnlocks) cs.pendingUnlocks = [];
 
   // 自癒：等級已達轉職門檻但 pendingJobChoice=0（狀態漏掉時補上）
-  if (cs && st.pendingJobChoice === 0 && !cs.graduated) {
+  if ((cs.pendingJobChoice || 0) === 0 && !cs.graduated) {
     const need = cs.level >= 75 ? 3 : cs.level >= 50 ? 2 : cs.level >= 25 ? 1 : 0;
-    if (need > cs.jobTier) st.pendingJobChoice = cs.jobTier + 1;
+    if (need > cs.jobTier) cs.pendingJobChoice = cs.jobTier + 1;
   }
 
-  // 優先處理轉職（有 pendingJobChoice）
-  if (st.pendingJobChoice && !document.getElementById('jobOverlay').classList.contains('open')) {
+  // 優先處理轉職
+  if (cs.pendingJobChoice && !document.getElementById('jobOverlay').classList.contains('open')) {
     if (document.getElementById('jobOverlay').classList.contains('hidden')) {
-      showJobChoice(st.pendingJobChoice);
+      showJobChoice(cs.pendingJobChoice);
     }
     return;
   }
-  // 解鎖通知處理
-  // - 共鳴升等 → 直接 toast 不彈窗（量多會煩）
-  // - 技能 / 被動 / 畢業 → 用彈窗（重要事件）
-  if (st.pendingUnlocks.length > 0) {
+  if (cs.pendingUnlocks.length > 0) {
     const importants = [];
     const resonances = [];
-    while (st.pendingUnlocks.length) {
+    while (cs.pendingUnlocks.length) {
       const u = GAME_STATE.dequeueUnlock();
-      if (u.kind === 'job') continue;  // 由 jobOverlay 處理
+      if (!u) break;
+      if (u.kind === 'job') continue;
       if (u.kind === 'resonance') resonances.push(u);
       else importants.push(u);
     }
-    // 共鳴 batch 成單一 toast
     if (resonances.length) {
       const max = resonances[resonances.length - 1].lv;
       const min = resonances[0].lv;
@@ -2814,7 +2829,6 @@ function flushPendingNotifications() {
         : `共鳴 R${min - 1} → R${max}（+${resonances.length} 點可分配）`;
       if (typeof toast === 'function') toast(msg, 'gold');
     }
-    // 重要事件用彈窗
     if (importants.length && document.getElementById('unlockOverlay').classList.contains('hidden')) {
       showUnlockOverlay(importants.slice(0, 8));
     }
