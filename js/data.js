@@ -194,23 +194,23 @@ const SKILLS = {
   // ── 路線 B：靈契禦狐（持續輸出 + AOE 控制，定位「穩定 DPS + 召喚物」）──
   'fox-mirage': {
     name: '狐影分身', tag: '召喚', kind: 'arcane', path: 'B',
-    desc: '召喚雪狐分身：即發 120% + 持續 8 秒每 0.35 秒攻擊（單次 70% × ~23 次 ≈ 1610%）。可暴擊，無敵人時暫停。CD 10s。',
-    mult: 1.2, summon: { dps: 0.7, dur: 8 }, cd: 10, mpCost: 90, costTier: 'light',
+    desc: '召喚雪狐分身：即發 150% + 持續 8 秒每 0.35 秒攻擊（單次 90% × ~23 次 ≈ 2070%）。可暴擊，無敵人時暫停。CD 10s。',
+    mult: 1.5, summon: { dps: 0.9, dur: 8 }, cd: 10, mpCost: 90, costTier: 'light',
   },
   'frostfall': {
     name: '凝霜降臨', tag: '冰封', kind: 'frost', path: 'B',
-    desc: '霜氣降下：350% 攻擊力 AOE 傷害 + 凍結敵人 2.5 秒（敵方停止行動）。CD 9s。',
-    mult: 3.5, aoe: true, freeze: 2.5, cd: 9, mpCost: 90, costTier: 'light',
+    desc: '霜氣降下：450% 攻擊力 AOE 傷害，對 BOSS 額外 +30%（合計 585% vs BOSS） + 凍結敵人 2.5 秒（敵方停止行動）。CD 9s。',
+    mult: 4.5, vsBossBonus: 0.3, aoe: true, freeze: 2.5, cd: 9, mpCost: 90, costTier: 'light',
   },
   'mist-seal': {
     name: '白霧封印', tag: '弱化', kind: 'arcane', path: 'B', requireTier: 2,
-    desc: '撕裂霧封印：550% 攻擊力，對 BOSS 額外 +90%（合計 1045% vs BOSS）。CD 12s。',
-    mult: 5.5, vsBossBonus: 0.9, cd: 12, mpCost: 180, costTier: 'medium',
+    desc: '撕裂霧封印：680% 攻擊力，對 BOSS 額外 +90%（合計 1292% vs BOSS）。CD 12s。',
+    mult: 6.8, vsBossBonus: 0.9, cd: 12, mpCost: 180, costTier: 'medium',
   },
   'fox-god-descend': {
     name: '狐神降世', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】九尾狐神降臨：即發 550% AOE + 持續 12 秒每 0.35 秒（單次 120% × ~34 次 ≈ 4080% 召喚），總 4630%。對 BOSS 額外 +50%。召喚物可暴擊，無敵人時暫停。CD 30s。',
-    mult: 5.5, aoe: true, summon: { dps: 1.2, dur: 12 }, vsBossBonus: 0.5,
+    desc: '【終極奧義】九尾狐神降臨：即發 700% AOE + 持續 12 秒每 0.3 秒（單次 150% × ~40 次 ≈ 6000% 召喚），總 6700%。對 BOSS 額外 +60%。召喚物可暴擊，無敵人時暫停。CD 30s。',
+    mult: 7.0, aoe: true, summon: { dps: 1.5, dur: 12, interval: 0.3 }, vsBossBonus: 0.6,
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
@@ -272,32 +272,34 @@ const SKILLS = {
   },
   'void-cleave': {
     name: '虛無一閃', tag: '★大招★', kind: 'arcane', path: 'A', requireTier: 3,
-    desc: '【終極奧義】魔劍劈裂虛空：1500% 攻擊力單體強擊，對 BOSS 額外 +80%（合計 2700% vs BOSS）。施放消耗 25% 當前 HP，必爆。CD 25s。',
-    mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true, selfDmg: 0.25,
+    desc: '【終極奧義】魔劍劈裂虛空：1500% 攻擊力單體強擊，對 BOSS 額外 +80%（合計 2700% vs BOSS），必爆。施放後 HP 降至 40%、受到傷害 -25%，持續 10 秒（強制觸發暗血盟與背水之姫）。CD 25s。',
+    mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true,
+    setHpPct: 0.4,
+    buff: { dmgReduce: 0.25, dur: 10 },
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
   // ── 路線 B：白翼聖姫（治癒、護盾、AOE）──
   'sacred-bloom': {
     name: '聖光綻放', tag: '治療+AOE', kind: 'arcane', path: 'B',
-    desc: '聖光綻放：對全體 320% AOE + 玩家回復 15% 最大 HP。CD 8s。',
-    mult: 3.2, aoe: true, heal: 0.15, cd: 8.0, mpCost: 180, costTier: 'medium',
+    desc: '聖光綻放：對全體 320% AOE + 自身與隊友各回復 15% 最大 HP。CD 8s。',
+    mult: 3.2, aoe: true, heal: 0.15, healAlly: true, cd: 8.0, mpCost: 180, costTier: 'medium',
   },
   'dawn-aria': {
     name: '曙光連歌', tag: '治癒連擊', kind: 'arcane', path: 'B',
-    desc: '聖光詠唱：四段 AOE 連擊共 1120%（每段 280%），每段同時回復 5% HP。CD 10s。',
-    mult: [2.8, 2.8, 2.8, 2.8], aoe: true, healPerHit: 0.05, cd: 10, mpCost: 180, costTier: 'medium',
+    desc: '聖光詠唱：四段 AOE 連擊共 1120%（每段 280%），每段自身與隊友各回 5% HP（合計 20%）。CD 10s。',
+    mult: [2.8, 2.8, 2.8, 2.8], aoe: true, healPerHit: 0.05, healAlly: true, cd: 10, mpCost: 180, costTier: 'medium',
   },
   'white-aegis': {
     name: '白翼結界', tag: '★護盾★', kind: 'self', path: 'B', requireTier: 2,
-    desc: '光輝結界：受到傷害 -50% 持續 10 秒、額外回復 25% 最大 HP。CD 16s。',
-    mult: 0, buff: { dmgReduce: 0.5, dur: 10 }, heal: 0.25,
+    desc: '光輝結界：受到傷害 -50% 持續 10 秒、自身與隊友各回復 25% 最大 HP。CD 16s。',
+    mult: 0, buff: { dmgReduce: 0.5, dur: 10 }, heal: 0.25, healAlly: true,
     cd: 16, isBuff: true, mpCost: 90, costTier: 'light',
   },
   'feather-eden': {
     name: '羽落聖光', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】羽翼降下聖光：三段 AOE 共 2550%（每段 850%）+ HP 回滿 + 8 秒減傷 30%。CD 30s。',
-    mult: [8.5, 8.5, 8.5], aoe: true, heal: 1.0, buff: { dmgReduce: 0.3, dur: 8 },
+    desc: '【終極奧義】羽翼降下聖光：三段 AOE 共 2550%（每段 850%）+ 自身與隊友 HP 回滿 + 8 秒減傷 30%。CD 30s。',
+    mult: [8.5, 8.5, 8.5], aoe: true, heal: 1.0, healAlly: true, buff: { dmgReduce: 0.3, dur: 8 },
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
@@ -309,9 +311,9 @@ const SKILLS = {
 const PASSIVES = {
   'fox-eye':    { name: '狐眼',       desc: '暴擊 +5%、攻擊速度 +5%。',                 apply: s => { s.crit += 0.05; s.spd *= 1.05; } },
   'wind-seal':  { name: '疾風之印',   desc: '攻擊力 +10%（戰鬥中常駐生效）。',           apply: s => { s.atk *= 1.10; } },
-  'pact-seal':  { name: '契約之印',   desc: '召喚物傷害 +50%。',                         apply: s => { s.summonMul = (s.summonMul || 1) * 1.5; } },
+  'pact-seal':  { name: '契約之印',   desc: '召喚物傷害 +80%、暴擊率 +5%。',              apply: s => { s.summonMul = (s.summonMul || 1) * 1.8; s.crit += 0.05; } },
   'traceless':  { name: '無痕',       desc: '受到傷害 -15%。',                           apply: s => { s.dmgReduce = (s.dmgReduce || 0) + 0.15; } },
-  'oracle':     { name: '神諭',       desc: '所有技能冷卻 -15%。',                       apply: s => { s.cdReduce = (s.cdReduce || 0) + 0.15; } },
+  'oracle':     { name: '神諭',       desc: '所有技能冷卻 -20%、攻擊力 +10%。',           apply: s => { s.cdReduce = (s.cdReduce || 0) + 0.20; s.atk *= 1.10; } },
   'silver-soul':{ name: '銀月之魂',   desc: '全屬性 +50%。',                             apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; } },
 
   // ===== 雪羽 被動 =====

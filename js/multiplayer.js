@@ -168,6 +168,17 @@ function broadcastEnemySync() {
   });
 }
 
+// ===== B 路線聖光治癒：廣播給隊友按各自 maxHp 計算回血量 =====
+function broadcastHealAlly(pct, skillName) {
+  if (MP.role === 'solo' || !MP.peer) {
+    console.log('[heal-ally][send] 略過：role=' + MP.role + ' peer=' + !!MP.peer);
+    return;
+  }
+  const conns = Object.keys(MP.connections).length;
+  console.log('[heal-ally][send] pct=' + pct + ' name=' + skillName + ' conns=' + conns);
+  broadcast('heal-ally', { pct, name: skillName || '' });
+}
+
 // ===== 廣播自己的傷害給所有隊友（雙向）=====
 // Host：對方累計到 damageStats 顯示，自己對敵人扣血是本地處理
 // Guest：Host 收到會幫忙扣敵人 HP（權威），其他 Guest 累計到 damageStats 顯示
@@ -264,9 +275,14 @@ function handleMessage(fromPeerId, data) {
         const bs = p && p.battleState;
         return bs && (bs.dead || (bs.inBattle && bs.maxHp > 0 && bs.hp <= 0));
       });
-      if (allAllyDead && typeof window.onBattleFail === 'function') {
+      if (allAllyDead) {
         b._teamWipeFired = true;
-        window.onBattleFail();
+        // 無盡塔：按累積傷害結算；一般副本：戰敗 0 獎勵
+        if (b._endlessMode && typeof window.onEndlessTimeUp === 'function') {
+          window.onEndlessTimeUp();
+        } else if (typeof window.onBattleFail === 'function') {
+          window.onBattleFail();
+        }
       }
     }
   }
@@ -348,6 +364,26 @@ function handleMessage(fromPeerId, data) {
         } else {
           console.warn('[mp] 忽略過早的 cleared sync (elapsed', elapsed, 'ms)');
         }
+      }
+    }
+  }
+  // 收到 B 路線聖光治癒 → 按自己 maxHp 補血
+  if (data.type === 'heal-ally') {
+    console.log('[heal-ally][recv] role=' + MP.role + ' running=' + (window.BATTLE?.running) + ' maxHp=' + (window.BATTLE?.player?.maxHp));
+    if (MP.role === 'host' || MP.role === 'guest') {
+      const b = window.BATTLE;
+      if (b && b.running && b.player && b.player.maxHp > 0) {
+        const pct = Math.max(0, Math.min(1, data.payload.pct || 0));
+        const amount = Math.floor(b.player.maxHp * pct);
+        console.log('[heal-ally][apply] pct=' + pct + ' amount=' + amount + ' hp_before=' + b.player.hp);
+        if (amount > 0) {
+          b.player.hp = Math.min(b.player.maxHp, b.player.hp + amount);
+          const allyName = (MP.players[fromPeerId] && MP.players[fromPeerId].nickname) || '隊友';
+          if (typeof window.logLine === 'function') window.logLine(`<span class="lg-clear">${allyName} 的 ${data.payload.name || '聖光'} 治療你 +${amount} HP</span>`, '');
+          if (typeof window.floatDamage === 'function') window.floatDamage('+' + amount, 'heal');
+        }
+      } else {
+        console.log('[heal-ally][skip] battle 不在執行中或玩家未就緒');
       }
     }
   }
@@ -468,6 +504,7 @@ window.MP_API = {
   broadcastRaidLaunch,
   broadcastBattleState,
   broadcastEnemySync,
+  broadcastHealAlly,
   reportDamageDealt,
   sendTo,
   isHost,

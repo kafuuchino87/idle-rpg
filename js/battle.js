@@ -349,11 +349,11 @@ function tickBattle(dt) {
   // 無盡塔：倒數 + 時間到結算 + BOSS atk 隨時間遞增（越打越痛）
   if (BATTLE._endlessMode) {
     BATTLE._endlessTimeLeft -= dtSec;
-    // BOSS atk：起始 100，每秒 +50（10 秒 600、20 秒 1100、30 秒 1600）
-    // 玩家 HP 通常 8000-20000，30 秒後不靠藥水大概會被打死
+    // BOSS atk：起始 1500，每秒 +150（10 秒 3000、20 秒 4500、30 秒 6000）
+    // 對應畢業玩家 def 1500-2500、HP 23000-30000，30 秒下來會被打到剩一口氣
     if (BATTLE.enemy && BATTLE.enemy.isEndlessBoss) {
       const elapsed = 30 - BATTLE._endlessTimeLeft;
-      BATTLE.enemy.atk = Math.floor(100 + elapsed * 50);
+      BATTLE.enemy.atk = Math.floor(1500 + elapsed * 150);
     }
     if (BATTLE._endlessTimeLeft <= 0 && !BATTLE._cleared) {
       BATTLE._endlessTimeLeft = 0;
@@ -401,7 +401,8 @@ function tickBattle(dt) {
 
   // 玩家行動（陣亡狀態不行動）
   if (!BATTLE._dead) {
-    const effSpd = BATTLE.player.spd * (1 + getBuffMod('spdMul'));
+    // 攻擊速度上限 5 — 避免共鳴/buff/裝備堆滿後出現極端值
+    const effSpd = Math.min(5, BATTLE.player.spd * (1 + getBuffMod('spdMul')));
     if (!BATTLE.player.nextAtk) BATTLE.player.nextAtk = 1 / effSpd;
     BATTLE.player.nextAtk -= dtSec;
     if (BATTLE.player.nextAtk <= 0) {
@@ -443,7 +444,8 @@ function tickBattle(dt) {
     }
   }
 
-  // 全隊滅判定：組隊時自己 dead + 所有隊友 dead → 觸發戰敗結算
+  // 全隊滅判定：組隊時自己 dead + 所有隊友 dead → 結算
+  // 無盡塔：按累積傷害結算（onEndlessTimeUp）；一般副本：戰敗 0 獎勵（onBattleFail）
   if (BATTLE._dead && !BATTLE._teamWipeFired && (BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest')) {
     if (window.MP_API) {
       const players = MP_API.getPlayers();
@@ -455,8 +457,13 @@ function tickBattle(dt) {
       });
       if (allAllyDead) {
         BATTLE._teamWipeFired = true;
-        logLine('<span class="lg-fail">全隊滅亡！</span>', '');
-        onBattleFail();
+        if (BATTLE._endlessMode) {
+          logLine('<span class="lg-fail">全隊滅亡！結算當前累積傷害...</span>', '');
+          onEndlessTimeUp();
+        } else {
+          logLine('<span class="lg-fail">全隊滅亡！</span>', '');
+          onBattleFail();
+        }
       }
     }
   }
@@ -568,19 +575,18 @@ function applyPotion(pid) {
 window.applyPotion = applyPotion;
 
 function tickSummons(dt) {
-  // Wave 31：召喚物攻擊頻率 0.5s → 0.35s（8 秒可打 23 次而非 16 次）
-  // Wave 31：無敵人時 dur 暫停（避免 wave 切換期間白白消耗秒數）
-  const TICK_INTERVAL = 0.35;
+  // 召喚物攻擊頻率：預設 0.35s（每召喚可獨立覆寫 interval）
+  // 無敵人時 dur 暫停（避免 wave 切換期間白白消耗秒數）
   BATTLE.summons = BATTLE.summons.filter(s => {
+    const interval = s.interval || 0.35;
     if (!BATTLE.enemy) {
-      // 沒目標 → 暫停一切倒數（acc 也不累積，避免敵人剛出現就連續打）
-      s.acc = Math.min(s.acc, TICK_INTERVAL);
+      s.acc = Math.min(s.acc, interval);
       return s.dur > 0;
     }
     s.dur -= dt;
     s.acc += dt;
-    while (s.acc >= TICK_INTERVAL) {
-      s.acc -= TICK_INTERVAL;
+    while (s.acc >= interval) {
+      s.acc -= interval;
       if (BATTLE.enemy) {
         const effCrit = BATTLE.player.crit + getBuffMod('crit');
         const isCrit = Math.random() < effCrit;
@@ -705,7 +711,7 @@ function castSkill(sk, sidHint) {
     BATTLE.dots.push({ dps: BATTLE.player.atk * sk.dot.dps, dur: sk.dot.dur, acc: 0, sourceId: sid, _name: sk.name, _maxDur: sk.dot.dur });
   }
   if (sk.summon && BATTLE.enemy) {
-    BATTLE.summons.push({ dps: BATTLE.player.atk * sk.summon.dps, dur: sk.summon.dur, acc: 0, sourceId: sid, _name: sk.name, _maxDur: sk.summon.dur });
+    BATTLE.summons.push({ dps: BATTLE.player.atk * sk.summon.dps, dur: sk.summon.dur, acc: 0, sourceId: sid, _name: sk.name, _maxDur: sk.summon.dur, interval: sk.summon.interval || 0.35 });
   }
   if (sk.freeze && BATTLE.enemy) {
     BATTLE.freezes = sk.freeze;
@@ -716,12 +722,18 @@ function castSkill(sk, sidHint) {
     BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + total * sk.lifesteal);
   }
   // ── 雪羽機制 ──
-  // 自殘技能（chaos-blade、void-cleave）：施放後扣當前 HP %
+  // 自殘技能（chaos-blade）：施放後扣當前 HP %
   if (sk.selfDmg && sk.selfDmg > 0) {
     const loss = Math.floor(BATTLE.player.hp * sk.selfDmg);
     BATTLE.player.hp = Math.max(1, BATTLE.player.hp - loss);
     logLine(`<span class="lg-fail">${sk.name} 自損 -${loss} HP</span>`, '');
     if (window.floatDamage) floatDamage('-' + loss + ' (自損)', 'enemy');
+  }
+  // 強制設 HP 到指定 %（void-cleave）：搭配減傷 buff，HP 仍會正常下降但不會被秒
+  if (sk.setHpPct != null) {
+    const target = Math.floor(BATTLE.player.maxHp * sk.setHpPct);
+    if (BATTLE.player.hp > target) BATTLE.player.hp = target;
+    logLine(`<span class="lg-clear">${sk.name} HP 降至 ${Math.round(sk.setHpPct * 100)}%</span>`, '');
   }
   // 治癒技能（sacred-bloom、white-aegis、feather-eden）：施放時回 maxHp %
   if (sk.heal && sk.heal > 0) {
@@ -730,6 +742,10 @@ function castSkill(sk, sidHint) {
     BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + heal);
     logLine(`<span class="lg-clear">${sk.name} 回復 +${heal} HP</span>`, '');
     if (window.floatDamage) floatDamage('+' + heal, 'heal');
+    // B 路線聖光治癒：同步治療隊友（pct of 對方 maxHp）
+    if (sk.healAlly && window.MP_API && window.MP_API.broadcastHealAlly) {
+      window.MP_API.broadcastHealAlly(sk.heal * healMul, sk.name);
+    }
   }
   // 每段治癒（dawn-aria）：依 multi-hit 次數每段回 maxHp %
   if (sk.healPerHit && sk.healPerHit > 0) {
@@ -737,6 +753,9 @@ function castSkill(sk, sidHint) {
     const healMul = BATTLE.player.healMul || 1;
     const heal = Math.floor(BATTLE.player.maxHp * sk.healPerHit * hits * healMul);
     BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + heal);
+    if (sk.healAlly && window.MP_API && window.MP_API.broadcastHealAlly) {
+      window.MP_API.broadcastHealAlly(sk.healPerHit * hits * healMul, sk.name);
+    }
     if (heal > 0) {
       logLine(`<span class="lg-clear">${sk.name} 連歌回復 +${heal} HP</span>`, '');
       if (window.floatDamage) floatDamage('+' + heal, 'heal');
@@ -1242,3 +1261,4 @@ window.trackDamage = trackDamage;
 window.spawnNextWave = spawnNextWave;
 window.onDungeonClear = onDungeonClear;
 window.onBattleFail = onBattleFail;
+window.onEndlessTimeUp = onEndlessTimeUp;

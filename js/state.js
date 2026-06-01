@@ -134,6 +134,14 @@ function autoEquipSkill(cs, skillId) {
 let STATE = loadState() || makeInitialState();
 let SAVE_TIMER = null;
 
+// Wave 31：STATE 就緒後補齊任何漏掉的等級解鎖（修「直設 level 跳過 gainExp」遺漏的 unlocks）
+if (STATE && STATE.characters) {
+  for (const id in STATE.characters) {
+    try { catchUpUnlocks(STATE.characters[id]); }
+    catch (e) { console.warn('[catchUpUnlocks]', id, e); }
+  }
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
@@ -185,7 +193,6 @@ function loadState() {
     selfHealEquipment(parsed);
     // Wave 30.3：補發遺失的 starter 練習裝（每 slot 獨立 + 強制存檔）
     healMissingStarterGear(parsed);
-    // Wave 30.3：載入後強制寫回 localStorage，確保 healMissingStarterGear 補的東西保存
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
     } catch (e) {
@@ -557,6 +564,24 @@ function applyLevelUnlocks(cs, lv, queue) {
 }
 
 // ============================================================================
+// catchUpUnlocks：補齊任何漏掉的等級解鎖（修「直設 level 跳過 gainExp」造成的缺）
+// 從 Lv 1 ~ cs.level 全部跑過 applyLevelUnlocks，只補不重複
+function catchUpUnlocks(cs) {
+  if (!cs) return { added: 0 };
+  const bp = GAME_DATA.getCharacterBlueprint(cs.blueprintId || cs.id);
+  if (!bp || !bp.unlocks) return { added: 0 };
+  cs.unlockedSkills = cs.unlockedSkills || [];
+  cs.unlockedPassives = cs.unlockedPassives || [];
+  cs.pendingUnlocks = cs.pendingUnlocks || [];
+  let added = 0;
+  for (let lv = 1; lv <= cs.level; lv++) {
+    const beforeS = cs.unlockedSkills.length, beforeP = cs.unlockedPassives.length;
+    applyLevelUnlocks(cs, lv, cs.pendingUnlocks);
+    added += (cs.unlockedSkills.length - beforeS) + (cs.unlockedPassives.length - beforeP);
+  }
+  return { added };
+}
+
 // Wave 28：跨路線技能 BUG 修復
 // 舊版本創角時可能讓單一角色同時解鎖 A 路線與 B 路線的技能/被動。
 // auditJobPath 回傳衝突詳情；fixJobPath 清除指定路線的對方資料。
@@ -1537,7 +1562,7 @@ window.GAME_STATE = {
   get state() { return STATE; },
   saveState, scheduleSave, resetState, replaceState,
   createCharacter, selectJobPath, MAX_CHARACTERS,
-  auditJobPath, fixJobPath,
+  auditJobPath, fixJobPath, catchUpUnlocks,
   setPlayerNickname, getPlayerNickname,
   effectiveStats, combatPower,
   isDungeonUnlocked,
