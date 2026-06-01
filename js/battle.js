@@ -107,7 +107,8 @@ function startBattle(dungeonId, charId) {
   const cp = GAME_STATE.combatPower(charId);
 
   const ratio = cp / dungeon.cp;
-  if (ratio < 0.4) {
+  // 無盡塔不檢查戰力（依累積傷害給獎勵，弱也能打）
+  if (ratio < 0.4 && !dungeon.isEndless) {
     logLine(`戰力不足，無法挑戰 <b>${dungeon.name}</b>（需要 ${dungeon.cp} CP，目前 ${cp}）`, 'lg-fail');
     return false;
   }
@@ -139,12 +140,19 @@ function startBattle(dungeonId, charId) {
   BATTLE._teamWipeFired = false;  // 重置全隊滅旗標
   BATTLE._wavePending = false;  // 重置 wave 切換 pending 旗標
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
-  // 多人模式判定：襲擊戰 + 已連線 → host / guest，其他 → solo
+  // 多人模式判定：襲擊戰 / 無盡塔 + 已連線 → host / guest，其他 → solo
   BATTLE._mpMode = 'solo';
-  if (dungeon.isRaid && window.MP_API && MP_API.isConnected()) {
+  if ((dungeon.isRaid || dungeon.isEndless) && window.MP_API && MP_API.isConnected()) {
     BATTLE._mpMode = MP_API.isHost() ? 'host' : 'guest';
   }
   BATTLE._lastEnemySync = 0;
+  // 無盡塔特殊狀態
+  BATTLE._endlessMode = !!dungeon.isEndless;
+  BATTLE._endlessTimeLeft = dungeon.isEndless ? (dungeon.timeLimit || 30) : 0;
+  BATTLE._endlessTotalDmg = 0;     // 自己累積傷害
+  BATTLE._endlessTeamDmg = 0;      // 團隊累積（含自己 + 廣播）
+  BATTLE._endlessTiers = dungeon.damageTiers || [];
+  BATTLE._endlessReached = -1;     // 達到的最高階梯 idx
   spawnNextEnemy();
 
   const lastLog = BATTLE.log[BATTLE.log.length - 1];
@@ -162,7 +170,15 @@ function buildEnemyList(dungeon) {
 }
 
 // 副本由波次組成，每波 1-3 隻怪，最後一波 BOSS 單獨
+// 無盡塔：只有 1 隻 BOSS，HP 無上限
 function buildWaves(dungeon) {
+  if (dungeon.isEndless) {
+    const boss = makeEnemy(dungeon.boss, dungeon, true);
+    boss.hp = Number.MAX_SAFE_INTEGER;
+    boss.maxHp = Number.MAX_SAFE_INTEGER;
+    boss.isEndlessBoss = true;
+    return [[boss]];
+  }
   const waves = [];
   const waveCount = 4 + Math.floor(Math.random() * 2);  // 4-5 波小兵
   for (let w = 0; w < waveCount; w++) {
@@ -265,18 +281,25 @@ function rollMaterialDrops(d, matMul) {
 }
 
 function makeEnemy(name, dungeon, isBoss) {
+  // 無盡塔：BOSS def=0（玩家傷害不打折）、atk 基礎值低（隨時間遞增）
+  if (dungeon.isEndless) {
+    return {
+      name, isBoss: true,
+      hp: Number.MAX_SAFE_INTEGER, maxHp: Number.MAX_SAFE_INTEGER,
+      atk: 100,  // 起始 atk 低（後續每秒+）
+      def: 0,
+    };
+  }
   const factor = isBoss ? 4 : 1;
   const diffMul = dungeon.difficultyMul || 1;  // 影響 HP / def，但 atk 用獨立倍率
   const baseHp = Math.max(60, Math.floor(dungeon.cp * 1.6 * factor * diffMul));
-  // 攻擊力倍率：襲擊戰用更低係數避免秒殺玩家（玩家 HP 約 1-2 萬，原本 atk 3 萬會直接秒）
-  // 公式：cp × atkCoef × (boss ×1.5) × atkDiffMul
   let atkCoef = 0.08;
   let atkDiffMul = diffMul;
   if (dungeon.isRaid) {
-    atkCoef = 0.025;       // 從 0.08 降到 0.025（約 1/3）
-    atkDiffMul = Math.min(diffMul, 2.0);  // atk 不吃完整 diffMul（從 3.5 壓回 2.0）
+    atkCoef = 0.025;
+    atkDiffMul = Math.min(diffMul, 2.0);
   } else if (dungeon.special) {
-    atkCoef = 0.05;        // 神窟也略降
+    atkCoef = 0.05;
   }
   return {
     name, isBoss,
@@ -323,6 +346,22 @@ function tickBattle(dt) {
 
   const dtSec = (dt / 1000) * BATTLE.speedMul;
 
+  // 無盡塔：倒數 + 時間到結算 + BOSS atk 隨時間遞增（越打越痛）
+  if (BATTLE._endlessMode) {
+    BATTLE._endlessTimeLeft -= dtSec;
+    // BOSS atk：起始 100，每秒 +50（10 秒 600、20 秒 1100、30 秒 1600）
+    // 玩家 HP 通常 8000-20000，30 秒後不靠藥水大概會被打死
+    if (BATTLE.enemy && BATTLE.enemy.isEndlessBoss) {
+      const elapsed = 30 - BATTLE._endlessTimeLeft;
+      BATTLE.enemy.atk = Math.floor(100 + elapsed * 50);
+    }
+    if (BATTLE._endlessTimeLeft <= 0 && !BATTLE._cleared) {
+      BATTLE._endlessTimeLeft = 0;
+      onEndlessTimeUp();
+      return;
+    }
+  }
+
   // 多人 Host：每 200ms 廣播敵人 HP 給 Guest
   if (BATTLE._mpMode === 'host' && window.MP_API) {
     BATTLE._lastEnemySync = (BATTLE._lastEnemySync || 0) + dt;
@@ -344,6 +383,11 @@ function tickBattle(dt) {
   if (BATTLE.player.mp < BATTLE.player.maxMp) {
     const regen = (BATTLE.player.mpRegen || 8);
     BATTLE.player.mp = Math.min(BATTLE.player.maxMp, BATTLE.player.mp + regen * dtSec);
+  }
+  // HP 自然回復（雪羽 B 路線 holy-grace 被動 hpRegenPct）
+  if (BATTLE.player.hpRegenPct && BATTLE.player.hp < BATTLE.player.maxHp && !BATTLE._dead) {
+    const heal = BATTLE.player.maxHp * BATTLE.player.hpRegenPct * dtSec;
+    BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + heal);
   }
 
   // 自動藥水
@@ -381,6 +425,13 @@ function tickBattle(dt) {
 
   // 玩家陣亡判定
   if (BATTLE.player.hp <= 0 && !BATTLE._dead) {
+    // 無盡塔 solo：陣亡 → 提早結算（保留已達階梯獎勵）
+    if (BATTLE._endlessMode && BATTLE._mpMode === 'solo') {
+      BATTLE._dead = true;
+      logLine(`<span class="lg-fail">${GAME_STATE.getPlayerNickname() || '你'} 陣亡！本場結束，依當前傷害結算...</span>`, '');
+      onEndlessTimeUp();
+      return;
+    }
     if (BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') {
       // 組隊：自己倒了不算失敗，等隊友通關（或全隊死亡才結算）
       BATTLE._dead = true;
@@ -422,10 +473,16 @@ function tickDots(dt) {
       d.acc -= 0.5;
       if (BATTLE.enemy) {
         const dmg = Math.floor(d.dps * 0.5);
-        BATTLE.enemy.hp -= dmg;
+        if (BATTLE._endlessMode) {
+          BATTLE._endlessTotalDmg += dmg;
+          BATTLE._endlessTeamDmg += dmg;
+          updateEndlessTier();
+        } else {
+          BATTLE.enemy.hp -= dmg;
+        }
         trackDamage(dmg, d.sourceId, false);
         if (window.floatDamage) floatDamage('🔥 ' + dmg, 'dot');
-        if (BATTLE.enemy.hp <= 0) { onEnemyDown(); return false; }
+        if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) { onEnemyDown(); return false; }
       }
     }
     return d.dur > 0;
@@ -528,10 +585,16 @@ function tickSummons(dt) {
         const effCrit = BATTLE.player.crit + getBuffMod('crit');
         const isCrit = Math.random() < effCrit;
         const dmg = computeDamage(s.dps * BATTLE.player.summonMul, isCrit);
-        BATTLE.enemy.hp -= dmg;
+        if (BATTLE._endlessMode) {
+          BATTLE._endlessTotalDmg += dmg;
+          BATTLE._endlessTeamDmg += dmg;
+          updateEndlessTier();
+        } else {
+          BATTLE.enemy.hp -= dmg;
+        }
         trackDamage(dmg, s.sourceId, isCrit);
         if (window.floatDamage) floatDamage('🦊 ' + (isCrit ? 'CRIT! ' : '') + dmg, isCrit ? 'crit' : 'summon');
-        if (BATTLE.enemy.hp <= 0) { onEnemyDown(); return s.dur > 0; }
+        if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) { onEnemyDown(); return s.dur > 0; }
       }
     }
     return s.dur > 0;
@@ -572,7 +635,17 @@ function doPlayerAction() {
 }
 
 function basicAttack() {
-  BATTLE._activeSkillId = 'silver-thrust';
+  // 依角色 blueprint 找普攻技能 ID（月凜=silver-thrust、雪羽=mirror-shot）
+  const cs = GAME_STATE.state.characters[BATTLE.charId];
+  let basicId = 'silver-thrust';
+  if (cs) {
+    const bp = GAME_DATA.getCharacterBlueprint(cs.blueprintId || cs.id);
+    if (bp && bp.unlocks) {
+      const firstBasic = bp.unlocks.find(u => u.type === 'skill' && u.skill && GAME_DATA.SKILLS[u.skill]?.isBasic);
+      if (firstBasic) basicId = firstBasic.skill;
+    }
+  }
+  BATTLE._activeSkillId = basicId;
   BATTLE._activeSkillName = null;  // 普攻不顯示「銀月刺」前綴
   // 普攻也要 roll 暴擊（之前忘了套）
   const effCrit = BATTLE.player.crit + getBuffMod('crit');
@@ -642,6 +715,33 @@ function castSkill(sk, sidHint) {
   if (sk.lifesteal && total > 0) {
     BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + total * sk.lifesteal);
   }
+  // ── 雪羽機制 ──
+  // 自殘技能（chaos-blade、void-cleave）：施放後扣當前 HP %
+  if (sk.selfDmg && sk.selfDmg > 0) {
+    const loss = Math.floor(BATTLE.player.hp * sk.selfDmg);
+    BATTLE.player.hp = Math.max(1, BATTLE.player.hp - loss);
+    logLine(`<span class="lg-fail">${sk.name} 自損 -${loss} HP</span>`, '');
+    if (window.floatDamage) floatDamage('-' + loss + ' (自損)', 'enemy');
+  }
+  // 治癒技能（sacred-bloom、white-aegis、feather-eden）：施放時回 maxHp %
+  if (sk.heal && sk.heal > 0) {
+    const healMul = BATTLE.player.healMul || 1;
+    const heal = Math.floor(BATTLE.player.maxHp * sk.heal * healMul);
+    BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + heal);
+    logLine(`<span class="lg-clear">${sk.name} 回復 +${heal} HP</span>`, '');
+    if (window.floatDamage) floatDamage('+' + heal, 'heal');
+  }
+  // 每段治癒（dawn-aria）：依 multi-hit 次數每段回 maxHp %
+  if (sk.healPerHit && sk.healPerHit > 0) {
+    const hits = Array.isArray(sk.mult) ? sk.mult.length : 1;
+    const healMul = BATTLE.player.healMul || 1;
+    const heal = Math.floor(BATTLE.player.maxHp * sk.healPerHit * hits * healMul);
+    BATTLE.player.hp = Math.min(BATTLE.player.maxHp, BATTLE.player.hp + heal);
+    if (heal > 0) {
+      logLine(`<span class="lg-clear">${sk.name} 連歌回復 +${heal} HP</span>`, '');
+      if (window.floatDamage) floatDamage('+' + heal, 'heal');
+    }
+  }
   // 神諭織縷觸發：每施放一個技能疊一層
   triggerCoreSet('on-skill-cast');
 }
@@ -680,17 +780,36 @@ function doEnemyAttack(srcEnemy) {
 function computeDamage(rawAtk, isCrit) {
   let mod = 1;
   for (const b of BATTLE.buffs) { if (b.atk) mod += b.atk; }
+  // ── 雪羽 A 路線動態被動 ──
+  // dark-blood：每損失 1% 當前 HP → 攻擊 +1%（最大 +60%）
+  if (BATTLE.player.darkBlood && BATTLE.player.maxHp > 0) {
+    const lossPct = 1 - (BATTLE.player.hp / BATTLE.player.maxHp);
+    mod += Math.min(0.6, lossPct);
+  }
+  // last-stand：HP < 40% 時，atk +50%、critDmg +30%
+  let critBonus = 0;
+  if (BATTLE.player.lastStand && BATTLE.player.hp / BATTLE.player.maxHp < 0.4) {
+    mod += 0.5;
+    critBonus = 0.3;
+  }
   const enemy = BATTLE.enemy;
   if (!enemy) return 0;
   const base = Math.max(1, rawAtk * mod - enemy.def * 0.4);
-  const critMul = BATTLE.player.critDmg || 1.8;
+  const critMul = (BATTLE.player.critDmg || 1.8) + critBonus;
   const dmg = Math.floor(base * (0.9 + Math.random() * 0.2) * (isCrit ? critMul : 1));
   return dmg;
 }
 
 function applyDamage(dmg, isCrit) {
   if (!BATTLE.enemy) return;
-  BATTLE.enemy.hp -= dmg;
+  // 無盡塔：HP 不扣（保持 MAX_SAFE_INTEGER），改累積到 totalDmg
+  if (BATTLE._endlessMode) {
+    BATTLE._endlessTotalDmg += dmg;
+    BATTLE._endlessTeamDmg += dmg;
+    updateEndlessTier();
+  } else {
+    BATTLE.enemy.hp -= dmg;
+  }
   trackDamage(dmg, BATTLE._activeSkillId, isCrit);
   // 多人：把自己造成的傷害廣播給所有隊友（host & guest 都廣播）
   if ((BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') && window.MP_API) {
@@ -729,7 +848,14 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
       if (sk.vsBossBonus) dmg = Math.floor(dmg * (1 + sk.vsBossBonus));
       if (BATTLE.player.vsBoss) dmg = Math.floor(dmg * (1 + BATTLE.player.vsBoss));
     }
-    e.hp -= dmg;
+    // 無盡塔：HP 不扣，改累積到 totalDmg
+    if (BATTLE._endlessMode) {
+      BATTLE._endlessTotalDmg += dmg;
+      BATTLE._endlessTeamDmg += dmg;
+      updateEndlessTier();
+    } else {
+      e.hp -= dmg;
+    }
     trackDamage(dmg, BATTLE._activeSkillId, isCrit);
     // 多人：把 AOE 傷害也廣播給所有隊友（host & guest 都廣播）
     if ((BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') && window.MP_API) {
@@ -797,6 +923,80 @@ function onEnemyDown() {
     BATTLE.enemy = BATTLE.currentWave[0];
     if (BATTLE.onUpdate) BATTLE.onUpdate();
   }
+}
+
+// 無盡塔：累積傷害變更時更新已達階梯
+function updateEndlessTier() {
+  if (!BATTLE._endlessMode || !BATTLE._endlessTiers) return;
+  const dmg = BATTLE._endlessTeamDmg;
+  for (let i = BATTLE._endlessTiers.length - 1; i >= 0; i--) {
+    if (dmg >= BATTLE._endlessTiers[i].dmg) {
+      if (i > BATTLE._endlessReached) {
+        BATTLE._endlessReached = i;
+        const t = BATTLE._endlessTiers[i];
+        logLine(`<span class="lg-clear">★ 階梯 ${t.label} 達成！（${(dmg/1e6).toFixed(1)}M）</span>`, '');
+      }
+      return;
+    }
+  }
+}
+
+// 無盡塔：30 秒時間到 → 結算
+function onEndlessTimeUp() {
+  if (BATTLE._cleared) return;
+  BATTLE._cleared = true;
+  const reached = BATTLE._endlessReached;
+  const tiers = BATTLE._endlessTiers || [];
+  const totalDmg = BATTLE._endlessTeamDmg;
+  const selfDmg = BATTLE._endlessTotalDmg;
+  const dungeonId = BATTLE.dungeonId;
+  const d = GAME_DATA.getDungeon(dungeonId);
+  const charId = BATTLE.charId;
+  const cs = GAME_STATE.state.characters[charId];
+
+  // 領取所有達到的階梯獎勵（互斥 → 累積發）
+  const granted = { mats: {}, gems: [], chests: [] };
+  for (let i = 0; i <= reached; i++) {
+    const r = tiers[i].rewards || {};
+    if (r.mats) {
+      for (const [m, q] of Object.entries(r.mats)) {
+        GAME_STATE.gainMaterial(m, q, charId);
+        granted.mats[m] = (granted.mats[m] || 0) + q;
+      }
+    }
+    if (r.gems) {
+      const [tMin, tMax] = r.gems.tier;
+      const pool = GAME_DATA.GEMS.filter(g => g.tier >= tMin && g.tier <= tMax);
+      for (let n = 0; n < (r.gems.qty || 1); n++) {
+        const picked = pool[Math.floor(Math.random() * pool.length)];
+        if (picked) {
+          GAME_STATE.gainGem(picked.id, 1, charId);
+          granted.gems.push(picked.name);
+        }
+      }
+    }
+  }
+
+  BATTLE.lastClear = {
+    dungeonId,
+    dungeonName: d.name,
+    isEndless: true,
+    failed: false,
+    time: 30,
+    endlessTotalDmg: totalDmg,
+    endlessSelfDmg: selfDmg,
+    endlessTierIdx: reached,
+    endlessTierLabel: reached >= 0 ? tiers[reached].label : '未達',
+    endlessGranted: granted,
+    awardedToCharId: charId,
+    awardedToCharName: cs ? (cs.customName || cs.id) : '?',
+    damage: { ...BATTLE.damageStats, bySkill: { ...BATTLE.damageStats.bySkill } },
+  };
+
+  logLine(`<span class="lg-clear">⏱ 時間到！累積傷害 ${(totalDmg/1e6).toFixed(2)}M，達成階梯：${BATTLE.lastClear.endlessTierLabel}</span>`, '');
+  GAME_STATE.scheduleSave();
+  if (BATTLE.onClear) BATTLE.onClear();
+  setTimeout(() => stopBattle(), 400);
 }
 
 function onDungeonClear() {
@@ -884,9 +1084,8 @@ function onDungeonClear() {
       slot = GAME_DATA.EQUIPMENT_SLOTS[Math.floor(Math.random() * GAME_DATA.EQUIPMENT_SLOTS.length)];
     }
     let pool = GAME_DATA.ITEMS.equipment.filter(e => e.slot === slot && e.tier <= tierCap && e.tier >= Math.max(1, forceMinTier));
-    // 特殊副本掉 SSR：包含核心套裝（神諭 / 烈日 / 永凍）。製作仍是穩定路線、掉落是驚喜。
-    const bpId = (BATTLE.charId || '').split('#')[0];
-    if (slot === 'weapon') pool = pool.filter(e => e.owner === bpId);
+    // 雪羽 Phase 7：武器掉落不過濾 owner — 完全隨機，掉到別角色武器只能分解拿材料
+    // （之前是 pool = pool.filter(e => e.owner === bpId)，現在拿掉以增加驚喜感）
     // 高機率掉低階、低機率掉高階（偏向當前等級）
     if (pool.length) {
       pool.sort((a, b) => b.tier - a.tier);
@@ -947,9 +1146,20 @@ function onDungeonClear() {
   let chestMsg = '';
   const chest = rollChestDrop(d);
   if (chest) {
-    GAME_STATE.gainChest(chest, 1, _battleCharId);  // 寶箱給戰鬥角色
+    GAME_STATE.gainChest(chest, 1, _battleCharId);
     const c = GAME_DATA.findChest(chest);
     chestMsg = ` <span class="lg-chest">獲得 ${c.name}（背包點開）</span>`;
+  }
+
+  // 異界之鎚掉落：依副本類型給不同低機率（鍛造終焉鎧用）
+  let hammerMsg = '';
+  let hammerChance = 0;
+  if (d.isRaid) hammerChance = 0.04;          // 襲擊戰 4%
+  else if (d.special) hammerChance = 0.02;    // 神窟 2%
+  else if (d.cp >= 6000) hammerChance = 0.005; // 主線高階 0.5%
+  if (hammerChance > 0 && Math.random() < hammerChance) {
+    GAME_STATE.gainMaterial('異界之鎚', 1, _battleCharId);
+    hammerMsg = ` <span class="lg-drop">🔨 異界之鎚 ×1</span>`;
   }
 
   // 結算紀錄（含戰鬥輸出統計）
@@ -977,7 +1187,7 @@ function onDungeonClear() {
   };
 
   const matStr = matMsgs.length ? matMsgs.join('、') : '無材料';
-  logLine(`<span class="lg-clear">通關 ${d.name}！</span> ${(clearTimeMs/1000).toFixed(1)}s / 金 +${goldDrop} / 經驗 +${expDrop} / ${matStr} ${dropMsg}${gemDropMsg}${chestMsg}`, '');
+  logLine(`<span class="lg-clear">通關 ${d.name}！</span> ${(clearTimeMs/1000).toFixed(1)}s / 金 +${goldDrop} / 經驗 +${expDrop} / ${matStr} ${dropMsg}${gemDropMsg}${chestMsg}${hammerMsg}`, '');
   GAME_STATE.scheduleSave();
   if (BATTLE.onClear) BATTLE.onClear();
 
@@ -1027,6 +1237,7 @@ window.rollMaterialDrops = rollMaterialDrops;
 window.stopBattle = stopBattle;
 window.tickBattle = tickBattle;
 window.onEnemyDown = onEnemyDown;
+window.updateEndlessTier = updateEndlessTier;
 window.trackDamage = trackDamage;
 window.spawnNextWave = spawnNextWave;
 window.onDungeonClear = onDungeonClear;

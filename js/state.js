@@ -49,6 +49,7 @@ function makeEmptyBag() {
     gems: {},
     potions: {},
     chests: {},
+    passes: {},        // 無盡塔等副本入場券
     rerollTokens: 0,
   };
 }
@@ -344,11 +345,18 @@ function selfHealEquipment(p) {
 // 第 3 層：cs.equip[slot] 為空 + bag 沒同 slot 裝備 → 補發 starter
 function healMissingStarterGear(p) {
   if (!p.characters) return;
-  const STARTER_MAP = {
-    weapon: 'eq-weap-prac', head: 'eq-head-prac', top: 'eq-top-prac',
-    bottom: 'eq-bot-prac', feet: 'eq-feet-prac',
-  };
-  console.log('[Wave 30.4] healMissingStarterGear 開始檢查');
+  // Wave 30.9：武器 starter 依角色 blueprint 動態選；其他部位共用
+  function getStarterId(slot, blueprintId) {
+    if (slot === 'weapon') {
+      const wp = (GAME_DATA.ITEMS.equipment || []).find(e =>
+        e.slot === 'weapon' && (e.tier || 0) === 0 && e.owner === blueprintId
+      );
+      return wp ? wp.id : 'eq-weap-prac';
+    }
+    return { head: 'eq-head-prac', top: 'eq-top-prac', bottom: 'eq-bot-prac', feet: 'eq-feet-prac' }[slot];
+  }
+  const SLOTS = ['weapon', 'head', 'top', 'bottom', 'feet'];
+  console.log('[Wave 30.9] healMissingStarterGear 開始檢查');
   for (const cid in p.characters) {
     const cs = p.characters[cid];
     if (!cs.equip) cs.equip = { weapon: null, head: null, top: null, bottom: null, feet: null };
@@ -372,10 +380,11 @@ function healMissingStarterGear(p) {
     console.log(`[Wave 30.5] ${cid} cs.equip=${JSON.stringify(cs.equip)}`);
     console.log(`[Wave 30.5] ${cid} bag (${bagItemDetails.length} 件)=${JSON.stringify(bagItemDetails)}`);
 
-    for (const [slot, starterId] of Object.entries(STARTER_MAP)) {
+    for (const slot of SLOTS) {
+      const starterId = getStarterId(slot, cs.blueprintId);
       // ── 第 1 層：清空指向不存在的 inst ──
       if (cs.equip[slot] && !cs.bag.equipment[cs.equip[slot]]) {
-        console.warn(`[Wave 30.5] ${cid}.${slot} → cs.equip 指向 ${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
+        console.warn(`[Wave 30.9] ${cid}.${slot} → cs.equip 指向 ${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
         cs.equip[slot] = null;
       }
       if (cs.equip[slot]) {
@@ -460,9 +469,13 @@ function createCharacter(blueprintId, customName) {
     STATE.nextInstId = 1;
   }
 
-  // 給整套練習裝（無詞綴）並穿上 — 用 slotKey 命名避免跟外層衝突
+  // Wave 30.9：starter 武器按 blueprintId 選對應 owner
+  // 雪羽 → eq-mirror-prac、月凜 → eq-weap-prac
+  const starterWeapon = (GAME_DATA.ITEMS.equipment || []).find(e =>
+    e.slot === 'weapon' && (e.tier || 0) === 0 && e.owner === blueprintId
+  );
   const starterMap = {
-    weapon: 'eq-weap-prac',
+    weapon: starterWeapon ? starterWeapon.id : 'eq-weap-prac',
     head:   'eq-head-prac',
     top:    'eq-top-prac',
     bottom: 'eq-bot-prac',
@@ -782,6 +795,15 @@ function effectiveStats(charId) {
         s[gem.stat] = (s[gem.stat] || 0) + gem.value;
       }
     }
+    // 鍛造效果（終焉套裝：每件依 smithStage 累加已解鎖效果）
+    if (GAME_DATA.isSmithEligible(def) && inst.smithStage > 0) {
+      const unlocked = GAME_DATA.getSmithUnlockedEffects(inst.smithStage);
+      for (const eff of unlocked) {
+        for (const [k, v] of Object.entries(eff.effect)) {
+          s[k] = (s[k] || 0) + v;
+        }
+      }
+    }
   }
 
   // ===== 套裝效果（依穿戴件數累加，allMul 屬於乘法後階段） =====
@@ -994,6 +1016,24 @@ function consumeMaterial(name, n) {
 }
 // 已被 createEquipInstance 取代
 
+// ========== 入場券（無盡塔等用）==========
+function gainPass(passId, n = 1, charId) {
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  if (!cs.bag.passes) cs.bag.passes = {};
+  cs.bag.passes[passId] = (cs.bag.passes[passId] || 0) + n;
+}
+function consumePass(passId, n = 1) {
+  const cs = activeChar();
+  if (!cs || !cs.bag || !cs.bag.passes) return false;
+  const cur = cs.bag.passes[passId] || 0;
+  if (cur < n) return false;
+  cs.bag.passes[passId] = cur - n;
+  if (cs.bag.passes[passId] <= 0) delete cs.bag.passes[passId];
+  return true;
+}
+
 // ========== 寶箱 ==========
 // Wave 30：加 charId 參數
 function gainChest(chestId, n = 1, charId) {
@@ -1050,6 +1090,11 @@ function openChest(chestId) {
         const instId = createEquipInstance(picked.id, true);
         granted.push({ label: `[${picked.rarity}] ${picked.name}`, kind: 'equip', rarity: picked.rarity, instId });
       }
+    } else if (r.kind === 'pass') {
+      // 無盡塔入場券（虛無通行證）
+      gainPass(r.id, r.qty);
+      const p = GAME_DATA.findPass(r.id);
+      granted.push({ label: `${p ? p.name : r.id} ×${r.qty}`, kind: 'pass', rarity: p?.rarity || 'SSR' });
     }
   }
   return { ok: true, rewards: granted, chestName: GAME_DATA.findChest(chestId)?.name };
@@ -1065,6 +1110,78 @@ function toggleEquipLock(instId) {
   inst.locked = !inst.locked;
   scheduleSave();
   return inst.locked;
+}
+
+// ===== 鍛造系統（終焉套裝專屬）=====
+// 機制：每次鍛造扣 50K 金 + 1 次次數，累積進度條（100% 自動升階）；1% 跳階直接 100%
+// 升階後重置進度 + 補滿初始次數；次數用完需用異界之鎚恢復（1 把 = +20 次）
+function smithEquip(instId) {
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[instId];
+  if (!inst) return { ok: false, reason: '找不到裝備' };
+  const def = GAME_DATA.findEquipment(inst.itemId);
+  if (!def) return { ok: false, reason: '裝備資料缺失' };
+  if (!GAME_DATA.isSmithEligible(def)) return { ok: false, reason: '此裝備不可鍛造（限蝕痕鎧神套）' };
+  const cur = inst.smithStage || 0;
+  if (cur >= GAME_DATA.SMITH_MAX_STAGE) return { ok: false, reason: '已鍛造到最高階（30）' };
+
+  // 初始化欄位
+  if (inst.smithHitsLeft == null) inst.smithHitsLeft = GAME_DATA.SMITH_INITIAL_HITS;
+  if (inst.smithProgress == null) inst.smithProgress = 0;
+
+  if (inst.smithHitsLeft <= 0) return { ok: false, reason: '鍛造次數已用完，需用異界之鎚恢復' };
+  if (STATE.gold < GAME_DATA.SMITH_GOLD_COST) return { ok: false, reason: `金幣不足（每次 ${GAME_DATA.SMITH_GOLD_COST.toLocaleString()}）` };
+
+  // 扣金 + 次數
+  STATE.gold -= GAME_DATA.SMITH_GOLD_COST;
+  inst.smithHitsLeft -= 1;
+
+  // 累積進度（每次 +100/保底次數）
+  const capHits = GAME_DATA.smithHitsToCap(cur);
+  const perHit = 100 / capHits;
+  inst.smithProgress = Math.min(100, inst.smithProgress + perHit);
+
+  // 跳階：1% 機率直接 100%
+  let jumped = false;
+  if (Math.random() < GAME_DATA.SMITH_JUMP_CHANCE && inst.smithProgress < 100) {
+    inst.smithProgress = 100;
+    jumped = true;
+  }
+
+  // 升階判定
+  let leveledUp = false;
+  if (inst.smithProgress >= 100) {
+    inst.smithStage = cur + 1;
+    inst.smithProgress = 0;
+    inst.smithHitsLeft = GAME_DATA.SMITH_INITIAL_HITS;  // 升階後補滿
+    leveledUp = true;
+  }
+
+  scheduleSave();
+  return {
+    ok: true, name: def.name,
+    stage: inst.smithStage,
+    progress: inst.smithProgress,
+    hitsLeft: inst.smithHitsLeft,
+    jumped, leveledUp,
+  };
+}
+
+function restoreSmithHits(instId) {
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[instId];
+  if (!inst) return { ok: false, reason: '找不到裝備' };
+  const def = GAME_DATA.findEquipment(inst.itemId);
+  if (!GAME_DATA.isSmithEligible(def)) return { ok: false, reason: '此裝備不可鍛造' };
+  if ((bag.materials['異界之鎚'] || 0) < 1) return { ok: false, reason: '需要 1 把異界之鎚' };
+  bag.materials['異界之鎚'] -= 1;
+  if (bag.materials['異界之鎚'] <= 0) delete bag.materials['異界之鎚'];
+  if (inst.smithHitsLeft == null) inst.smithHitsLeft = GAME_DATA.SMITH_INITIAL_HITS;
+  inst.smithHitsLeft += GAME_DATA.SMITH_HITS_PER_HAMMER;
+  scheduleSave();
+  return { ok: true, hitsLeft: inst.smithHitsLeft };
 }
 
 function disassembleEquipment(instId) {
@@ -1368,7 +1485,9 @@ window.GAME_STATE = {
   gainPotion, consumePotion, buyPotion, setPotionSlot, setPotionThreshold,
   getGlobalBuffMod, activateGlobalBuff,
   gainChest, consumeChest, openChest,
+  gainPass, consumePass,
   disassembleEquipment, batchDisassemble, toggleEquipLock,
+  smithEquip, restoreSmithHits,
   findItem, getCharacterBlueprint, createEquipInstance,
   dequeueUnlock,
   resonanceExpFor, getResonanceUnspent, allocateResonance, resetResonance, getResonanceCap,

@@ -360,8 +360,13 @@ function handleMessage(fromPeerId, data) {
       if (typeof window.trackDamage === 'function') {
         window.trackDamage(data.payload.dmg, 'mp-ally:' + allyName, !!data.payload.isCrit);
       }
-      // Host 額外責任：實際扣敵人 HP（權威）
-      if (MP.role === 'host' && b.currentWave && b.currentWaveIdx === data.payload.waveIdx) {
+      // 無盡塔：累加團隊傷害（自己不算 selfDmg）
+      if (b._endlessMode) {
+        b._endlessTeamDmg = (b._endlessTeamDmg || 0) + data.payload.dmg;
+        if (typeof window.updateEndlessTier === 'function') window.updateEndlessTier();
+      }
+      // Host 額外責任：實際扣敵人 HP（權威）— 無盡塔不扣（HP 是 Infinity）
+      if (!b._endlessMode && MP.role === 'host' && b.currentWave && b.currentWaveIdx === data.payload.waveIdx) {
         const e = b.currentWave[data.payload.enemyIdx];
         if (e && e.hp > 0) {
           e.hp -= data.payload.dmg;

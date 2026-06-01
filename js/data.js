@@ -68,6 +68,62 @@ const CHARACTERS = [
       { lv: 99, type: 'graduate' },
     ],
   },
+  // ============================================================================
+  // 雪羽 — Eve 為原型的鏡靈使
+  // ============================================================================
+  {
+    id: 'eve',
+    name: '雪羽',
+    enName: 'Yukiha',
+    title: '鏡靈使',
+    weaponType: '靈鏡',
+    role: '中距 / 雙形態（暗蝕 ↔ 聖光）',
+    lore: '在世界邊緣的鏡之神域，沉眠著一面記錄萬象的「夢境之鏡」。某日鏡光迸裂，誕下少女雪羽 — 她是鏡的意志化身。隨著心境分歧，她將踏上月蝕墮天或白翼聖姫的命運。',
+    palette: { skin: '#f4dfd0', hair: '#dde0e8', cloth: '#e8e8f0', accent: '#a89cff' },
+    // 基礎屬性：低 HP / 低速、但高 crit、定位中距精準
+    baseStats: { atk: 22, def: 9, hp: 180, spd: 1.0, crit: 0.15 },
+    paths: {
+      A: {
+        id: 'A', name: '月蝕墮天', tag: '暗影爆發',
+        desc: '心被絕望吞噬，化為毀滅之姫。以自身鮮血換取毀世之力。',
+        tier2: { name: '月蝕侵染', desc: '紫黑暗影侵蝕雙瞳，鏡片化為利刃。' },
+        tier3: { name: '月蝕墮天', desc: '魔翼覺醒，巨型魔劍出鞘。' },
+      },
+      B: {
+        id: 'B', name: '白翼聖姫', tag: '聖光治癒',
+        desc: '心被希望淨化，化為守護之姫。聖光融鏡，治癒戰場一切創傷。',
+        tier2: { name: '光輝守護', desc: '羽翼覺醒，鏡片化為光芒。' },
+        tier3: { name: '白翼聖姫', desc: '彩翼舞動，聖光神諭加身。' },
+      },
+    },
+    unlocks: [
+      { lv: 1,  type: 'skill',   pathAny: true, skill: 'mirror-shot' },     // 普攻
+      { lv: 1,  type: 'skill',   pathAny: true, skill: 'ring-flash' },      // 連擊
+      { lv: 5,  type: 'skill',   pathAny: true, skill: 'star-shard' },      // AOE
+      { lv: 10, type: 'passive', pathAny: true, passive: 'third-eye' },     // crit+
+      { lv: 15, type: 'skill',   pathAny: true, skill: 'mirror-shield' },   // 減傷 buff
+      { lv: 20, type: 'skill',   pathAny: true, skill: 'ray-cleave' },      // 單體高傷
+      { lv: 25, type: 'job',     tier: 1 },
+      { lv: 25, type: 'skill', path: 'A', skill: 'eclipse-touch' },         // A 連擊+DOT
+      { lv: 25, type: 'skill', path: 'B', skill: 'sacred-bloom' },          // B 治療AOE
+      { lv: 35, type: 'passive', path: 'A', passive: 'dark-blood' },        // 損 HP 換 atk
+      { lv: 35, type: 'passive', path: 'B', passive: 'holy-grace' },        // HP regen
+      { lv: 40, type: 'skill',   pathAny: true, skill: 'prism-veil' },      // 共用盾
+      { lv: 45, type: 'skill', path: 'A', skill: 'chaos-blade' },           // A 自殘大傷
+      { lv: 45, type: 'skill', path: 'B', skill: 'dawn-aria' },             // B AOE治癒
+      { lv: 50, type: 'job',     tier: 2 },
+      { lv: 50, type: 'skill', path: 'A', skill: 'black-moon-judge' },      // A vsBOSS
+      { lv: 50, type: 'skill', path: 'B', skill: 'white-aegis' },           // B 護盾
+      { lv: 60, type: 'passive', path: 'A', passive: 'last-stand' },        // 背水
+      { lv: 60, type: 'passive', path: 'B', passive: 'angel-favor' },       // 神光庇護
+      { lv: 65, type: 'skill',   pathAny: true, skill: 'mirror-vigor' },    // 共用補給
+      { lv: 75, type: 'job',     tier: 3 },
+      { lv: 75, type: 'skill', path: 'A', skill: 'void-cleave' },           // A 終極
+      { lv: 75, type: 'skill', path: 'B', skill: 'feather-eden' },          // B 終極
+      { lv: 90, type: 'passive', pathAny: true, passive: 'mirror-soul' },   // 終極被動
+      { lv: 99, type: 'graduate' },
+    ],
+  },
 ];
 
 // --------------------------------------------------------------------------
@@ -158,6 +214,93 @@ const SKILLS = {
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
+  // ============================================================================
+  // 雪羽 — 鏡靈使（中距 / 雙形態）
+  // ============================================================================
+  // ── 共用技能 ──
+  'mirror-shot': {
+    name: '鏡光射撃', tag: '普攻', kind: 'arcane',
+    desc: '靈鏡發射光彈，無冷卻。',
+    mult: 1.0, cd: 0, isBasic: true,
+  },
+  'ring-flash': {
+    name: '流光圓舞', tag: '連擊', kind: 'arcane',
+    desc: '四片鏡光繞身飛旋：四段連擊共 240% 攻擊力（最後段 90% 強擊）。CD 3s。',
+    mult: [0.5, 0.5, 0.5, 0.9], cd: 3.0, mpCost: 90, costTier: 'light',
+  },
+  'star-shard': {
+    name: '星辰碎片', tag: '範圍', kind: 'arcane',
+    desc: '鏡片碎裂成星屑：對全體 180% 攻擊力 AOE。CD 4s。',
+    mult: 1.8, cd: 4.0, aoe: true, mpCost: 90, costTier: 'light',
+  },
+  'mirror-shield': {
+    name: '鏡像護盾', tag: 'Buff', kind: 'self',
+    desc: '鏡光環身：受到傷害 -25%，持續 8 秒。CD 14s。',
+    mult: 0, buff: { dmgReduce: 0.25, dur: 8 }, cd: 14, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'ray-cleave': {
+    name: '鏡破光斬', tag: '單體', kind: 'arcane',
+    desc: '聚光斬擊：單體 320% 攻擊力。CD 5s。',
+    mult: 3.2, cd: 5.0, mpCost: 180, costTier: 'medium',
+  },
+  'prism-veil': {
+    name: '稜鏡紗幕', tag: 'Buff', kind: 'self',
+    desc: '稜鏡折光成幕：受到傷害 -60%，持續 6 秒。CD 18s。',
+    mult: 0, buff: { dmgReduce: 0.6, dur: 6 }, cd: 18, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'mirror-vigor': {
+    name: '鏡華貫氣', tag: 'Buff', kind: 'self',
+    desc: '鏡光貫滿身軀：速度 +50%、暴擊率 +25%、暴傷 +30%，持續 10 秒。CD 22s。',
+    mult: 0, buff: { spdMul: 0.5, crit: 0.25, critDmg: 0.3, dur: 10 }, cd: 22, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+
+  // ── 路線 A：月蝕墮天（自殘換爆發、vs BOSS 強）──
+  'eclipse-touch': {
+    name: '暗蝕觸發', tag: '連擊+DOT', kind: 'arcane', path: 'A',
+    desc: '暗鏡劃過：三段連擊共 300% + 持續 3 秒每秒 50% DOT（合計 ~450%）。CD 6s。',
+    mult: [1.0, 1.0, 1.0], dot: { dps: 0.5, dur: 3 }, cd: 6.0, mpCost: 180, costTier: 'medium',
+  },
+  'chaos-blade': {
+    name: '絕焰魔劍', tag: '★自殘★', kind: 'arcane', path: 'A',
+    desc: '揮舞魔劍：580% 攻擊力 + 損失 15% 當前 HP。CD 9s。',
+    mult: 5.8, selfDmg: 0.15, cd: 9.0, mpCost: 180, costTier: 'medium',
+  },
+  'black-moon-judge': {
+    name: '黑月斷罪', tag: 'vs BOSS', kind: 'arcane', path: 'A', requireTier: 2,
+    desc: '月蝕之刃：750% 攻擊力，對 BOSS 額外 +60%（合計 1200% vs BOSS）。CD 11s。',
+    mult: 7.5, vsBossBonus: 0.6, cd: 11, mpCost: 180, costTier: 'medium',
+  },
+  'void-cleave': {
+    name: '虛無一閃', tag: '★大招★', kind: 'arcane', path: 'A', requireTier: 3,
+    desc: '【終極奧義】魔劍劈裂虛空：1500% 攻擊力單體強擊，對 BOSS 額外 +80%（合計 2700% vs BOSS）。施放消耗 25% 當前 HP，必爆。CD 25s。',
+    mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true, selfDmg: 0.25,
+    cd: 25, mpCost: 270, costTier: 'heavy',
+  },
+
+  // ── 路線 B：白翼聖姫（治癒、護盾、AOE）──
+  'sacred-bloom': {
+    name: '聖光綻放', tag: '治療+AOE', kind: 'arcane', path: 'B',
+    desc: '聖光綻放：對全體 320% AOE + 玩家回復 15% 最大 HP。CD 8s。',
+    mult: 3.2, aoe: true, heal: 0.15, cd: 8.0, mpCost: 180, costTier: 'medium',
+  },
+  'dawn-aria': {
+    name: '曙光連歌', tag: '治癒連擊', kind: 'arcane', path: 'B',
+    desc: '聖光詠唱：四段 AOE 連擊共 1120%（每段 280%），每段同時回復 5% HP。CD 10s。',
+    mult: [2.8, 2.8, 2.8, 2.8], aoe: true, healPerHit: 0.05, cd: 10, mpCost: 180, costTier: 'medium',
+  },
+  'white-aegis': {
+    name: '白翼結界', tag: '★護盾★', kind: 'self', path: 'B', requireTier: 2,
+    desc: '光輝結界：受到傷害 -50% 持續 10 秒、額外回復 25% 最大 HP。CD 16s。',
+    mult: 0, buff: { dmgReduce: 0.5, dur: 10 }, heal: 0.25,
+    cd: 16, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'feather-eden': {
+    name: '羽落聖光', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
+    desc: '【終極奧義】羽翼降下聖光：三段 AOE 共 2550%（每段 850%）+ HP 回滿 + 8 秒減傷 30%。CD 30s。',
+    mult: [8.5, 8.5, 8.5], aoe: true, heal: 1.0, buff: { dmgReduce: 0.3, dur: 8 },
+    cd: 30, mpCost: 270, costTier: 'heavy',
+  },
+
 };
 
 // --------------------------------------------------------------------------
@@ -170,6 +313,14 @@ const PASSIVES = {
   'traceless':  { name: '無痕',       desc: '受到傷害 -15%。',                           apply: s => { s.dmgReduce = (s.dmgReduce || 0) + 0.15; } },
   'oracle':     { name: '神諭',       desc: '所有技能冷卻 -15%。',                       apply: s => { s.cdReduce = (s.cdReduce || 0) + 0.15; } },
   'silver-soul':{ name: '銀月之魂',   desc: '全屬性 +50%。',                             apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; } },
+
+  // ===== 雪羽 被動 =====
+  'third-eye':   { name: '心眼',       desc: '暴擊率 +6%、暴擊傷害 +15%。',                apply: s => { s.crit += 0.06; s.critDmg = (s.critDmg || 1.8) + 0.15; } },
+  'dark-blood':  { name: '暗血盟',     desc: '每損失 1% 當前 HP，攻擊力 +1%（戰鬥中動態，戰前無效）。', apply: s => { s.darkBlood = true; } },
+  'holy-grace':  { name: '聖恩潤澤',   desc: '戰鬥中 HP 每秒回復 1.5%、所有治癒效果 +25%。',           apply: s => { s.hpRegenPct = (s.hpRegenPct || 0) + 0.015; s.healMul = (s.healMul || 1) * 1.25; } },
+  'last-stand':  { name: '背水之姫',   desc: 'HP < 40% 時，攻擊力 +50%、暴擊傷害 +30%（戰鬥中動態）。', apply: s => { s.lastStand = true; } },
+  'angel-favor': { name: '神光庇護',   desc: 'HP 上限 +20%、減傷 +15%、暴擊傷害 +25%。',               apply: s => { s.hp *= 1.2; s.dmgReduce = (s.dmgReduce || 0) + 0.15; s.critDmg = (s.critDmg || 1.8) + 0.25; } },
+  'mirror-soul': { name: '鏡之魂',     desc: '全屬性 +50%、技能傷害 +30%。',                            apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.skillDmg = (s.skillDmg || 0) + 0.3; } },
 };
 
 // --------------------------------------------------------------------------
@@ -273,14 +424,53 @@ const REGIONS = [
     isSpecial: true,
     dungeons: [
       { id: 'sp-exp', name: '修行神窟', cp: 18000, unlock: 'abyss-mirror', requiredLv: 99,
-        special: 'exp', baseTime: 35, expBase: 12000, goldBase: 500,
+        special: 'exp', baseTime: 35, expBase: 12000, goldBase: 25000,  // × goldMul 0.3 ≈ 7.5K/場（主以經驗）
         difficultyMul: 1.4, dropMats: ['神鋼', '永晶', '星鋼'],
         enemies: ['幻影修者', '虛靈試煉者'], boss: '修行至尊（神格）' },
       { id: 'sp-mat', name: '材料神窟', cp: 18000, unlock: 'abyss-mirror', requiredLv: 99,
-        special: 'mat', baseTime: 40, expBase: 600, goldBase: 6000,
+        special: 'mat', baseTime: 40, expBase: 600, goldBase: 22000,  // × goldMul 1.0 = 22K/場（鍛 1 次需打 2-3 場）
         difficultyMul: 1.4, dropMats: ['神鋼', '永晶', '星鋼', '精鋼', '粗鋼'],
-        bonusMengjingChance: 0.12,  // 額外 12% 機率掉夢晶 ×1（不吃任何加成）
+        bonusMengjingChance: 0.12,
         enemies: ['神鋼巨人', '永晶守衛'], boss: '神鋼巨像（神格）' },
+    ],
+  },
+  // ===== 無盡塔（30 秒限時，依累積傷害領獎）=====
+  {
+    id: 'endless', name: '無盡塔', tagline: '時限 30 秒，挑戰你的爆發 DPS。團隊累積、階梯領獎、入場需通行證。',
+    palette: { sky: '#1a1838', ground: '#2a1a5a' }, mats: ['永晶', '夢晶'],
+    isEndless: true,
+    dungeons: [
+      { id: 'endless-tower', name: '虛無之塔 · 鏡之終焉', cp: 200000, unlock: 'raid-calamity', requiredLv: 99,
+        isEndless: true, baseTime: 30, timeLimit: 30,
+        expBase: 0, goldBase: 0,  // 無盡塔不掉 exp/gold，獎勵由階梯給
+        // 階梯：累積傷害 → 終焉材料獎勵；V 階給異界之鎚
+        damageTiers: [
+          { dmg: 10_000_000,  label: 'I',   rewards: { mats: { '蝕痕碎片': 3 } } },
+          { dmg: 25_000_000,  label: 'II',  rewards: { mats: { '蝕痕碎片': 5, '蝕痕神核': 1 } } },
+          { dmg: 45_000_000,  label: 'III', rewards: { mats: { '蝕痕碎片': 8, '蝕痕神核': 3, '終焉印石': 1 } } },
+          { dmg: 90_000_000,  label: 'IV',  rewards: { mats: { '蝕痕碎片': 12, '蝕痕神核': 6, '終焉印石': 3 } } },
+          { dmg: 180_000_000, label: 'V',   rewards: { mats: { '蝕痕碎片': 20, '蝕痕神核': 10, '終焉印石': 6, '異界之鎚': 1 } } },
+        ],
+        lore: [
+          '在虛無之塔的頂端，鏡之終焉沉眠。',
+          '他既無始亦無終 — 你能撼動他多少？',
+          '時限三十秒，每一擊都是試煉。',
+          '盡你所能，揭示自己的極限。',
+        ],
+        warning: '時限 30 秒。BOSS 無血量上限，依累積傷害領取階梯獎勵。多人連線時團隊傷害累加。入場需消耗 1 張「虛無通行證」。',
+        rewards: [
+          { label: '時限', value: '30 秒（BOSS 無 HP 上限，越打越痛）', color: 'var(--accent)' },
+          { label: '入場', value: '消耗 1 張虛無通行證（寶箱掉落）', color: 'var(--shard)' },
+          { label: '階梯 I', value: '10M 傷害 → 蝕痕碎片 ×3', color: 'var(--muted)' },
+          { label: '階梯 II', value: '25M → +蝕痕碎片 ×5、神核 ×1', color: 'var(--hp-self)' },
+          { label: '階梯 III', value: '45M → +碎片 ×8、神核 ×3、印石 ×1（畢業 DPS 極限）', color: 'var(--exp)' },
+          { label: '階梯 IV', value: '90M → +碎片 ×12、神核 ×6、印石 ×3（雙人合作）', color: 'var(--gold)' },
+          { label: '階梯 V', value: '180M → +碎片 ×20、神核 ×10、印石 ×6、★異界之鎚 ×1（鍛造用）', color: 'var(--hp-enemy)' },
+          { label: '多人', value: '團隊累積傷害共享、每人各扣 1 張通行證', color: 'var(--accent)' },
+        ],
+        bossPortrait: 'assets/portraits/endless-boss.png',
+        enemies: [],
+        boss: '終焉鎧神 · 蝕痕' },
     ],
   },
   // ===== 襲擊戰（Lv 99 endgame，超級難）=====
@@ -336,6 +526,16 @@ const RECIPES = [
   { id: 'craft-ssr-feet', name: '幻月之履', target: 'eq-feet-ssr1', cost: { gold: 15000, mats: { '神鋼': 25, '永晶': 8,  '星鋼': 12 } }, requiredLv: 60 },
   // ★★★ Lv 90 上品 SSR 金裝（介於 SSR 與 UR 之間） ★★★
   { id: 'craft-ssr2-weap', name: '永夜·神煉真矛', target: 'eq-weap-ssr2', cost: { gold: 60000, mats: { '神鋼': 70, '永晶': 30 } }, requiredLv: 90 },
+  // 終焉鎧神套（畢業 UR 防具，無盡塔材料製作）
+  { id: 'craft-ruin-head', name: '蝕痕鎧神冠', target: 'eq-head-ruin', cost: { gold: 200000, mats: { '蝕痕碎片': 30, '蝕痕神核': 15, '終焉印石': 5, '夢晶': 5 } }, requiredLv: 99 },
+  { id: 'craft-ruin-top',  name: '蝕痕鎧神甲', target: 'eq-top-ruin',  cost: { gold: 200000, mats: { '蝕痕碎片': 30, '蝕痕神核': 15, '終焉印石': 5, '夢晶': 5 } }, requiredLv: 99 },
+  { id: 'craft-ruin-bot',  name: '蝕痕鎧神腿', target: 'eq-bot-ruin',  cost: { gold: 200000, mats: { '蝕痕碎片': 30, '蝕痕神核': 15, '終焉印石': 5, '夢晶': 5 } }, requiredLv: 99 },
+  { id: 'craft-ruin-feet', name: '蝕痕鎧神履', target: 'eq-feet-ruin', cost: { gold: 200000, mats: { '蝕痕碎片': 30, '蝕痕神核': 15, '終焉印石': 5, '夢晶': 5 } }, requiredLv: 99 },
+  // 雪羽靈鏡製作配方（同階成本與月凜對齊，只是 target 不同）
+  { id: 'craft-r-mirror',    name: '寒霜鏡',         target: 'eq-mirror-r1',   cost: { gold: 1000, mats: { '精鋼': 15 } }, requiredLv: 15 },
+  { id: 'craft-sr-mirror',   name: '星辰鏡',         target: 'eq-mirror-sr1',  cost: { gold: 4500, mats: { '星鋼': 25, '精鋼': 10 } }, requiredLv: 35 },
+  { id: 'craft-ssr-mirror',  name: '月蝕真鏡',       target: 'eq-mirror-ssr1', cost: { gold: 18000, mats: { '神鋼': 30, '永晶': 10, '星鋼': 15 } }, requiredLv: 60 },
+  { id: 'craft-ssr2-mirror', name: '月蝕·神煉鏡',    target: 'eq-mirror-ssr2', cost: { gold: 60000, mats: { '神鋼': 70, '永晶': 30 } }, requiredLv: 90 },
   { id: 'craft-ssr2-head', name: '星辰·神煉冕',   target: 'eq-head-ssr2', cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
   { id: 'craft-ssr2-top',  name: '銀河·神煉戰袍', target: 'eq-top-ssr2',  cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
   { id: 'craft-ssr2-bot',  name: '永夜·神煉流袴', target: 'eq-bot-ssr2',  cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
@@ -435,6 +635,16 @@ function findShardExchange(id) { return SHARD_EXCHANGE.find(s => s.id === id); }
 // ===== 寶箱系統 =====
 // 四階寶箱：木 / 銀 / 金 / 神格
 // 開箱時 roll 3-5 件獎勵，每個 slot 從對應 pool 隨機抽
+// ===== 入場券（無盡塔等特殊副本用）=====
+const PASSES = {
+  'pass-endless': {
+    id: 'pass-endless', name: '虛無通行證', rarity: 'SSR', icon: '✦',
+    desc: '進入「無盡塔 · 鏡之終焉」需消耗 1 張。寶箱低機率掉落。',
+    dungeonId: 'endless-tower',
+  },
+};
+function findPass(id) { return PASSES[id]; }
+
 const CHESTS = {
   'chest-wood': {
     id: 'chest-wood', name: '木製寶箱', rarity: 'N', color: '#a07050',
@@ -451,7 +661,7 @@ const CHESTS = {
   },
   'chest-silver': {
     id: 'chest-silver', name: '銀製寶箱', rarity: 'R', color: '#c0c8d8',
-    desc: '中階寶箱，常有中型藥水與材料。',
+    desc: '中階寶箱，常有中型藥水與材料。極低機率掉虛無通行證。',
     rolls: 4,
     pool: [
       { kind: 'gold', min: 1000, max: 3000, weight: 25 },
@@ -462,6 +672,8 @@ const CHESTS = {
       { kind: 'potion', id: 'buff-fight', min: 1, max: 1, weight: 5 },
       { kind: 'shard', min: 3, max: 8, weight: 8 },
       { kind: 'gem-random', tier: [1, 2], weight: 3 },
+      { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 0.5 },  // 0.5%
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.3 },  // 銀箱 0.3%
     ],
   },
   'chest-gold': {
@@ -480,6 +692,8 @@ const CHESTS = {
       { kind: 'shard', min: 8, max: 20, weight: 8 },
       { kind: 'gem-random', tier: [2, 3], weight: 7 },
       { kind: 'equip-rarity', rarity: 'SR', weight: 7 },
+      { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 2 },  // 2%
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 1.5 },  // 金箱 1.5%
     ],
   },
   'chest-divine': {
@@ -497,6 +711,8 @@ const CHESTS = {
       { kind: 'shard', min: 30, max: 80, weight: 6 },
       { kind: 'gem-random', tier: [3, 4], weight: 10 },
       { kind: 'equip-rarity', rarity: 'SSR', weight: 9 },
+      { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 8 },  // 8%
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 5 },  // 神箱 5%
     ],
   },
 };
@@ -554,6 +770,11 @@ const ITEMS = {
     '神鋼': { tag: '材料', rarity: 'SSR', icon: '◆' },
     '永晶': { tag: '材料', rarity: 'SSR', icon: '◇' },
     '夢晶': { tag: '材料', rarity: 'UR',  icon: '◇' },
+    // 無盡塔終焉材料（用於製作終焉套 + 兌換鎚子）
+    '蝕痕碎片': { tag: '終焉', rarity: 'UR', icon: '✦' },
+    '蝕痕神核': { tag: '終焉', rarity: 'UR', icon: '✦' },
+    '終焉印石': { tag: '終焉', rarity: 'UR', icon: '✶' },
+    '異界之鎚': { tag: '鍛造', rarity: 'UR', icon: '🔨' },
   },
   // 5 部位 × 5 階品質
   equipment: [
@@ -604,6 +825,22 @@ const ITEMS = {
     { id: 'eq-bot-frost', slot: 'bottom', name: '永凍·守魂袴', rarity: 'SSR', tier: 3, setId: 'set-frost', stats: { def: 180, hp: 1500, dmgReduce: 0.04 }, fixed: { label: '永凍守備：防禦 +(60+強化×5)', effect: { def: 'forge:60+5' } } },
     { id: 'eq-feet-frost', slot: 'feet', name: '永凍·守魂履', rarity: 'SSR', tier: 3, setId: 'set-frost', stats: { spd: 0.35, hp: 1200, def: 80 }, fixed: { label: '永凍踏霜：生命 +(800+強化×60)', effect: { hp: 'forge:800+60' } } },
 
+    // ===== 終焉鎧（UR 防具・無盡塔製作・畢業終極套裝） =====
+    // 鑲嵌格 4 個（其他 SSR 是 3 個），數值平衡介於神煉與神話之間
+    // 鍛造系統：每件可以鍛造 0-30 階，每 3 階解鎖一個效果（4 件鍛同樣效果疊加）
+    { id: 'eq-head-ruin', slot: 'head', name: '蝕痕鎧神冠', rarity: 'UR', tier: 4, setId: 'set-ruination',
+      stats: { hp: 2000, crit: 0.15, atk: 120, critDmg: 0.20 },
+      fixed: { label: '鎧神之印：對 BOSS +(25%+強化×1.5%)、暴擊傷害 +25%', effect: { vsBoss: 'forge:0.25+0.015', critDmg: 0.25 } } },
+    { id: 'eq-top-ruin', slot: 'top', name: '蝕痕鎧神甲', rarity: 'UR', tier: 4, setId: 'set-ruination',
+      stats: { def: 220, hp: 2400, crit: 0.05 },
+      fixed: { label: '鎧神守護：減傷 +(18%+強化×1%)、生命 +800、技能傷害 +10%', effect: { dmgReduce: 'forge:0.18+0.01', hp: 800, skillDmg: 0.10 } } },
+    { id: 'eq-bot-ruin', slot: 'bottom', name: '蝕痕鎧神腿', rarity: 'UR', tier: 4, setId: 'set-ruination',
+      stats: { def: 150, spd: 0.50, hp: 1000 },
+      fixed: { label: '鎧神迅律：CD 縮減 +(18%+強化×1%)、技能傷害 +12%、速度 +15%', effect: { cdReduce: 'forge:0.18+0.01', skillDmg: 0.12, spd: 0.15 } } },
+    { id: 'eq-feet-ruin', slot: 'feet', name: '蝕痕鎧神履', rarity: 'UR', tier: 4, setId: 'set-ruination',
+      stats: { spd: 0.65, hp: 1000, crit: 0.12, atk: 50 },
+      fixed: { label: '鎧神疾光：速度 +(30%+強化×2%)、技能傷害 +10%、暴擊 +5%', effect: { spd: 'forge:0.30+0.02', skillDmg: 0.10, crit: 0.05 } } },
+
     // ===== 神諭織縷（核心套裝・技能型・Lv 95 製作） =====
     { id: 'eq-head-oracle', slot: 'head', name: '神諭·織縷冠', rarity: 'SSR', tier: 3, setId: 'set-oracle', stats: { hp: 1500, crit: 0.10, atk: 100 }, fixed: { label: '神諭加冕：CD 縮減 +(6%+強化×0.5%)', effect: { cdReduce: 'forge:0.06+0.005' } } },
     { id: 'eq-top-oracle', slot: 'top', name: '神諭·織縷袍', rarity: 'SSR', tier: 3, setId: 'set-oracle', stats: { def: 150, hp: 1800 }, fixed: { label: '神諭法袍：技能傷害 +(8%+強化×0.6%)', effect: { skillDmg: 'forge:0.08+0.006' } } },
@@ -616,6 +853,20 @@ const ITEMS = {
       stats: { atk: 720, crit: 0.25, critDmg: 0.80 },
       fixed: {
         label: '狐神之意：攻擊 +(160+強化×16)、暴擊 +10%、暴傷 +30%、對王 +(20%+強化×1.2%)、技能傷害 +(20%+強化×1.2%)',
+        effect: { atk: 'forge:160+16', crit: 0.10, critDmg: 0.30, vsBoss: 'forge:0.20+0.012', skillDmg: 'forge:0.20+0.012' },
+      },
+    },
+
+    // ===== 雪羽 靈鏡系列 =====
+    { id: 'eq-mirror-prac', slot: 'weapon', owner: 'eve', name: '練習鏡', rarity: 'N', tier: 0, stats: { atk: 6 }, fixed: { label: '初心者護祐：基礎攻擊 +2', effect: { atk: 2 } } },
+    { id: 'eq-mirror-r1', slot: 'weapon', owner: 'eve', name: '寒霜鏡', rarity: 'R', tier: 1, setId: 'set-frost', stats: { atk: 25, crit: 0.02 }, fixed: { label: '凜光：攻擊 +(12+強化×1.5)', effect: { atk: 'forge:12+1.5' } } },
+    { id: 'eq-mirror-sr1', slot: 'weapon', owner: 'eve', name: '星辰鏡', rarity: 'SR', tier: 2, setId: 'set-silvermoon', stats: { atk: 70, crit: 0.05 }, fixed: { label: '星屑光輝：暴擊 +(5%+強化×0.8%)', effect: { crit: 'forge:0.05+0.008' } } },
+    { id: 'eq-mirror-ssr1', slot: 'weapon', owner: 'eve', name: '月蝕真鏡', rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 170, crit: 0.08, critDmg: 0.25 }, fixed: { label: '月蝕之光：暴擊傷害 +(25%+強化×1.8%)', effect: { critDmg: 'forge:0.25+0.018' } } },
+    { id: 'eq-mirror-ssr2', slot: 'weapon', owner: 'eve', name: '月蝕·神煉鏡', rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 320, crit: 0.13, critDmg: 0.4 }, fixed: { label: '神煉月蝕：攻擊 +(45+強化×5)、暴擊 +4%', effect: { atk: 'forge:45+5', crit: 0.04 } } },
+    { id: 'eq-mirror-ur1', slot: 'weapon', owner: 'eve', name: '永夜·虛無真鏡', rarity: 'UR', tier: 4,
+      stats: { atk: 720, crit: 0.25, critDmg: 0.80 },
+      fixed: {
+        label: '虛無之眼：攻擊 +(160+強化×16)、暴擊 +10%、暴傷 +30%、對王 +(20%+強化×1.2%)、技能傷害 +(20%+強化×1.2%)',
         effect: { atk: 'forge:160+16', crit: 0.10, critDmg: 0.30, vsBoss: 'forge:0.20+0.012', skillDmg: 'forge:0.20+0.012' },
       },
     },
@@ -691,8 +942,54 @@ const SETS = {
       }, passive: { maxMp: 200 } },
     ],
   },
+  // 終焉套（無盡塔製作・畢業終極）
+  'set-ruination': {
+    name: '蝕痕鎧神',
+    color: '#ff5e7a',
+    tagline: '殞落神靈的鎧甲，由無盡塔中的虛無印石鍛造而成。每多一件，自身潛能就再覺醒一分。',
+    coreSet: true, armorOnly: true,
+    bonuses: [
+      { pieces: 2, label: '蝕痕·二件套：對 BOSS +15%、暴擊傷害 +15%', effect: { vsBoss: 0.15, critDmg: 0.15 } },
+      { pieces: 4, label: '★蝕痕·四件套：所有屬性 +20%、技能傷害 +25%、減傷 +10%（畢業最終護持）', effect: { allMul: 0.20, skillDmg: 0.25, dmgReduce: 0.10 } },
+    ],
+  },
 };
 function findSet(id) { return SETS[id]; }
+
+// ===== 鍛造系統（終焉套裝專屬，每件 0-30 階）=====
+// 每 3 階解鎖一個效果，4 件穿戴時效果 ×4 累加
+const SMITH_EFFECTS = [
+  { stage: 3,  label: '暴擊傷害 +5%',  effect: { critDmg: 0.05 } },
+  { stage: 6,  label: '技能傷害 +5%',  effect: { skillDmg: 0.05 } },
+  { stage: 9,  label: '對 BOSS +5%',   effect: { vsBoss: 0.05 } },
+  { stage: 12, label: '減傷 +3%',      effect: { dmgReduce: 0.03 } },
+  { stage: 15, label: 'HP 上限 +300',  effect: { hp: 300 } },
+  { stage: 18, label: 'MP 上限 +30',   effect: { maxMp: 30 } },
+  { stage: 21, label: '速度 +3%',      effect: { spd: 0.03 } },
+  { stage: 24, label: 'CD 縮減 +3%',   effect: { cdReduce: 0.03 } },
+  { stage: 27, label: '暴擊率 +3%',    effect: { crit: 0.03 } },
+  { stage: 30, label: '★攻擊力 +60',   effect: { atk: 60 } },
+];
+const SMITH_MAX_STAGE = 30;
+const SMITH_GOLD_COST = 50000;        // 每次鍛造金幣成本
+const SMITH_INITIAL_HITS = 100;       // 新裝備初始鍛造次數
+const SMITH_HITS_PER_HAMMER = 20;     // 1 把異界之鎚恢復多少次
+const SMITH_JUMP_CHANCE = 0.01;       // 每次鍛造直接跳階機率（1%）
+
+// 階 N → N+1 所需保底次數（隨階級指數增長）
+// 階 0→1 約 5 下、階 29→30 約 295 下，平滑曲線
+function smithHitsToCap(stage) {
+  if (stage >= SMITH_MAX_STAGE) return 0;
+  const t = stage / (SMITH_MAX_STAGE - 1);  // 0 → 1
+  return Math.max(5, Math.ceil(5 + t * t * 295));
+}
+
+function isSmithEligible(def) {
+  return def && def.setId === 'set-ruination';
+}
+function getSmithUnlockedEffects(stage) {
+  return SMITH_EFFECTS.filter(e => e.stage <= stage);
+}
 
 // 計算角色身上各套裝穿戴件數（每角色獨立背包：用 cs.bag）
 function countSetPieces(cs) {
@@ -828,6 +1125,9 @@ window.GAME_DATA = {
   rollAffixes, findEquipment, resolveFixedValue,
   findRecipe, findMaterialRecipe, findGem, socketsForRarity,
   findSet, countSetPieces,
+  SMITH_EFFECTS, SMITH_MAX_STAGE, SMITH_GOLD_COST, SMITH_INITIAL_HITS, SMITH_HITS_PER_HAMMER, SMITH_JUMP_CHANCE,
+  smithHitsToCap, isSmithEligible, getSmithUnlockedEffects,
   findPotion, findChest, rollChestRewards, findShardExchange,
+  PASSES, findPass,
   isMainStoryDungeon, getNextMainDungeon, getPrevMainDungeon,
 };

@@ -42,7 +42,7 @@ function enterGame() {
   BATTLE.onClear = () => {
     renderHud(); renderDungeonList(); renderForge(); renderBag(); renderClearSummary(); flushPendingNotifications();
     // 襲擊戰通關跳結算彈窗（停止自動戰鬥防誤入）
-    if (BATTLE.lastClear && BATTLE.lastClear.isRaid) showResultModal(BATTLE.lastClear);
+    if (BATTLE.lastClear && (BATTLE.lastClear.isRaid || BATTLE.lastClear.isEndless)) showResultModal(BATTLE.lastClear);
   };
   BATTLE.onFail = () => {
     renderHud();
@@ -223,11 +223,62 @@ function renderAll() {
 // ============================================================================
 function showCreationOverlay(isAdditional) {
   document.getElementById('creationOverlay').classList.remove('hidden');
-  document.getElementById('creationPortrait').innerHTML = CHAR_PORTRAIT('tsukirin', { bg: true, forceBase: true });
+
+  // 渲染角色縮圖列表（左欄）+ 詳細區（右欄）
+  const list = document.getElementById('charThumbList');
+  const blueprints = (GAME_DATA.CHARACTERS || []);
+  let selectedId = blueprints[0] ? blueprints[0].id : 'tsukirin';
+
+  function renderCards() {
+    list.innerHTML = '';
+    for (const bp of blueprints) {
+      const card = document.createElement('div');
+      card.className = 'char-thumb' + (selectedId === bp.id ? ' selected' : '');
+      card.dataset.bp = bp.id;
+      card.innerHTML = `
+        <div class="char-thumb-portrait">${CHAR_PORTRAIT(bp.id, { bg: true, forceBase: true })}</div>
+        <div class="char-thumb-info">
+          <div class="char-thumb-name">${bp.name}</div>
+          <div class="char-thumb-title">${bp.title}</div>
+          <div class="char-thumb-weapon">⚔ ${bp.weaponType}</div>
+        </div>
+      `;
+      card.onclick = () => {
+        selectedId = bp.id;
+        renderCards();
+        renderDetail();
+      };
+      list.appendChild(card);
+    }
+  }
+
+  function renderDetail() {
+    const bp = blueprints.find(b => b.id === selectedId) || blueprints[0];
+    if (!bp) return;
+    document.getElementById('creationPortrait').innerHTML = CHAR_PORTRAIT(bp.id, { bg: true, forceBase: true });
+    document.getElementById('creationDetailInfo').innerHTML = `
+      <div class="detail-name">${bp.name} <small>${bp.enName || ''}</small></div>
+      <div class="detail-subtitle">${bp.title} · ${bp.weaponType}</div>
+      <div class="detail-role">${bp.role}</div>
+      <div class="detail-lore">${bp.lore}</div>
+      <div class="detail-paths">
+        <div class="path-row path-a">
+          <div class="path-head"><span class="path-tag">A 路線</span> ${bp.paths.A.name}</div>
+          <div class="path-desc">${bp.paths.A.desc}</div>
+        </div>
+        <div class="path-row path-b">
+          <div class="path-head"><span class="path-tag">B 路線</span> ${bp.paths.B.name}</div>
+          <div class="path-desc">${bp.paths.B.desc}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderCards();
+  renderDetail();
 
   document.getElementById('btnCreate').onclick = () => {
     const nickname = (document.getElementById('creationNickname').value || '').trim();
-    // 玩家暱稱（跨角色共用）— 首次創角才需要填
     if (!GAME_STATE.getPlayerNickname()) {
       if (!nickname) {
         toast('請填寫玩家暱稱（多人連線會用到）', 'error');
@@ -236,19 +287,18 @@ function showCreationOverlay(isAdditional) {
       }
       GAME_STATE.setPlayerNickname(nickname);
     } else if (nickname) {
-      // 加角色時若有填，順便更新暱稱
       GAME_STATE.setPlayerNickname(nickname);
     }
-    // 角色名固定為「月凜」（角色既定名，不可改）
-    const cs = GAME_STATE.createCharacter('tsukirin', '月凜');
+    const bp = blueprints.find(b => b.id === selectedId) || blueprints[0];
+    const cs = GAME_STATE.createCharacter(bp.id, bp.name);
     if (!cs) { toast('已達角色上限', 'error'); return; }
     document.getElementById('creationOverlay').classList.add('hidden');
     if (isAdditional) {
       renderAll();
-      toast(`「${name}」加入隊伍。`, 'gold');
+      toast(`「${bp.name}」加入隊伍。`, 'gold');
     } else {
       enterGame();
-      toast(`「${name}」的旅程開始了。`, 'gold');
+      toast(`「${bp.name}」的旅程開始了。`, 'gold');
     }
   };
 }
@@ -258,7 +308,7 @@ function showCreationOverlay(isAdditional) {
 // ============================================================================
 function bindGlobalEvents() {
   // 浮動視窗：按鈕開關
-  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom' };
+  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom', smith: 'winSmith' };
   document.querySelectorAll('.dock-toggle, .cs-detail-btn').forEach(btn => {
     btn.onclick = () => {
       const key = btn.dataset.win;
@@ -279,6 +329,7 @@ function bindGlobalEvents() {
         if (key === 'shop') renderShop();
         if (key === 'potionConfig') renderPotionConfig();
         if (key === 'mpRoom') renderMpRoom();
+        if (key === 'smith') renderSmith();
       }
     };
   });
@@ -606,8 +657,10 @@ function renderActiveSets(cs) {
     const setDef = GAME_DATA.findSet(setId);
     if (!setDef) continue;
     const n = counts[setId];
+    // armorOnly 套裝沒武器（4 件）；其他套裝有武器（5 件）
+    const maxPieces = setDef.armorOnly ? 4 : 5;
     html += `<div class="set-block">
-      <div class="set-block-title" style="color:${setDef.color}">${setDef.name} <span style="color:var(--muted);font-size:10px">(${n} / 5)</span></div>`;
+      <div class="set-block-title" style="color:${setDef.color}">${setDef.name} <span style="color:var(--muted);font-size:10px">(${n} / ${maxPieces})</span></div>`;
     for (const b of setDef.bonuses) {
       const active = n >= b.pieces;
       html += `<div class="set-bonus ${active ? 'active' : 'inactive'}">${active ? '✓' : '–'} ${b.label}</div>`;
@@ -649,11 +702,31 @@ function renderClearSummary() {
       chestHtml = `<span class="cs-chest" style="color:${chestDef.color}">📦 ${chestDef.name}</span>`;
     }
   }
+  // 無盡塔：簡短顯示「累積傷害 + 階梯」；其他副本顯示傳統 exp/gold
+  if (lc.isEndless) {
+    const fmtM = (n) => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : Math.floor(n).toLocaleString();
+    const grantedMats = (lc.endlessGranted && lc.endlessGranted.mats) || {};
+    const grantedGems = (lc.endlessGranted && lc.endlessGranted.gems) || [];
+    const matHtmlE = Object.entries(grantedMats).map(([n, q]) =>
+      `<span class="cs-mat" style="color:${TIER_COLOR[n] || 'var(--text)'}">${n} +${q}</span>`
+    ).join('');
+    const gemHtmlE = grantedGems.map(name => `<span class="cs-drop">💎 ${name}</span>`).join('');
+    body.innerHTML = `
+      <span class="cs-name">${lc.dungeonName}</span>
+      <span class="cs-time">30s ⏱</span>
+      <span class="cs-dmg">累積 ${fmtM(lc.endlessTotalDmg || 0)}</span>
+      <span class="cs-num">★ 階梯 ${lc.endlessTierLabel || '未達'}</span>
+      ${matHtmlE || gemHtmlE || '<span class="cs-mat" style="color:var(--muted)">未達階梯 I</span>'}
+      ${matHtmlE ? '' : ''}${gemHtmlE}
+    `;
+    renderBattleReport();
+    return;
+  }
   body.innerHTML = `
     <span class="cs-name">${lc.dungeonName}</span>
     <span class="cs-time">${lc.time.toFixed(1)}s</span>
-    <span class="cs-exp">經驗 +${lc.exp.toLocaleString()}${expBuffTag}</span>
-    <span class="cs-num">金 +${lc.gold.toLocaleString()}${goldBuffTag}</span>
+    <span class="cs-exp">經驗 +${(lc.exp||0).toLocaleString()}${expBuffTag}</span>
+    <span class="cs-num">金 +${(lc.gold||0).toLocaleString()}${goldBuffTag}</span>
     ${matHtml || '<span class="cs-mat" style="color:var(--muted)">無材料</span>'}
     ${lc.shard ? `<span class="cs-mat" style="color:var(--shard)">魂晶 +${lc.shard}</span>` : ''}
     ${chestHtml}
@@ -712,11 +785,15 @@ function renderBattleReport() {
     </div>
     <div class="report-loot">
       <div class="cs-loot-grid">
-        <span class="cs-exp">經驗 +${lc.exp.toLocaleString()}</span>
-        <span class="cs-num">金幣 +${lc.gold.toLocaleString()}</span>
-        <span class="cs-mat">${lc.matName} +${lc.matQty}</span>
-        ${lc.shard ? `<span class="cs-mat">魂晶 +${lc.shard}</span>` : ''}
-        ${lc.drop ? `<span class="cs-drop">${lc.drop}</span>` : ''}
+        ${lc.isEndless
+          ? `<span class="cs-dmg">階梯 ${lc.endlessTierLabel || '未達'}</span>
+             <span class="cs-mat">累積 ${Math.floor(lc.endlessTotalDmg||0).toLocaleString()}</span>`
+          : `<span class="cs-exp">經驗 +${(lc.exp||0).toLocaleString()}</span>
+             <span class="cs-num">金幣 +${(lc.gold||0).toLocaleString()}</span>
+             ${lc.matName ? `<span class="cs-mat">${lc.matName} +${lc.matQty||0}</span>` : ''}
+             ${lc.shard ? `<span class="cs-mat">魂晶 +${lc.shard}</span>` : ''}
+             ${lc.drop ? `<span class="cs-drop">${lc.drop}</span>` : ''}`
+        }
       </div>
     </div>
     <div class="report-section-title">技能輸出明細</div>
@@ -759,11 +836,18 @@ function renderCraft() {
         `).join('')}
       </div>`;
 
-    // 依部位篩選配方
+    // 雪羽 Phase 8：依角色 + 部位篩選配方
+    // 武器類配方按 active 角色 blueprintId 過濾（不顯示別角色武器配方）
+    // 防具配方無 owner，所有角色共用
+    const bpId = cs.blueprintId || cs.id.split('#')[0];
     const filteredRecipes = GAME_DATA.RECIPES.filter(rec => {
-      if (_craftSlot === 'all') return true;
       const def = GAME_DATA.findEquipment(rec.target);
-      return def && def.slot === _craftSlot;
+      if (!def) return false;
+      // 武器：owner 必須符合當前角色
+      if (def.slot === 'weapon' && def.owner && def.owner !== bpId) return false;
+      // 部位篩選
+      if (_craftSlot === 'all') return true;
+      return def.slot === _craftSlot;
     });
 
     const rows = filteredRecipes.map(rec => {
@@ -1628,13 +1712,23 @@ window.showRaidPreview = function(dungeonId) {
   setTimeout(() => win.classList.remove('flash-open'), 600);
   // 綁定按鈕
   body.querySelector('button[data-raid-start]')?.addEventListener('click', () => {
-    // 房主：廣播 raid-launch 給朋友
-    if (window.MP_API && MP_API.isHost()) {
-      MP_API.broadcastRaidLaunch(d.id);
-      const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
-      toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
+    // 無盡塔：先檢查並扣入場券
+    if (d.isEndless) {
+      const ok = GAME_STATE.consumePass('pass-endless', 1);
+      if (!ok) {
+        toast('入場券不足！從寶箱中可低機率掉落「虛無通行證」', 'error');
+        return;
+      }
+      toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
     } else {
-      toast(`進入襲擊戰：${d.name}`, 'error');
+      // 房主：廣播 raid-launch 給朋友
+      if (window.MP_API && MP_API.isHost()) {
+        MP_API.broadcastRaidLaunch(d.id);
+        const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
+        toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
+      } else {
+        toast(`進入襲擊戰：${d.name}`, 'error');
+      }
     }
     win.style.display = '';
     win.classList.add('hidden');
@@ -1828,6 +1922,18 @@ function renderHud() {
   } else {
     resRow.style.display = 'none';
   }
+  // 鍛造按鈕：畢業 + 持有任一終焉套或鎚子才顯示
+  const smithBtn = document.getElementById('btnOpenSmith');
+  if (smithBtn) {
+    const cs = GAME_STATE.state.characters[st.activeCharId];
+    const bag = cs && cs.bag;
+    const hasRuin = bag && bag.equipment && Object.values(bag.equipment).some(inst => {
+      const def = GAME_DATA.findEquipment(inst.itemId);
+      return def && GAME_DATA.isSmithEligible(def);
+    });
+    const hasHammer = bag && bag.materials && (bag.materials['異界之鎚'] || 0) > 0;
+    smithBtn.style.display = (hasRuin || hasHammer) ? '' : 'none';
+  }
 }
 
 let _lastPortraitKey = null;
@@ -1965,11 +2071,16 @@ function renderEnemyCards() {
     }
     wave.forEach((e, i) => {
       const card = document.createElement('div');
-      card.className = 'fighter-card enemy-card';
+      card.className = 'fighter-card enemy-card' + (BATTLE._endlessMode ? ' endless-boss-card' : '');
       card.dataset.idx = i;
+      // 無盡塔 BOSS：用立繪取代像素圖、卡片大張
+      const dungeon = GAME_DATA.getDungeon(BATTLE.dungeonId);
+      const portraitHtml = (BATTLE._endlessMode && dungeon && dungeon.bossPortrait)
+        ? `<img src="${dungeon.bossPortrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`
+        : '';
       card.innerHTML = `
         <div class="card-frame">
-          <div class="portrait"></div>
+          <div class="portrait">${portraitHtml}</div>
           <div class="enemy-debuffs"></div>
         </div>
         <div class="card-name">${e.name}</div>
@@ -1980,11 +2091,13 @@ function renderEnemyCards() {
         </div>
       `;
       root.appendChild(card);
-      // 加上像素 portrait
-      const portrait = card.querySelector('.portrait');
-      if (portrait && typeof renderEnemyPortrait === 'function') {
-        const cv = renderEnemyPortrait(e.name, 140);
-        portrait.appendChild(cv);
+      // 非無盡塔加像素 portrait（無盡塔用 img 立繪）
+      if (!BATTLE._endlessMode) {
+        const portrait = card.querySelector('.portrait');
+        if (portrait && typeof renderEnemyPortrait === 'function') {
+          const cv = renderEnemyPortrait(e.name, 140);
+          portrait.appendChild(cv);
+        }
       }
     });
   }
@@ -1997,8 +2110,26 @@ function renderEnemyCards() {
     if (!card) return;
     const fill = card.querySelector('.hp-fill');
     const txt = card.querySelector('.hp-text');
-    if (fill) fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
-    if (txt) txt.textContent = `${Math.max(0, Math.floor(e.hp))} / ${e.maxHp}`;
+    if (BATTLE._endlessMode) {
+      // 無盡塔：HP 條改為「下個階梯進度」+ 文字顯示累積傷害 / 倒數
+      const cur = BATTLE._endlessTeamDmg || 0;
+      const tiers = BATTLE._endlessTiers || [];
+      const reached = BATTLE._endlessReached;
+      const next = tiers[reached + 1];
+      const prev = reached >= 0 ? tiers[reached].dmg : 0;
+      const target = next ? next.dmg : (tiers[tiers.length-1]?.dmg || 1);
+      const pct = next ? Math.min(100, ((cur - prev) / (target - prev)) * 100) : 100;
+      if (fill) fill.style.width = pct + '%';
+      if (txt) {
+        const fmt = (n) => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : (n/1e3).toFixed(0)+'K';
+        const tierLabel = reached >= 0 ? tiers[reached].label : '—';
+        const timeLeft = (BATTLE._endlessTimeLeft || 0).toFixed(1);
+        txt.textContent = `${fmt(cur)} | ★${tierLabel} | ⏱${timeLeft}s${next ? ` → ${next.label} ${fmt(target)}` : ' (MAX)'}`;
+      }
+    } else {
+      if (fill) fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
+      if (txt) txt.textContent = `${Math.max(0, Math.floor(e.hp))} / ${e.maxHp}`;
+    }
     card.classList.toggle('active-target', e === BATTLE.enemy);
     // Debuff badges
     const debuffEl = card.querySelector('.enemy-debuffs');
@@ -2099,7 +2230,7 @@ window.flashSkillButton = function(sid) {
 // ============================================================================
 // 副本列表
 // ============================================================================
-let _dungeonTab = 'main';  // 'main' / 'special' / 'raid'
+let _dungeonTab = 'main';  // 'main' / 'special' / 'raid' / 'endless'
 function renderDungeonList() {
   const root = document.getElementById('tabDungeon');
   root.innerHTML = '';
@@ -2113,6 +2244,7 @@ function renderDungeonList() {
     <button class="${_dungeonTab === 'main' ? 'active' : ''}" data-dtab="main">🗺 主線</button>
     <button class="${_dungeonTab === 'special' ? 'active' : ''}" data-dtab="special">⭐ 特殊副本</button>
     <button class="${_dungeonTab === 'raid' ? 'active' : ''}" data-dtab="raid">⚔ 襲擊戰</button>
+    <button class="${_dungeonTab === 'endless' ? 'active' : ''}" data-dtab="endless">✦ 無盡塔</button>
   `;
   root.appendChild(tabs);
   tabs.querySelectorAll('button[data-dtab]').forEach(b => {
@@ -2121,9 +2253,10 @@ function renderDungeonList() {
 
   // 依分頁過濾 regions
   const filteredRegions = GAME_DATA.REGIONS.filter(r => {
-    if (_dungeonTab === 'main') return !r.isSpecial && !r.isRaid;
+    if (_dungeonTab === 'main') return !r.isSpecial && !r.isRaid && !r.isEndless;
     if (_dungeonTab === 'special') return r.isSpecial;
     if (_dungeonTab === 'raid') return r.isRaid;
+    if (_dungeonTab === 'endless') return r.isEndless;
     return true;
   });
   if (filteredRegions.length === 0) {
@@ -2154,6 +2287,10 @@ function renderDungeonList() {
       else if (d.special === 'mat') typeTag = '<span style="color:var(--shard);font-size:10px;margin-left:4px">材料</span>';
       else if (d.special === 'forge') typeTag = '<span style="color:var(--gold);font-size:10px;margin-left:4px">強化</span>';
       else if (d.isRaid) typeTag = '<span style="color:var(--hp-enemy);font-size:10px;margin-left:4px">RAID</span>';
+      else if (d.isEndless) {
+        const passCount = (cs && cs.bag && cs.bag.passes && cs.bag.passes['pass-endless']) || 0;
+        typeTag = `<span style="color:var(--accent);font-size:10px;margin-left:4px">✦ 通行證 ×${passCount}</span>`;
+      }
       // Lv 99 顯示「需畢業」，其他顯示「需 LvN」
       const lvTag = d.requiredLv
         ? `<span style="font-size:10px;color:${lvOk ? 'var(--muted)' : 'var(--hp-enemy)'};margin-left:4px">${d.requiredLv >= 99 ? '需畢業' : `需 Lv${d.requiredLv}`}</span>`
@@ -2165,8 +2302,8 @@ function renderDungeonList() {
       if (unlocked) {
         row.onclick = () => {
           GAME_STATE.state.selectedDungeonId = d.id;
-          // 襲擊戰不直接開打 → 跳預覽視窗
-          if (d.isRaid) {
+          // 襲擊戰 / 無盡塔不直接開打 → 跳預覽視窗
+          if (d.isRaid || d.isEndless) {
             showRaidPreview(d.id);
             return;
           }
@@ -2243,6 +2380,129 @@ function renderForge() {
 
   root.querySelectorAll('button[data-forge-inst]').forEach(btn => {
     btn.onclick = () => doForge(btn.dataset.forgeInst);
+  });
+}
+
+// ============================================================================
+// 鍛造系統（蝕痕鎧神專屬，獨立視窗）
+// ============================================================================
+function renderSmith() {
+  const root = document.getElementById('tabSmith');
+  if (!root) return;
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (!cs || !cs.equip) { root.innerHTML = ''; return; }
+  const hammerCount = (_activeBag().materials['異界之鎚'] || 0);
+
+  // 找出穿戴中的終焉套
+  const ruinSlots = ['head', 'top', 'bottom', 'feet'].filter(slot => {
+    const id = cs.equip[slot];
+    if (!id) return false;
+    const inst = _activeBag().equipment[id];
+    const def = inst && GAME_DATA.findEquipment(inst.itemId);
+    return def && GAME_DATA.isSmithEligible(def);
+  });
+
+  let html = `
+    <div style="background:linear-gradient(180deg,rgba(255,94,122,0.12),var(--bg3));padding:10px 12px;border-radius:6px;border-left:3px solid #ff5e7a;margin-bottom:12px">
+      <div style="color:#ff5e7a;font-weight:600;margin-bottom:4px">蝕痕鎧神鍛造</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        每件防具可鍛造 0-30 階，每 3 階解鎖一個效果。<br>
+        4 件穿戴時所有效果累加（例如 4 件都鍛到 30，攻擊力 +60 ×4 = +240）。<br>
+        升 1 階消耗 1 把異界之鎚（無盡塔 V 階梯掉落）。
+      </div>
+    </div>
+    <div style="background:var(--bg);padding:10px 12px;border-radius:4px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div>持有：<b style="color:#ff5e7a;font-size:16px">🔨 異界之鎚 ×${hammerCount}</b></div>
+      <div style="color:var(--muted);font-size:11px">穿戴終焉套 ${ruinSlots.length} / 4 件</div>
+    </div>
+  `;
+
+  if (ruinSlots.length === 0) {
+    html += `<div style="text-align:center;padding:30px;color:var(--muted)">尚未穿戴任何蝕痕鎧神套裝。<br><small>從製作 → 99 級可製作 4 件終焉套（需無盡塔材料）</small></div>`;
+    root.innerHTML = html;
+    return;
+  }
+
+  const goldCost = GAME_DATA.SMITH_GOLD_COST;
+  const playerGold = GAME_STATE.state.gold;
+
+  for (const slot of ruinSlots) {
+    const instId = cs.equip[slot];
+    const inst = _activeBag().equipment[instId];
+    const def = GAME_DATA.findEquipment(inst.itemId);
+    const stage = inst.smithStage || 0;
+    const maxStage = GAME_DATA.SMITH_MAX_STAGE;
+    const progress = inst.smithProgress || 0;
+    const hitsLeft = (inst.smithHitsLeft == null ? GAME_DATA.SMITH_INITIAL_HITS : inst.smithHitsLeft);
+    const next = GAME_DATA.SMITH_EFFECTS.find(e => e.stage > stage);
+    const effectsList = GAME_DATA.SMITH_EFFECTS.map(e => {
+      const got = stage >= e.stage;
+      return `<span style="color:${got ? 'var(--hp-self)' : 'var(--muted)'};font-size:11px;display:inline-block;margin:2px 6px 2px 0">${got ? '✓' : '–'} 階${e.stage}：${e.label}</span>`;
+    }).join('');
+    let bottom = '';
+    if (stage >= maxStage) {
+      bottom = `<div style="color:var(--gold);font-size:12px;text-align:center;padding:6px">★ 已鍛造滿階（30/30）</div>`;
+    } else {
+      const capHits = GAME_DATA.smithHitsToCap(stage);
+      const canSmith = hitsLeft > 0 && playerGold >= goldCost;
+      const canRestore = hammerCount >= 1;
+      const reasonNo = hitsLeft <= 0 ? '次數用完' : (playerGold < goldCost ? '金幣不足' : '');
+      bottom = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0;font-size:11px">
+          <span style="color:var(--muted)">階 ${stage} → ${stage + 1}：保底 ${capHits} 下　|　每次扣 <b style="color:${playerGold >= goldCost ? 'var(--gold)' : 'var(--hp-enemy)'}">金 ${goldCost.toLocaleString()}</b></span>
+          <span style="color:${hitsLeft > 0 ? 'var(--hp-self)' : 'var(--hp-enemy)'}">剩餘次數 ${hitsLeft}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="primary" style="flex:1" ${canSmith ? '' : 'disabled'} data-smith-inst="${instId}">
+            🔨 鍛造一次${reasonNo ? `（${reasonNo}）` : ''}
+          </button>
+          <button class="ghost" ${canRestore ? '' : 'disabled'} data-restore-inst="${instId}" title="消耗 1 把異界之鎚，恢復 ${GAME_DATA.SMITH_HITS_PER_HAMMER} 次鍛造次數">
+            ↻ 恢復 +${GAME_DATA.SMITH_HITS_PER_HAMMER}（鎚 ×1）
+          </button>
+        </div>
+      `;
+    }
+    html += `
+      <div class="forge-block">
+        <h4>${GAME_DATA.SLOT_LABELS[slot]}：<span class="bag-item UR" style="display:inline-block;padding:1px 6px;border-width:1px">${def.name}</span> <span style="color:#ff5e7a;float:right">鍛 ${stage}/${maxStage}</span></h4>
+        ${stage < maxStage ? `
+        <div style="position:relative;height:14px;background:var(--bg);border-radius:7px;overflow:hidden;border:1px solid var(--line);margin:6px 0">
+          <div style="position:absolute;inset:0;width:${progress}%;background:linear-gradient(90deg,#ff5e7a,#ff8a3c,#ffd66e);transition:width 0.2s"></div>
+          <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;text-shadow:0 0 4px #000">煉製進度 ${progress.toFixed(1)}%</span>
+        </div>` : ''}
+        <div style="margin:8px 0;line-height:1.8">${effectsList}</div>
+        ${bottom}
+      </div>
+    `;
+  }
+  root.innerHTML = html;
+
+  root.querySelectorAll('button[data-smith-inst]').forEach(btn => {
+    btn.onclick = () => {
+      const r = GAME_STATE.smithEquip(btn.dataset.smithInst);
+      if (r.ok) {
+        if (r.leveledUp) {
+          const msg = r.jumped ? `★ 跳階！${r.name} → 階 ${r.stage}` : `${r.name} 升階成功 → 階 ${r.stage}！次數已補滿`;
+          toast(msg, 'gold');
+        } else if (r.jumped) {
+          toast(`${r.name} 觸發跳階加成！進度條已滿`, 'gold');
+        }
+        renderSmith(); renderHud(); renderBag(); renderCharDetail();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
+  });
+  root.querySelectorAll('button[data-restore-inst]').forEach(btn => {
+    btn.onclick = () => {
+      const r = GAME_STATE.restoreSmithHits(btn.dataset.restoreInst);
+      if (r.ok) {
+        toast(`恢復 +${GAME_DATA.SMITH_HITS_PER_HAMMER} 鍛造次數（剩 ${r.hitsLeft}）`, 'gold');
+        renderSmith(); renderHud(); renderBag();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
   });
 }
 
@@ -3093,6 +3353,11 @@ window.showResultModal = function(lc) {
     titleEl.textContent = '✘ 戰敗';
     titleEl.className = 'result-title fail';
     subEl.textContent = `${lc.dungeonName}　·　堅持了 ${lc.time.toFixed(1)} 秒`;
+  } else if (lc.isEndless) {
+    titleEl.textContent = `✦ 階梯 ${lc.endlessTierLabel} 達成`;
+    titleEl.className = 'result-title raid';
+    const fmtM = (n) => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n.toLocaleString();
+    subEl.textContent = `${lc.dungeonName}　·　團隊累積 ${fmtM(lc.endlessTotalDmg||0)}（個人 ${fmtM(lc.endlessSelfDmg||0)}）`;
   } else if (lc.isRaid) {
     titleEl.textContent = '★ 襲擊戰通關 ★';
     titleEl.className = 'result-title raid';
@@ -3117,7 +3382,7 @@ window.showResultModal = function(lc) {
   // 區段標題依模式決定
   const sectionTitleEl = overlay.querySelector('.result-section-title');
   const entries = Object.entries(d.bySkill || {});
-  if (lc.isRaid) {
+  if (lc.isRaid || lc.isEndless) {
     // 襲擊戰：顯示「玩家貢獻」聚合（我 + 每位隊友），不顯示技能明細
     if (sectionTitleEl) sectionTitleEl.textContent = '玩家貢獻';
     const allyEntries = entries.filter(([k]) => k.startsWith('mp-ally:'));
@@ -3170,6 +3435,15 @@ window.showResultModal = function(lc) {
   // 戰利品（只在通關顯示）
   if (lc.failed) {
     lootSection.style.display = 'none';
+  } else if (lc.isEndless) {
+    lootSection.style.display = '';
+    const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
+    const g = lc.endlessGranted || { mats: {}, gems: [] };
+    const matHtml = Object.entries(g.mats || {}).map(([n, q]) =>
+      `<span class="result-loot-item" style="color:${TIER_COLOR[n] || 'var(--text)'}">${n} +${q}</span>`
+    ).join('');
+    const gemHtml = (g.gems || []).map(name => `<span class="result-loot-item">💎 ${name}</span>`).join('');
+    lootEl.innerHTML = (matHtml + gemHtml) || '<span class="result-loot-item">未達階梯 I，無獎勵</span>';
   } else {
     lootSection.style.display = '';
     const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
