@@ -243,6 +243,68 @@ function applyLevelUnlocks(cs, lv, queue) {
   }
 }
 
+// ============================================================================
+// Wave 28：跨路線技能 BUG 修復
+// 舊版本創角時可能讓單一角色同時解鎖 A 路線與 B 路線的技能/被動。
+// auditJobPath 回傳衝突詳情；fixJobPath 清除指定路線的對方資料。
+// ============================================================================
+function auditJobPath(cs) {
+  if (!cs) return null;
+  const bp = GAME_DATA.getCharacterBlueprint(cs.blueprintId || cs.id);
+  if (!bp || !bp.unlocks) return null;
+  // 建索引：skillId → path、passiveId → path
+  const skillPath = {}, passivePath = {};
+  for (const u of bp.unlocks) {
+    if (u.path) {
+      if (u.type === 'skill' && u.skill) skillPath[u.skill] = u.path;
+      if (u.type === 'passive' && u.passive) passivePath[u.passive] = u.path;
+    }
+  }
+  const result = { aSkills: [], bSkills: [], aPassives: [], bPassives: [] };
+  for (const sid of (cs.unlockedSkills || [])) {
+    const p = skillPath[sid];
+    if (p === 'A') result.aSkills.push(sid);
+    if (p === 'B') result.bSkills.push(sid);
+  }
+  for (const pid of (cs.unlockedPassives || [])) {
+    const p = passivePath[pid];
+    if (p === 'A') result.aPassives.push(pid);
+    if (p === 'B') result.bPassives.push(pid);
+  }
+  result.hasConflict = (result.aSkills.length > 0 && result.bSkills.length > 0)
+    || (result.aPassives.length > 0 && result.bPassives.length > 0);
+  result.currentPath = cs.jobPath || null;
+  return result;
+}
+
+function fixJobPath(cs, keepPath) {
+  if (!cs || (keepPath !== 'A' && keepPath !== 'B')) return null;
+  const audit = auditJobPath(cs);
+  if (!audit) return null;
+  const dropPath = keepPath === 'A' ? 'B' : 'A';
+  const dropSkills = keepPath === 'A' ? audit.bSkills : audit.aSkills;
+  const dropPassives = keepPath === 'A' ? audit.bPassives : audit.aPassives;
+  // 1. 從 unlockedSkills / unlockedPassives 移除
+  cs.unlockedSkills = (cs.unlockedSkills || []).filter(s => !dropSkills.includes(s));
+  cs.unlockedPassives = (cs.unlockedPassives || []).filter(p => !dropPassives.includes(p));
+  // 2. 從 equippedSkills 槽移除（保持陣列長度 + null 槽）
+  if (cs.equippedSkills) {
+    cs.equippedSkills = cs.equippedSkills.map(s => dropSkills.includes(s) ? null : s);
+  }
+  // 3. 修正 jobPath
+  cs.jobPath = keepPath;
+  // 4. 若有保留路線的技能卻 jobTier=0（極端情況），補成至少 1
+  if ((audit[keepPath === 'A' ? 'aSkills' : 'bSkills'].length > 0) && (cs.jobTier || 0) < 1) {
+    cs.jobTier = 1;
+  }
+  saveState();
+  return {
+    droppedSkills: dropSkills.length,
+    droppedPassives: dropPassives.length,
+    keepPath, dropPath,
+  };
+}
+
 // 玩家在轉職介面選了路線後呼叫
 function selectJobPath(pathId, tier) {
   const cs = STATE.characters[STATE.activeCharId];
@@ -950,6 +1012,7 @@ window.GAME_STATE = {
   get state() { return STATE; },
   saveState, scheduleSave, resetState, replaceState,
   createCharacter, selectJobPath, MAX_CHARACTERS,
+  auditJobPath, fixJobPath,
   setPlayerNickname, getPlayerNickname,
   effectiveStats, combatPower,
   isDungeonUnlocked,

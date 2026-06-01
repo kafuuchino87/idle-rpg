@@ -96,6 +96,98 @@ function enterGame() {
   renderLeftChat();
 
   toast(`歡迎回來，旅人。`);
+
+  // Wave 28：檢查角色是否有跨路線技能 BUG（舊版本創角遺留）
+  setTimeout(checkJobPathConflicts, 600);
+}
+
+// ============================================================================
+// Wave 28：跨路線技能 BUG 偵測 + 修復對話框
+// ============================================================================
+function checkJobPathConflicts() {
+  const state = GAME_STATE.state;
+  if (!state || !state.characters) return;
+  const conflicted = [];
+  for (const id in state.characters) {
+    const cs = state.characters[id];
+    const audit = GAME_STATE.auditJobPath(cs);
+    if (audit && audit.hasConflict) {
+      conflicted.push({ cs, audit });
+    }
+  }
+  if (conflicted.length === 0) return;
+  // 一次處理一個角色，處理完再檢查下一個
+  showJobPathFixModal(conflicted, 0);
+}
+
+function showJobPathFixModal(list, idx) {
+  if (idx >= list.length) return;
+  const { cs, audit } = list[idx];
+  const skillName = sid => (GAME_DATA.SKILLS[sid] && GAME_DATA.SKILLS[sid].name) || sid;
+  const passiveName = pid => (GAME_DATA.PASSIVES[pid] && GAME_DATA.PASSIVES[pid].name) || pid;
+  const aList = [
+    ...audit.aSkills.map(s => `技能：${skillName(s)}`),
+    ...audit.aPassives.map(p => `被動：${passiveName(p)}`),
+  ].join('、') || '（無）';
+  const bList = [
+    ...audit.bSkills.map(s => `技能：${skillName(s)}`),
+    ...audit.bPassives.map(p => `被動：${passiveName(p)}`),
+  ].join('、') || '（無）';
+  const curPathLabel = audit.currentPath === 'A' ? 'A 路線（月華）' :
+                       audit.currentPath === 'B' ? 'B 路線（狐神）' : '未選擇';
+
+  // 建動態 overlay
+  let overlay = document.getElementById('jobPathFixOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'jobPathFixOverlay';
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="overlay-card small">
+        <h3 style="color:var(--hp-enemy);margin:0 0 8px">⚠ 跨路線技能 BUG 修復</h3>
+        <div id="jpfBody" style="font-size:12px;line-height:1.7;margin-bottom:12px"></div>
+        <div style="display:flex;gap:6px;flex-direction:column">
+          <button class="primary" id="jpfKeepA">保留 A 路線（移除 B 內容）</button>
+          <button class="primary" id="jpfKeepB">保留 B 路線（移除 A 內容）</button>
+          <button class="ghost" id="jpfSkip">稍後再修</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+  const body = overlay.querySelector('#jpfBody');
+  body.innerHTML = `
+    <div>角色：<b>${cs.customName || cs.blueprintId} (Lv ${cs.level})</b></div>
+    <div>當前路線：<b style="color:var(--accent)">${curPathLabel}</b></div>
+    <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:4px;border-left:3px solid #6699ff">
+      <b style="color:#6699ff">A 路線內容：</b><br>${aList}
+    </div>
+    <div style="margin-top:6px;padding:6px 8px;background:var(--bg);border-radius:4px;border-left:3px solid #ff6688">
+      <b style="color:#ff6688">B 路線內容：</b><br>${bList}
+    </div>
+    <div style="margin-top:8px;color:var(--muted);font-size:11px">
+      請選擇要保留的路線（另一邊的技能 / 被動會被移除，並從技能槽自動取消裝備）。
+    </div>
+    ${list.length > 1 ? `<div style="margin-top:4px;color:var(--muted);font-size:11px">（${idx + 1} / ${list.length}）</div>` : ''}`;
+  overlay.classList.remove('hidden');
+
+  const close = () => {
+    overlay.classList.add('hidden');
+  };
+  const fixAndNext = (keep) => {
+    const r = GAME_STATE.fixJobPath(cs, keep);
+    if (r) {
+      toast(`已修復 ${cs.customName || cs.blueprintId}：移除 ${r.droppedSkills} 個技能、${r.droppedPassives} 個被動`, 'gold');
+      renderAll();
+    }
+    close();
+    setTimeout(() => showJobPathFixModal(list, idx + 1), 400);
+  };
+  overlay.querySelector('#jpfKeepA').onclick = () => fixAndNext('A');
+  overlay.querySelector('#jpfKeepB').onclick = () => fixAndNext('B');
+  overlay.querySelector('#jpfSkip').onclick = () => {
+    close();
+    toast('已跳過跨路線修復（重新整理會再次提示）', 'warn');
+  };
 }
 
 function renderAll() {
@@ -619,6 +711,7 @@ function renderBattleReport() {
 // HUD
 // ============================================================================
 let _craftTab = 'equip';  // 'equip' / 'material'
+let _craftSlot = 'all';   // 'all' / 'weapon' / 'head' / 'top' / 'bottom' / 'feet'
 function renderCraft() {
   const root = document.getElementById('tabCraft');
   if (!root) return;
@@ -633,7 +726,30 @@ function renderCraft() {
 
   let body = '';
   if (_craftTab === 'equip') {
-    const rows = GAME_DATA.RECIPES.map(rec => {
+    // 部位篩選列
+    const slotFilters = [
+      { key: 'all', label: '全部' },
+      { key: 'weapon', label: '武器' },
+      { key: 'head', label: '頭' },
+      { key: 'top', label: '上衣' },
+      { key: 'bottom', label: '下衣' },
+      { key: 'feet', label: '腳' },
+    ];
+    const slotBar = `
+      <div class="craft-slot-filter">
+        ${slotFilters.map(f => `
+          <button class="${_craftSlot === f.key ? 'active' : ''}" data-slot="${f.key}">${f.label}</button>
+        `).join('')}
+      </div>`;
+
+    // 依部位篩選配方
+    const filteredRecipes = GAME_DATA.RECIPES.filter(rec => {
+      if (_craftSlot === 'all') return true;
+      const def = GAME_DATA.findEquipment(rec.target);
+      return def && def.slot === _craftSlot;
+    });
+
+    const rows = filteredRecipes.map(rec => {
       const def = GAME_DATA.findEquipment(rec.target);
       if (!def) return '';
       const lvOk = cs.level >= (rec.requiredLv || 0);
@@ -645,10 +761,12 @@ function renderCraft() {
         const ok = have >= q;
         return `<span class="${ok ? 'ok' : 'no'}">${n} ${have}/${q}</span>`;
       }).join(' ');
+      const slotLabel = (GAME_DATA.SLOT_LABELS && GAME_DATA.SLOT_LABELS[def.slot]) || '';
       return `
         <div class="craft-row">
           <div class="craft-info">
             <div class="craft-name">
+              ${slotLabel ? `<span class="craft-slot-tag">${slotLabel}</span>` : ''}
               <span class="bag-item ${def.rarity} cp-clickable" style="display:inline-block;padding:1px 6px;border-width:1px;cursor:pointer" data-preview="${def.id}" title="點擊查看屬性">${def.name}</span>
               <small>Lv ${rec.requiredLv}+</small>
             </div>
@@ -661,9 +779,11 @@ function renderCraft() {
         </div>
       `;
     }).filter(Boolean).join('');
+    const emptyMsg = rows ? '' : '<div style="text-align:center;color:var(--muted);font-size:11px;padding:20px">此部位無配方</div>';
     body = `
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">用素材製作中低階裝備。UR 裝備僅由「襲擊戰」副本掉落，不可製作。</div>
-      <div class="craft-list">${rows}</div>`;
+      ${slotBar}
+      <div class="craft-list">${rows}${emptyMsg}</div>`;
   } else {
     // 材料升階
     const rows = GAME_DATA.MATERIAL_RECIPES.map(rec => {
@@ -707,6 +827,9 @@ function renderCraft() {
   root.innerHTML = tabs + body;
   root.querySelectorAll('.craft-tabs button').forEach(btn => {
     btn.onclick = () => { _craftTab = btn.dataset.tab; renderCraft(); };
+  });
+  root.querySelectorAll('.craft-slot-filter button').forEach(btn => {
+    btn.onclick = () => { _craftSlot = btn.dataset.slot; renderCraft(); };
   });
   root.querySelectorAll('button[data-craft]').forEach(btn => {
     btn.onclick = () => doCraft(btn.dataset.craft);

@@ -2562,6 +2562,46 @@ button.small { padding: 3px 10px; font-size: 11px; }
 }
 .craft-buttons button { width: 100%; }
 
+/* ───────── 裝備製作 — 部位篩選列 ───────── */
+.craft-slot-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.craft-slot-filter button {
+  flex: 1 1 auto;
+  min-width: 52px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.craft-slot-filter button:hover { color: var(--text); background: var(--bg2); }
+.craft-slot-filter button.active {
+  background: var(--accent);
+  color: #0a0a1a;
+  border-color: var(--accent);
+}
+/* 配方列前的部位小標籤 */
+.craft-slot-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 /* ───────── 襲擊戰預覽視窗 ───────── */
 #winRaidPreview {
   background: linear-gradient(180deg, #1a0810, #0a0410);
