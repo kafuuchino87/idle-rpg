@@ -2166,16 +2166,18 @@ function renderBag() {
   bar.className = 'bag-toolbar';
   bar.innerHTML = `
     <span class="bag-tool-title">批次分解：</span>
-    <button class="ghost small" data-batch="N">分解所有 N</button>
-    <button class="ghost small" data-batch="R">分解 N + R</button>
-    <button class="ghost small" data-batch="SR">分解 N + R + SR</button>
+    <button class="ghost small" data-batch="N">N</button>
+    <button class="ghost small" data-batch="R">+R</button>
+    <button class="ghost small" data-batch="SR">+SR</button>
+    <button class="ghost small" data-batch="SSR" style="border-color:#ffb84d;color:#ffb84d">+SSR</button>
   `;
   root.appendChild(bar);
   bar.querySelectorAll('button[data-batch]').forEach(b => {
     b.onclick = () => {
       const tier = b.dataset.batch;
-      const label = { N: 'N', R: 'N+R', SR: 'N+R+SR' }[tier];
-      if (!confirm(`確定分解所有 ${label} 階未裝備裝備？此操作無法復原。`)) return;
+      const label = { N: 'N', R: 'N+R', SR: 'N+R+SR', SSR: 'N+R+SR+SSR' }[tier];
+      const extraWarn = tier === 'SSR' ? '\n\n⚠️ SSR 含核心套裝（神諭/烈日/永凍）！\n建議先穿好要留的核心套裝。' : '';
+      if (!confirm(`確定分解所有 ${label} 階「未裝備」裝備？此操作無法復原。${extraWarn}`)) return;
       const r = GAME_STATE.batchDisassemble({ maxRarity: tier });
       if (r.count === 0) { toast('沒有可分解的裝備', 'error'); return; }
       const matStr = Object.entries(r.mats).map(([n, q]) => `${n} ×${q}`).join('、');
@@ -2338,14 +2340,15 @@ function renderBag() {
       const def = GAME_DATA.findEquipment(inst.itemId);
       const isEquipped = cs.equip[slot] === instId;
       const cell = document.createElement('div');
-      cell.className = `bag-item ${def.rarity}`;
+      cell.className = `bag-item ${def.rarity}` + (inst.locked ? ' locked' : '');
       const forge = inst.forge || 0;
       const statStr = Object.entries(def.stats).map(([k, v]) => statLabel(k, v, forge)).join('<br>');
       const affixStr = inst.affixes.length
         ? '<div style="color:var(--shard);font-size:10px;margin-top:3px">' + inst.affixes.map(a => formatAffix(a).raw).join('、') + '</div>'
         : '';
+      const lockIcon = inst.locked ? '<span class="lock-badge" title="已鎖定（批次分解會跳過）">🔒</span>' : '';
       cell.innerHTML = `
-        <div class="iname">${def.name}${forge ? ` +${forge}` : ''}</div>
+        <div class="iname">${lockIcon}${def.name}${forge ? ` +${forge}` : ''}</div>
         <div class="itag">${def.rarity}</div>
         <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${statStr}</div>
         ${affixStr}
@@ -2353,6 +2356,7 @@ function renderBag() {
           ? '<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">[裝備中]</div>'
           : `<div class="bag-cell-actions">
               <button data-equip="${slot}:${instId}">裝備</button>
+              <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
               <button class="danger small" data-disasm="${instId}" title="分解返還材料">分解</button>
             </div>`}
       `;
@@ -2455,6 +2459,15 @@ function renderBag() {
       } else {
         toast(r.reason, 'error');
       }
+    };
+  });
+  root.querySelectorAll('button[data-lock]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.lock;
+      const nowLocked = GAME_STATE.toggleEquipLock(id);
+      toast(nowLocked ? '🔒 已鎖定（批次分解會跳過）' : '🔓 已解鎖', 'gold');
+      renderBag();
     };
   });
 }

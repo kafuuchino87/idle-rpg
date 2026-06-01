@@ -1495,6 +1495,8 @@ button.primary:hover { filter: brightness(1.1); }
   font-weight: 700;
 }
 .bag-item .iname { font-weight: 600; margin: 2px 0; }
+.lock-badge { margin-right: 3px; font-size: 11px; }
+.bag-item.locked { box-shadow: 0 0 0 2px var(--gold) inset; }
 .bag-item .itag { color: var(--muted); font-size: 10px; }
 
 /* Skills */

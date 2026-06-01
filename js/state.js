@@ -671,11 +671,21 @@ function openChest(chestId) {
 
 // ========== 裝備分解 ==========
 // 依稀有度回饋對應材料與金錢；強化等級加倍返還
+function toggleEquipLock(instId) {
+  const inst = STATE.bag.equipment[instId];
+  if (!inst) return false;
+  inst.locked = !inst.locked;
+  scheduleSave();
+  return inst.locked;
+}
+
 function disassembleEquipment(instId) {
   const inst = STATE.bag.equipment[instId];
   if (!inst) return { ok: false, reason: '找不到裝備' };
   const def = GAME_DATA.findEquipment(inst.itemId);
   if (!def) return { ok: false, reason: '裝備資料缺失' };
+  // 鎖定中不可分解
+  if (inst.locked) return { ok: false, reason: '裝備已鎖定（請先解鎖）' };
   // 裝備中不可分解
   for (const cid in STATE.characters) {
     const cs = STATE.characters[cid];
@@ -722,6 +732,7 @@ function batchDisassemble(criteria) {
   const toDis = [];
   for (const [instId, inst] of Object.entries(STATE.bag.equipment)) {
     if (equippedSet.has(instId)) continue;
+    if (inst.locked) continue;  // 已鎖定的不分解
     const def = GAME_DATA.findEquipment(inst.itemId);
     if (!def) continue;
     if (RARITY_ORDER[def.rarity] > maxRarityVal) continue;
@@ -948,7 +959,7 @@ window.GAME_STATE = {
   gainPotion, consumePotion, buyPotion, setPotionSlot, setPotionThreshold,
   getGlobalBuffMod, activateGlobalBuff,
   gainChest, consumeChest, openChest,
-  disassembleEquipment, batchDisassemble,
+  disassembleEquipment, batchDisassemble, toggleEquipLock,
   findItem, getCharacterBlueprint, createEquipInstance,
   dequeueUnlock,
   resonanceExpFor, getResonanceUnspent, allocateResonance, resetResonance, getResonanceCap,
