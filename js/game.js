@@ -394,8 +394,8 @@ function bindGlobalEvents() {
           alert('存檔版本不支援：' + data.version);
           return;
         }
-        if (parsedState.version !== 4) {
-          alert('存檔版本錯誤：預期 4，實際是 ' + JSON.stringify(parsedState.version));
+        if (parsedState.version !== 4 && parsedState.version !== 5) {
+          alert('存檔版本錯誤：預期 4 或 5，實際是 ' + JSON.stringify(parsedState.version));
           return;
         }
         if (!confirm('匯入會覆蓋當前進度（無法復原），確定？\n\n存檔詳情：\n' +

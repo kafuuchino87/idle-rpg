@@ -978,12 +978,17 @@ function onDungeonClear() {
   setTimeout(() => {
     const did = BATTLE.dungeonId;
     const isRaid = GAME_DATA.getDungeon(did)?.isRaid;
-    // 襲擊戰打完即停止自動戰鬥（玩家確認結算後才能再次手動進入）
-    const _autoCs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+    // Wave 29.3：用 BATTLE.charId（戰鬥角色）而非 activeCharId（UI 角色）取 cs
+    // 避免玩家切到別的角色看背包時，自動再戰判斷錯誤
+    const _autoCs = GAME_STATE.state.characters[BATTLE.charId];
     const _pendingJob = _autoCs ? (_autoCs.pendingJobChoice || 0) : 0;
     if (GAME_STATE.state.autoRun && !BATTLE.paused && !_pendingJob && !isRaid) {
       startBattle(did, BATTLE.charId);
     } else {
+      // 給玩家明確訊息為什麼停了
+      if (_pendingJob && _autoCs) {
+        logLine(`<span class="lg-fail">需先選擇轉職路線（${_autoCs.customName || _autoCs.id}）才能繼續自動再戰</span>`, '');
+      }
       stopBattle();
     }
   }, 400);
