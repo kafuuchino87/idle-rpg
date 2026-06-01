@@ -336,34 +336,47 @@ function healMissingStarterGear(p) {
     if (!cs.bag) cs.bag = makeEmptyBag();
     if (!cs.bag.equipment) cs.bag.equipment = {};
 
-    // 印出當前角色狀態
-    const bagItemSlots = {};
+    // 印出當前角色狀態（用 JSON 字串強制展開）
+    const bagItemDetails = [];
     for (const instId in cs.bag.equipment) {
       const inst = cs.bag.equipment[instId];
       const def = (typeof GAME_DATA !== 'undefined') && GAME_DATA.findEquipment(inst.itemId);
-      const sl = def ? def.slot : '?';
-      bagItemSlots[sl] = (bagItemSlots[sl] || 0) + 1;
+      bagItemDetails.push({
+        instId,
+        itemId: inst.itemId,
+        slot: def ? def.slot : '?',
+        rarity: def ? def.rarity : '?',
+        owner: def ? (def.owner || '-') : '?',
+      });
     }
-    console.log(`[Wave 30.4] ${cid} 狀態：cs.equip=`, JSON.parse(JSON.stringify(cs.equip)),
-      ' bag-slot-counts=', bagItemSlots);
+    console.log(`[Wave 30.5] ${cid} blueprintId=${cs.blueprintId}`);
+    console.log(`[Wave 30.5] ${cid} cs.equip=${JSON.stringify(cs.equip)}`);
+    console.log(`[Wave 30.5] ${cid} bag (${bagItemDetails.length} 件)=${JSON.stringify(bagItemDetails)}`);
 
     for (const [slot, starterId] of Object.entries(STARTER_MAP)) {
       // ── 第 1 層：清空指向不存在的 inst ──
       if (cs.equip[slot] && !cs.bag.equipment[cs.equip[slot]]) {
-        console.warn(`[Wave 30.4] ${cid} cs.equip[${slot}]=${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
+        console.warn(`[Wave 30.5] ${cid}.${slot} → cs.equip 指向 ${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
         cs.equip[slot] = null;
       }
-      if (cs.equip[slot]) continue;  // 有穿著的真實 instance → OK
+      if (cs.equip[slot]) {
+        console.log(`[Wave 30.5] ${cid}.${slot} 已穿著 ${cs.equip[slot]} → 跳過`);
+        continue;
+      }
 
       // ── 第 2 層：bag 裡找同 slot 最高階自動穿上 ──
       let bestInstId = null;
       let bestTier = -1;
+      let skipReasons = [];
       for (const instId in cs.bag.equipment) {
         const inst = cs.bag.equipment[instId];
         const def = GAME_DATA.findEquipment(inst.itemId);
-        if (!def || def.slot !== slot) continue;
-        // 武器位額外檢查 owner
-        if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) continue;
+        if (!def) { skipReasons.push(`${instId}:def-not-found`); continue; }
+        if (def.slot !== slot) continue;
+        if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) {
+          skipReasons.push(`${instId}:owner-mismatch(${def.owner}!=${cs.blueprintId})`);
+          continue;
+        }
         const tier = def.tier || 0;
         if (tier > bestTier) {
           bestTier = tier;
@@ -373,21 +386,24 @@ function healMissingStarterGear(p) {
       if (bestInstId) {
         cs.equip[slot] = bestInstId;
         const def = GAME_DATA.findEquipment(cs.bag.equipment[bestInstId].itemId);
-        console.log(`[Wave 30.4] ${cid} ${slot} 位自動穿上 ${def ? def.name : bestInstId}（tier ${bestTier}）`);
+        console.log(`[Wave 30.5] ✓ ${cid}.${slot} 自動穿上 ${def ? def.name : bestInstId}（tier ${bestTier}）`);
         continue;
+      }
+      if (skipReasons.length) {
+        console.log(`[Wave 30.5] ${cid}.${slot} bag 雖有同 slot 但全被過濾：${skipReasons.join(', ')}`);
       }
 
       // ── 第 3 層：bag 完全沒同 slot 裝備 → 補發 starter ──
       const def = GAME_DATA.findEquipment(starterId);
       if (!def) {
-        console.warn(`[Wave 30.4] starter ${starterId} 找不到`);
+        console.warn(`[Wave 30.5] starter ${starterId} 找不到`);
         continue;
       }
       const instId = 'inst_' + (p.nextInstId || 1);
       p.nextInstId = (p.nextInstId || 1) + 1;
       cs.bag.equipment[instId] = { itemId: starterId, forge: 0, affixes: [] };
       cs.equip[slot] = instId;
-      console.log(`[Wave 30.4] ✓ ${cid} 補發 ${slot} starter → ${def.name}（${instId}）`);
+      console.log(`[Wave 30.5] ✓ ${cid}.${slot} 補發 starter → ${def.name}（${instId}）`);
     }
   }
 }
