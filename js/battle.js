@@ -539,59 +539,30 @@ function doPlayerAction() {
   const cs = GAME_STATE.state.characters[BATTLE.charId];
   if (!cs) return;
 
-  // 候選池：裝備的技能（依槽位順序）且非普攻、CD 完成、buff 不重疊
+  // 嚴格按 slot 順序釋放：從 slot 1 開始，第一個能放的技能就放
+  // 條件：CD 完成 + MP 足夠 + 不是 buff 重複
   const equipped = (cs.equippedSkills || []).filter(s => s);
-  const candidates = [];
   for (let i = 0; i < equipped.length; i++) {
     const sid = equipped[i];
     const sk = GAME_DATA.SKILLS[sid];
-    if (!sk || sk.isBasic || BATTLE.skillCDs[sid]) continue;
-    // 已有同一個 skill buff 中才跳過（藥水 buff 不算重複）
+    if (!sk || sk.isBasic) continue;
+    if (BATTLE.skillCDs[sid]) continue;  // CD 中
+    // 已有同一個 skill buff 中跳過（藥水 buff 不算）
     if (sk.isBuff && sk.buff) {
       const dup = BATTLE.buffs.some(b => b._skillId === sid && b.dur > 0);
       if (dup) continue;
     }
-
-    // 優先順序權重（前面槽位 > 後面）
-    const slotW = 1 - (i / Math.max(1, equipped.length)) * 0.5;
-    // 技能威力（buff 給合理基準）
-    const m = Array.isArray(sk.mult) ? sk.mult.reduce((a, b) => a + b, 0) : (sk.mult || 0);
-    const power = sk.isBuff ? 1.5 : Math.max(0.4, m);
-    // 防 spam：近期用過的權重大降
-    const recentIdx = BATTLE.recentSkills.indexOf(sid);
-    const recentPen = recentIdx === -1 ? 1.0 : (0.12 + recentIdx * 0.22);
-
-    const score = slotW * power * recentPen + Math.random() * 0.35;
-    candidates.push({ sk, sid, score });
+    const mpCost = sk.mpCost || 90;
+    if (BATTLE.player.mp < mpCost) continue;  // MP 不足，跳這個技能
+    // 放這個技能
+    BATTLE.player.mp -= mpCost;
+    castSkill(sk, sid);
+    BATTLE.recentSkills.unshift(sid);
+    if (BATTLE.recentSkills.length > 4) BATTLE.recentSkills.pop();
+    return;
   }
-
-  if (candidates.length === 0) { basicAttack(); return; }
-  candidates.sort((a, b) => b.score - a.score);
-
-  // 85% 機率放最高分技能，15% 普攻給變化感
-  if (Math.random() < 0.85) {
-    const pick = candidates[0];
-    const mpCost = pick.sk.mpCost || 90;  // 技能消耗：90 / 180 / 270 三階固定
-    if (BATTLE.player.mp < mpCost) {
-      // MP 不足 → 嘗試挑費用低的可用技能；沒有就普攻
-      const cheap = candidates.find(c => (c.sk.mpCost || 90) <= BATTLE.player.mp);
-      if (cheap) {
-        BATTLE.player.mp -= (cheap.sk.mpCost || 90);
-        castSkill(cheap.sk, cheap.sid);
-        BATTLE.recentSkills.unshift(cheap.sid);
-        if (BATTLE.recentSkills.length > 4) BATTLE.recentSkills.pop();
-      } else {
-        basicAttack();
-      }
-    } else {
-      BATTLE.player.mp -= mpCost;
-      castSkill(pick.sk, pick.sid);
-      BATTLE.recentSkills.unshift(pick.sid);
-      if (BATTLE.recentSkills.length > 4) BATTLE.recentSkills.pop();
-    }
-  } else {
-    basicAttack();
-  }
+  // 沒有可放的技能 → 普攻
+  basicAttack();
 }
 
 function basicAttack() {
