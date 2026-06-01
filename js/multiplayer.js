@@ -303,9 +303,14 @@ function handleMessage(fromPeerId, data) {
           }
         }
       }
-      // Host 已通關 → Guest 跟著結算
+      // Host 已通關 → Guest 跟著結算（但要進戰鬥至少 3 秒避免被殘留訊息誤觸發）
       if (data.payload.cleared && !b._cleared && typeof window.onDungeonClear === 'function') {
-        window.onDungeonClear();
+        const elapsed = b.startTime ? (performance.now() - b.startTime) : 0;
+        if (elapsed >= 3000) {
+          window.onDungeonClear();
+        } else {
+          console.warn('[mp] 忽略過早的 cleared sync (elapsed', elapsed, 'ms)');
+        }
       }
     }
   }

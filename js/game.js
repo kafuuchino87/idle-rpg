@@ -249,9 +249,21 @@ function bindGlobalEvents() {
         if (!raw) { toast('請先貼上存檔字串', 'error'); return; }
         let data;
         try { data = JSON.parse(raw); }
-        catch (e) { toast('存檔格式錯誤（不是有效 JSON）', 'error'); return; }
+        catch (e) {
+          alert('JSON 解析失敗：\n\n' + e.message
+            + '\n\n字串長度：' + raw.length + ' 字'
+            + '\n開頭 100 字：\n' + raw.slice(0, 100)
+            + '\n\n結尾 100 字：\n' + raw.slice(-100)
+            + '\n\n可能原因：\n'
+            + '1. 貼上時被截斷（手機瀏覽器限制）\n'
+            + '2. 複製時沒全選\n'
+            + '3. 存檔包含特殊字元被破壞');
+          return;
+        }
         if (!data || data.version !== 'veilreach-export-v1' || !data.save) {
-          toast('這不是有效的存檔', 'error'); return;
+          alert('這不是有效的存檔字串。\n\n預期：{"save":"...","nickname":"...","version":"veilreach-export-v1"}\n\n收到的內容：\n'
+            + raw.slice(0, 200));
+          return;
         }
         // 預先驗證內層 STATE 是否能正確解析
         let parsedState;
@@ -1677,7 +1689,7 @@ function renderHudBars() {
       _lastPortraitKey = key;
     }
     document.getElementById('playerName').textContent = cs.customName;
-    const bp = GAME_STATE.getCharacterBlueprint(cs.id);
+    const bp = GAME_STATE.getCharacterBlueprint(cs.blueprintId || cs.id);
     let jobText = '一階弟子';
     if (cs.jobPath) {
       const p = bp.paths[cs.jobPath];
@@ -2449,7 +2461,7 @@ function renderSkills() {
   const root = document.getElementById('tabSkills');
   const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
   if (!cs) { root.innerHTML = ''; return; }
-  const bp = GAME_STATE.getCharacterBlueprint(cs.id);
+  const bp = GAME_STATE.getCharacterBlueprint(cs.blueprintId || cs.id);
   if (!cs.equippedSkills) cs.equippedSkills = [null, null, null, null, null];
   root.innerHTML = '';
 
@@ -2682,7 +2694,7 @@ function showJobChoice(tier) {
   const sub = document.getElementById('jobSub');
   const grid = document.getElementById('pathGrid');
   const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
-  const bp = GAME_STATE.getCharacterBlueprint(cs.id);
+  const bp = GAME_STATE.getCharacterBlueprint(cs.blueprintId || cs.id);
 
   title.textContent = `${tier === 1 ? '一' : tier === 2 ? '二' : '三'}轉 · ${tier === 1 ? '選擇你的道路' : '精修現有路線'}`;
   if (tier === 1) sub.textContent = '月凜在霜月家祖廟前佇立良久——是時候決定流派。';

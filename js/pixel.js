@@ -374,7 +374,9 @@ PIX.draw = function() {
   // 玩家
   const playerX = 80;
   const playerY = PIX.H * 0.65 - 128;
-  const bp = GAME_STATE.getCharacterBlueprint(PIX.currentScene.charId);
+  // 從 charId 推 blueprint id（去掉 #2 / #3 之類 slot 後綴）
+  const sceneBpId = (PIX.currentScene.charId || '').split('#')[0] || 'tsukirin';
+  const bp = GAME_STATE.getCharacterBlueprint(sceneBpId);
   const lunge = PIX.currentScene.playerAttack > 0 ? Math.sin((1 - PIX.currentScene.playerAttack / 12) * Math.PI) * 14 : 0;
   let palette = bp.palette;
   if (PIX.currentScene.foxMode) {

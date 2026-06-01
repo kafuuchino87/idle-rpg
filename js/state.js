@@ -205,7 +205,7 @@ function requireTierForLv(lv) {
 }
 
 function applyLevelUnlocks(cs, lv, queue) {
-  const bp = GAME_DATA.getCharacterBlueprint(cs.id);
+  const bp = GAME_DATA.getCharacterBlueprint(cs.blueprintId || cs.id);
   if (!bp || !bp.unlocks) return;
   for (const u of bp.unlocks) {
     if (u.lv !== lv) continue;
@@ -253,7 +253,7 @@ function selectJobPath(pathId, tier) {
 
   // 補解鎖：所有等級 <= 當前等級、路線符合的內容
   const newQueue = [];
-  const bp = GAME_DATA.getCharacterBlueprint(cs.id);
+  const bp = GAME_DATA.getCharacterBlueprint(cs.blueprintId || cs.id);
   // 只看：tier 切換之後新增的內容
   const tierLvMin = tier === 1 ? 25 : tier === 2 ? 50 : 75;
   const tierLvMax = tier === 1 ? 49 : tier === 2 ? 74 : 99;
