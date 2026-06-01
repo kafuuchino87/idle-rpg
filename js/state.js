@@ -163,6 +163,8 @@ function loadState() {
     }
     // Wave 29.1：每次載入都做一次自癒（防止舊存檔殘留問題）
     selfHealEquipment(parsed);
+    // Wave 30.1：補發遺失的 starter 練習裝（之前 selfHeal 拉鋸 bug 清空了分身）
+    healMissingStarterGear(parsed);
     return parsed;
   } catch (e) {
     console.warn('讀取存檔失敗', e);
@@ -307,6 +309,38 @@ function selfHealEquipment(p) {
         console.warn(`[Wave 30] cs.equip[${slot}]=${instId} 在任何 bag 都找不到，清空槽位（${cid}）`);
         cs.equip[slot] = null;
       }
+    }
+  }
+}
+
+// Wave 30.1：補救「完全裸體」的角色 — 沒穿任何裝備 + bag 也沒任何裝備
+// 這通常發生在 Wave 29.x 時期 selfHealEquipment 拉鋸 bug 把分身的 starter 清空後留下的空殼
+// 若偵測到 → 補發 starter 練習裝（跟新創角色一樣）
+function healMissingStarterGear(p) {
+  if (!p.characters) return;
+  const STARTER_MAP = {
+    weapon: 'eq-weap-prac', head: 'eq-head-prac', top: 'eq-top-prac',
+    bottom: 'eq-bot-prac', feet: 'eq-feet-prac',
+  };
+  for (const cid in p.characters) {
+    const cs = p.characters[cid];
+    if (!cs.equip) cs.equip = { weapon: null, head: null, top: null, bottom: null, feet: null };
+    if (!cs.bag) cs.bag = makeEmptyBag();
+    if (!cs.bag.equipment) cs.bag.equipment = {};
+
+    const hasAnyEquip = Object.values(cs.equip).some(v => v);
+    const hasAnyInBag = Object.keys(cs.bag.equipment).length > 0;
+
+    if (hasAnyEquip || hasAnyInBag) continue;  // 至少有一件 → 不補
+
+    console.log(`[Wave 30.1] ${cid} 完全沒裝備，補發 starter 練習裝`);
+    for (const [slot, itemId] of Object.entries(STARTER_MAP)) {
+      const def = GAME_DATA.findEquipment(itemId);
+      if (!def) continue;
+      const instId = 'inst_' + (p.nextInstId || 1);
+      p.nextInstId = (p.nextInstId || 1) + 1;
+      cs.bag.equipment[instId] = { itemId, forge: 0, affixes: [] };
+      cs.equip[slot] = instId;
     }
   }
 }
