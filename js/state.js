@@ -163,8 +163,14 @@ function loadState() {
     }
     // Wave 29.1：每次載入都做一次自癒（防止舊存檔殘留問題）
     selfHealEquipment(parsed);
-    // Wave 30.1：補發遺失的 starter 練習裝（之前 selfHeal 拉鋸 bug 清空了分身）
+    // Wave 30.3：補發遺失的 starter 練習裝（每 slot 獨立 + 強制存檔）
     healMissingStarterGear(parsed);
+    // Wave 30.3：載入後強制寫回 localStorage，確保 healMissingStarterGear 補的東西保存
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
+    } catch (e) {
+      console.warn('[Wave 30.3] 自癒後寫回 localStorage 失敗', e);
+    }
     return parsed;
   } catch (e) {
     console.warn('讀取存檔失敗', e);
@@ -313,46 +319,69 @@ function selfHealEquipment(p) {
   }
 }
 
-// Wave 30.2：補救「缺特定 slot 裝備」的角色 — 每個 slot 獨立判斷
-// 觸發條件（per slot）：
-//   1. cs.equip[slot] 為空（沒穿）
-//   2. cs.bag 裡也沒有任何同 slot 的裝備（玩家不是故意卸下放著）
-// → 補該 slot 的 starter 練習裝
+// Wave 30.3：補救「缺特定 slot 裝備」的角色 — 每個 slot 獨立判斷
+// 觸發條件（per slot）：cs.equip[slot] 為空 且 bag 裡也沒同 slot 裝備 → 補 starter
 function healMissingStarterGear(p) {
   if (!p.characters) return;
   const STARTER_MAP = {
     weapon: 'eq-weap-prac', head: 'eq-head-prac', top: 'eq-top-prac',
     bottom: 'eq-bot-prac', feet: 'eq-feet-prac',
   };
+  console.log('[Wave 30.3] healMissingStarterGear 開始檢查');
   for (const cid in p.characters) {
     const cs = p.characters[cid];
     if (!cs.equip) cs.equip = { weapon: null, head: null, top: null, bottom: null, feet: null };
     if (!cs.bag) cs.bag = makeEmptyBag();
     if (!cs.bag.equipment) cs.bag.equipment = {};
 
+    // 印出當前角色狀態，方便診斷
+    const bagItemSlots = {};
+    for (const instId in cs.bag.equipment) {
+      const inst = cs.bag.equipment[instId];
+      const def = (typeof GAME_DATA !== 'undefined') && GAME_DATA.findEquipment(inst.itemId);
+      const sl = def ? def.slot : '?';
+      bagItemSlots[sl] = (bagItemSlots[sl] || 0) + 1;
+    }
+    console.log(`[Wave 30.3] ${cid} 狀態：cs.equip=`, JSON.parse(JSON.stringify(cs.equip)),
+      ' bag-slot-counts=', bagItemSlots);
+
     for (const [slot, starterId] of Object.entries(STARTER_MAP)) {
-      if (cs.equip[slot]) continue;  // 該位有穿 → 跳過
-      // 檢查 bag 裡是否已有同 slot 任何裝備（即使是高階沒穿著的）
+      if (cs.equip[slot]) {
+        // 但要驗證指向的 instance 真的存在於自己 bag
+        if (!cs.bag.equipment[cs.equip[slot]]) {
+          console.warn(`[Wave 30.3] ${cid} cs.equip[${slot}]=${cs.equip[slot]} 但 bag 沒此 instance → 清空`);
+          cs.equip[slot] = null;
+        } else {
+          continue;  // 真的有穿
+        }
+      }
+      // 檢查 bag 裡是否已有同 slot 裝備（不限階）
       let hasAnyForSlot = false;
       for (const instId in cs.bag.equipment) {
         const inst = cs.bag.equipment[instId];
         const def = GAME_DATA.findEquipment(inst.itemId);
         if (def && def.slot === slot) {
-          // 武器位額外檢查 owner — 不是自己 blueprint 的武器不算
+          // 武器位額外檢查 owner
           if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) continue;
           hasAnyForSlot = true;
           break;
         }
       }
-      if (hasAnyForSlot) continue;  // bag 已有此 slot 裝備（玩家卸下放著）→ 不補
+      if (hasAnyForSlot) {
+        console.log(`[Wave 30.3] ${cid} ${slot} 位 bag 已有裝備（沒穿著）→ 不補發`);
+        continue;
+      }
       // 補發 starter
       const def = GAME_DATA.findEquipment(starterId);
-      if (!def) continue;
+      if (!def) {
+        console.warn(`[Wave 30.3] starter ${starterId} 找不到`);
+        continue;
+      }
       const instId = 'inst_' + (p.nextInstId || 1);
       p.nextInstId = (p.nextInstId || 1) + 1;
       cs.bag.equipment[instId] = { itemId: starterId, forge: 0, affixes: [] };
       cs.equip[slot] = instId;
-      console.log(`[Wave 30.2] ${cid} 缺 ${slot} 裝備，補發 ${starterId}（${def.name}）`);
+      console.log(`[Wave 30.3] ✓ ${cid} 缺 ${slot} 裝備，補發 ${starterId}（${def.name}）→ ${instId}`);
     }
   }
 }
