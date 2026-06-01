@@ -197,7 +197,6 @@ function broadcastBattleState() {
     jobTier: cs ? (cs.jobTier || 0) : 0,
     pathName: cs && cs.pathName ? cs.pathName : '',
   };
-  const b = window.BATTLE;
   if (!b || !b.charId) {
     broadcast('player-state', { inBattle: false, ...base });
     return;
