@@ -357,7 +357,14 @@ function tickBattle(dt) {
     }
     if (BATTLE._endlessTimeLeft <= 0 && !BATTLE._cleared) {
       BATTLE._endlessTimeLeft = 0;
-      onEndlessTimeUp();
+      // guest 端：等 host 廣播 endless-end（避免兩端時間差導致資料不同步）
+      // fallback：等 3 秒沒收到就自己結算（保險，避免 host 斷線時 guest 卡死）
+      if (BATTLE._mpMode === 'guest') {
+        BATTLE._endlessGuestWait = (BATTLE._endlessGuestWait || 0) + dtSec;
+        if (BATTLE._endlessGuestWait >= 3.0) onEndlessTimeUp();
+      } else {
+        onEndlessTimeUp();
+      }
       return;
     }
   }
@@ -964,6 +971,10 @@ function updateEndlessTier() {
 function onEndlessTimeUp() {
   if (BATTLE._cleared) return;
   BATTLE._cleared = true;
+  // host 通知所有 guest：用權威 totalTeamDmg 強制結算（保證兩端同時結束 + 數據一致）
+  if (BATTLE._mpMode === 'host' && window.MP_API && MP_API.broadcastEndlessEnd) {
+    MP_API.broadcastEndlessEnd(BATTLE._endlessTeamDmg || 0);
+  }
   const reached = BATTLE._endlessReached;
   const tiers = BATTLE._endlessTiers || [];
   const totalDmg = BATTLE._endlessTeamDmg;

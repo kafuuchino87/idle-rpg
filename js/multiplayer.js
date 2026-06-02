@@ -168,6 +168,13 @@ function broadcastEnemySync() {
   });
 }
 
+// ===== 無盡塔結束：host 廣播權威終局數據 → guest 強制同步結算 =====
+// 確保兩端同時結束 + 用 host 統計的 totalTeamDmg（含完整隊伍累積）
+function broadcastEndlessEnd(totalTeamDmg) {
+  if (MP.role !== 'host' || !MP.peer) return;
+  broadcast('endless-end', { totalTeamDmg: totalTeamDmg || 0, ts: Date.now() });
+}
+
 // ===== B 路線聖光治癒：廣播給隊友按各自 maxHp 計算回血量 =====
 function broadcastHealAlly(pct, skillName) {
   if (MP.role === 'solo' || !MP.peer) {
@@ -376,6 +383,21 @@ function handleMessage(fromPeerId, data) {
       }
     }
   }
+  // 收到 host 廣播的「無盡塔結束」→ guest 強制同步結算
+  if (data.type === 'endless-end' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (b && b.running && b._endlessMode && !b._cleared) {
+      // 用 host 的權威 totalTeamDmg 覆寫本地（補上 host 還沒同步到 guest 的傷害）
+      const hostTotal = data.payload.totalTeamDmg || 0;
+      if (hostTotal > (b._endlessTeamDmg || 0)) {
+        b._endlessTeamDmg = hostTotal;
+        if (typeof window.updateEndlessTier === 'function') window.updateEndlessTier();
+      }
+      // 強制結束 timer，立刻結算
+      b._endlessTimeLeft = 0;
+      if (typeof window.onEndlessTimeUp === 'function') window.onEndlessTimeUp();
+    }
+  }
   // 收到 B 路線聖光治癒 → 按自己 maxHp 補血
   if (data.type === 'heal-ally') {
     console.log('[heal-ally][recv] role=' + MP.role + ' running=' + (window.BATTLE?.running) + ' maxHp=' + (window.BATTLE?.player?.maxHp));
@@ -514,6 +536,7 @@ window.MP_API = {
   broadcastBattleState,
   broadcastEnemySync,
   broadcastHealAlly,
+  broadcastEndlessEnd,
   reportDamageDealt,
   sendTo,
   isHost,
