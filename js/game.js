@@ -2717,6 +2717,32 @@ function renderBag() {
     root.appendChild(cSec);
   }
 
+  // ===== 入場券 =====
+  const passes = _activeBag().passes || {};
+  const passEntries = Object.entries(passes).filter(([, q]) => q > 0);
+  if (passEntries.length > 0) {
+    const pSec = document.createElement('div');
+    pSec.className = 'bag-section';
+    pSec.innerHTML = `<h4>入場券 <span style="color:var(--muted);font-size:10px;font-weight:400">用於進入特定副本</span></h4>`;
+    const pGrid = document.createElement('div');
+    pGrid.className = 'bag-grid';
+    for (const [pid, qty] of passEntries) {
+      const pd = GAME_DATA.findPass(pid);
+      if (!pd) continue;
+      const cell = document.createElement('div');
+      cell.className = `bag-item ${pd.rarity}`;
+      cell.innerHTML = `
+        <div class="iname" style="color:var(--shard)">${pd.icon || '✦'} ${pd.name}</div>
+        <div class="itag">${pd.rarity}</div>
+        <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${pd.desc}</div>
+        <div class="qty">${qty}</div>
+      `;
+      pGrid.appendChild(cell);
+    }
+    pSec.appendChild(pGrid);
+    root.appendChild(pSec);
+  }
+
   // ===== 藥水 / 卷軸 =====
   const potions = _activeBag().potions || {};
   const potionEntries = Object.entries(potions).filter(([, q]) => q > 0);
