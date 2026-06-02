@@ -290,8 +290,9 @@ function handleMessage(fromPeerId, data) {
   if (data.type === 'enemy-sync' && MP.role === 'guest') {
     const b = window.BATTLE;
     // Wave 29.2：guest 沒在 host 的副本 → 自動跟上（解決後加入的 guest 沒收到 raid-launch 的問題）
+    // Wave 31：!b.running 也要跟（修「結算後 host 開同關卡，guest 還停在上一場結束狀態」）
     const hostDungeonId = data.payload.dungeonId;
-    const notInRightDungeon = !b || !b.dungeonId || b.dungeonId !== hostDungeonId || b._mpMode !== 'guest';
+    const notInRightDungeon = !b || !b.dungeonId || b.dungeonId !== hostDungeonId || b._mpMode !== 'guest' || !b.running;
     if (notInRightDungeon && typeof window.startBattle === 'function') {
       // 防抖：800ms 內不要重複進入（避免每 200ms 一次 enemy-sync 反覆觸發）
       const now = Date.now();
@@ -300,13 +301,21 @@ function handleMessage(fromPeerId, data) {
         const d = (typeof GAME_DATA !== 'undefined') && GAME_DATA.getDungeon(hostDungeonId);
         const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
         if (d && cs && (!d.requiredLv || cs.level >= d.requiredLv)) {
+          // 無盡塔 fallback 路徑也要扣自己 1 張入場券（與 raid-launch 路徑一致）
+          if (d.isEndless) {
+            const ok = GAME_STATE.consumePass('pass-endless', 1);
+            if (!ok) {
+              if (typeof toast === 'function') toast('你的入場券不足，無法跟進無盡塔', 'error');
+              return;
+            }
+          }
           console.log('[Wave 29.2] 自動跟上 host 副本：' + hostDungeonId);
-          if (typeof toast === 'function') toast('自動跟上隊伍：' + d.name, 'gold');
+          if (typeof toast === 'function') toast('自動跟上隊伍：' + d.name + (d.isEndless ? '（扣 1 張通行證）' : ''), 'gold');
           if (typeof PIXEL !== 'undefined') {
             try { PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id }); } catch (_) {}
           }
-          // 關掉副本選擇/襲擊戰預覽視窗
-          ['winRaidPreview', 'winDungeon'].forEach(id => {
+          // 關掉副本選擇/襲擊戰預覽視窗 + 結算彈窗
+          ['winRaidPreview', 'winDungeon', 'resultOverlay'].forEach(id => {
             const w = document.getElementById(id);
             if (w) { w.style.display = ''; w.classList.add('hidden'); }
           });

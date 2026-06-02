@@ -1719,7 +1719,14 @@ window.showRaidPreview = function(dungeonId) {
         toast('入場券不足！從寶箱中可低機率掉落「虛無通行證」', 'error');
         return;
       }
-      toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
+      // 房主開無盡塔也要廣播，讓 guest 自動跟進並扣自己入場券
+      if (window.MP_API && MP_API.isHost() && MP_API.isConnected()) {
+        MP_API.broadcastRaidLaunch(d.id);
+        const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
+        toast(`房主開無盡塔 — ${teamSize} 人團進入：${d.name}（扣 1 張通行證）`, 'gold');
+      } else {
+        toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
+      }
     } else {
       // 房主：廣播 raid-launch 給朋友
       if (window.MP_API && MP_API.isHost()) {
@@ -1730,6 +1737,9 @@ window.showRaidPreview = function(dungeonId) {
         toast(`進入襲擊戰：${d.name}`, 'error');
       }
     }
+    // 關閉上一場的結算彈窗（避免擋住戰鬥畫面）
+    const resultOverlay = document.getElementById('resultOverlay');
+    if (resultOverlay) resultOverlay.classList.add('hidden');
     win.style.display = '';
     win.classList.add('hidden');
     PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
@@ -3855,12 +3865,22 @@ function hookMpCallbacks() {
         toast(`你的等級不足（需 Lv ${d.requiredLv}），無法跟團`, 'error');
         return;
       }
-      // 關閉所有副本相關視窗
-      ['winRaidPreview', 'winDungeon'].forEach(id => {
+      // 無盡塔：guest 也要扣自己 1 張入場券（按設定「每人扣 1 張」）
+      if (d.isEndless) {
+        const ok = GAME_STATE.consumePass('pass-endless', 1);
+        if (!ok) {
+          toast(`你的入場券不足，無法跟進無盡塔（房主已開戰）`, 'error');
+          return;
+        }
+        toast(`房主開無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
+      } else {
+        toast(`房主開戰：${d.name}`, 'gold');
+      }
+      // 關閉所有副本相關視窗 + 上一場結算彈窗
+      ['winRaidPreview', 'winDungeon', 'resultOverlay'].forEach(id => {
         const w = document.getElementById(id);
         if (w) { w.style.display = ''; w.classList.add('hidden'); }
       });
-      toast(`房主開戰：${d.name}`, 'gold');
       PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
       startBattle(d.id, GAME_STATE.state.activeCharId);
     }
