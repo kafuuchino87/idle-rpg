@@ -502,10 +502,13 @@ function tickBattle(dt) {
 }
 
 // BOSS 護盾即死機制（雙影獵討）
-// shieldConfig: { firstAt, interval, hpPct, breakTime }
-// shieldTimer 倒數至 0 → 給 BOSS 護盾 = maxHp × hpPct，breakTime 倒數開始
-// shield 沒打破且 breakTime 倒數至 0 → onBattleFail 全隊即死
+// shieldConfig: { firstAt, interval, hpFixed?, hpPct?, breakTime }
+//   hpFixed: 固定護盾值（例：10_000_000）
+//   hpPct: 按 BOSS maxHp 比例（fallback）
+// 多人：host 為權威，guest 只接收 enemy-sync 同步護盾資料、即死靠 host 廣播 raid-instant-kill
 function tickBossShield(dt) {
+  // guest 端不執行護盾邏輯 — 跟著 host enemy-sync 同步
+  if (BATTLE._mpMode === 'guest') return;
   const e = BATTLE.enemy;
   if (!e || !e.shieldConfig || e.hp <= 0) return;
   const cfg = e.shieldConfig;
@@ -513,7 +516,8 @@ function tickBossShield(dt) {
   if (e.shield <= 0) {
     e.shieldTimer -= dt;
     if (e.shieldTimer <= 0) {
-      e.shield = Math.floor(e.maxHp * cfg.hpPct);
+      // hpFixed 優先；否則用 hpPct × maxHp
+      e.shield = cfg.hpFixed ? Math.floor(cfg.hpFixed) : Math.floor(e.maxHp * (cfg.hpPct || 0.05));
       e.shieldMax = e.shield;
       e.shieldBreakTimer = cfg.breakTime;
       if (typeof logLine === 'function') logLine(`<span class="lg-fail">⚠ ${e.name} 凝聚虛無護盾！${cfg.breakTime} 秒內打破否則全隊即死！</span>`, '');
@@ -527,10 +531,11 @@ function tickBossShield(dt) {
     if (typeof logLine === 'function') logLine(`<span class="lg-fail">✘ 護盾未破！${e.name} 釋放虛無吞噬，全隊即死！</span>`, '');
     BATTLE.player.hp = 0;
     BATTLE._dead = true;
-    if (BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') {
-      if (window.MP_API) MP_API.broadcast('player-dead', { dungeonId: BATTLE.dungeonId });
-    } else {
-      // solo：直接觸發戰敗
+    // host：廣播 raid-instant-kill 給所有 guest 同步即死
+    if (BATTLE._mpMode === 'host' && window.MP_API) {
+      MP_API.broadcast('raid-instant-kill', { dungeonId: BATTLE.dungeonId, reason: 'shield' });
+      MP_API.broadcast('player-dead', { dungeonId: BATTLE.dungeonId });
+    } else if (BATTLE._mpMode === 'solo') {
       if (typeof onBattleFail === 'function') onBattleFail();
     }
   }

@@ -535,7 +535,7 @@ const REGIONS = [
           // Phase 2 — 虛宙星龍：護盾即死機制 + HP/atk 強化（真正考驗）
           { name: '虛宙星龍', portrait: 'assets/portraits/raid-dragon.png',
             hpMul: 2.2, atkMul: 1.4,
-            shield: { firstAt: 10, interval: 15, hpPct: 0.08, breakTime: 5 } },
+            shield: { firstAt: 10, interval: 15, hpFixed: 10_000_000, breakTime: 5 } },
         ],
         // 通關必掉星淵材料；低機率掉永恆星辰；UR 武器只掉 ur2 系列（不掉 ur1）
         guaranteedMats: { '星淵碎片': [3, 5], '星龍鱗片': [2, 4] },

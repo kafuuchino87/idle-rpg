@@ -163,6 +163,11 @@ function broadcastEnemySync() {
       isBoss: !!e.isBoss,
       atk: e.atk,
       def: e.def,
+      // 護盾資料（雙影獵討 Phase 2 護盾即死機制）— guest 只顯示，邏輯由 host 跑
+      shield: e.shield || 0,
+      shieldMax: e.shieldMax || 0,
+      shieldBreakTimer: e.shieldBreakTimer || 0,
+      shieldTimer: e.shieldTimer || 0,
     })),
     cleared: !!b._cleared,
   });
@@ -359,16 +364,26 @@ function handleMessage(fromPeerId, data) {
           def: e.def,
           isBoss: e.isBoss,
           nextAtk: 1.4 + Math.random() * 0.4,
+          // 護盾資料（guest 同步顯示，邏輯由 host 跑）
+          shield: e.shield || 0,
+          shieldMax: e.shieldMax || 0,
+          shieldBreakTimer: e.shieldBreakTimer || 0,
+          shieldTimer: e.shieldTimer || 0,
         }));
         b.enemy = b.currentWave[0] || null;
         b.freezes = 0;
         if (b.onUpdate) b.onUpdate();
       } else {
-        // 結構一致 → 只覆寫 HP（只能降）
+        // 結構一致 → 覆寫 HP（只能降）+ 護盾資料
         for (let i = 0; i < Math.min(b.currentWave.length, hostEnemies.length); i++) {
           if (b.currentWave[i] && hostEnemies[i]) {
             const newHp = hostEnemies[i].hp;
             if (newHp < b.currentWave[i].hp) b.currentWave[i].hp = newHp;
+            // 護盾即時同步
+            b.currentWave[i].shield = hostEnemies[i].shield || 0;
+            b.currentWave[i].shieldMax = hostEnemies[i].shieldMax || 0;
+            b.currentWave[i].shieldBreakTimer = hostEnemies[i].shieldBreakTimer || 0;
+            b.currentWave[i].shieldTimer = hostEnemies[i].shieldTimer || 0;
           }
         }
       }
@@ -381,6 +396,15 @@ function handleMessage(fromPeerId, data) {
           console.warn('[mp] 忽略過早的 cleared sync (elapsed', elapsed, 'ms)');
         }
       }
+    }
+  }
+  // 收到 host 廣播的「raid-instant-kill」→ guest 強制即死（雙影獵討護盾未破）
+  if (data.type === 'raid-instant-kill' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (b && b.running && !b._dead) {
+      if (typeof window.logLine === 'function') window.logLine(`<span class="lg-fail">✘ 護盾未破！全隊即死！</span>`, '');
+      b.player.hp = 0;
+      b._dead = true;
     }
   }
   // 收到 host 廣播的「無盡塔結束」→ guest 強制同步結算
@@ -432,11 +456,26 @@ function handleMessage(fromPeerId, data) {
         b._endlessTeamDmg = (b._endlessTeamDmg || 0) + data.payload.dmg;
         if (typeof window.updateEndlessTier === 'function') window.updateEndlessTier();
       }
-      // Host 額外責任：實際扣敵人 HP（權威）— 無盡塔不扣（HP 是 Infinity）
+      // Host 額外責任：實際扣敵人 HP / shield（權威）— 無盡塔不扣（HP 是 Infinity）
       if (!b._endlessMode && MP.role === 'host' && b.currentWave && b.currentWaveIdx === data.payload.waveIdx) {
         const e = b.currentWave[data.payload.enemyIdx];
         if (e && e.hp > 0) {
-          e.hp -= data.payload.dmg;
+          const dmg = data.payload.dmg;
+          // 護盾優先（雙影獵討）：傷害先扣 shield，溢出才扣 HP
+          if (e.shield > 0) {
+            const absorbed = Math.min(e.shield, dmg);
+            e.shield -= absorbed;
+            const overflow = dmg - absorbed;
+            if (overflow > 0) e.hp -= overflow;
+            if (e.shield <= 0 && e.shieldConfig) {
+              e.shield = 0; e.shieldMax = 0;
+              e.shieldBreakTimer = 0;
+              e.shieldTimer = e.shieldConfig.interval;
+              if (typeof window.logLine === 'function') window.logLine(`<span class="lg-clear">✓ 護盾粉碎！</span>`, '');
+            }
+          } else {
+            e.hp -= dmg;
+          }
           if (e.hp <= 0 && typeof window.onEnemyDown === 'function') {
             window.onEnemyDown();
           }
