@@ -182,12 +182,7 @@ function broadcastEndlessEnd(totalTeamDmg) {
 
 // ===== B 路線聖光治癒：廣播給隊友按各自 maxHp 計算回血量 =====
 function broadcastHealAlly(pct, skillName) {
-  if (MP.role === 'solo' || !MP.peer) {
-    console.log('[heal-ally][send] 略過：role=' + MP.role + ' peer=' + !!MP.peer);
-    return;
-  }
-  const conns = Object.keys(MP.connections).length;
-  console.log('[heal-ally][send] pct=' + pct + ' name=' + skillName + ' conns=' + conns);
+  if (MP.role === 'solo' || !MP.peer) return;
   broadcast('heal-ally', { pct, name: skillName || '' });
 }
 
@@ -423,22 +418,16 @@ function handleMessage(fromPeerId, data) {
     }
   }
   // 收到 B 路線聖光治癒 → 按自己 maxHp 補血
-  if (data.type === 'heal-ally') {
-    console.log('[heal-ally][recv] role=' + MP.role + ' running=' + (window.BATTLE?.running) + ' maxHp=' + (window.BATTLE?.player?.maxHp));
-    if (MP.role === 'host' || MP.role === 'guest') {
-      const b = window.BATTLE;
-      if (b && b.running && b.player && b.player.maxHp > 0) {
-        const pct = Math.max(0, Math.min(1, data.payload.pct || 0));
-        const amount = Math.floor(b.player.maxHp * pct);
-        console.log('[heal-ally][apply] pct=' + pct + ' amount=' + amount + ' hp_before=' + b.player.hp);
-        if (amount > 0) {
-          b.player.hp = Math.min(b.player.maxHp, b.player.hp + amount);
-          const allyName = (MP.players[fromPeerId] && MP.players[fromPeerId].nickname) || '隊友';
-          if (typeof window.logLine === 'function') window.logLine(`<span class="lg-clear">${allyName} 的 ${data.payload.name || '聖光'} 治療你 +${amount} HP</span>`, '');
-          if (typeof window.floatDamage === 'function') window.floatDamage('+' + amount, 'heal');
-        }
-      } else {
-        console.log('[heal-ally][skip] battle 不在執行中或玩家未就緒');
+  if (data.type === 'heal-ally' && (MP.role === 'host' || MP.role === 'guest')) {
+    const b = window.BATTLE;
+    if (b && b.running && b.player && b.player.maxHp > 0) {
+      const pct = Math.max(0, Math.min(1, data.payload.pct || 0));
+      const amount = Math.floor(b.player.maxHp * pct);
+      if (amount > 0) {
+        b.player.hp = Math.min(b.player.maxHp, b.player.hp + amount);
+        const allyName = (MP.players[fromPeerId] && MP.players[fromPeerId].nickname) || '隊友';
+        if (typeof window.logLine === 'function') window.logLine(`<span class="lg-clear">${allyName} 的 ${data.payload.name || '聖光'} 治療你 +${amount} HP</span>`, '');
+        if (typeof window.floatDamage === 'function') window.floatDamage('+' + amount, 'heal');
       }
     }
   }

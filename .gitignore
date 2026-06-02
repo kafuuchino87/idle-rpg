@@ -1,3 +1,5 @@
 .claude/
 *.bak
 *.tmp
+# 開發測試工具（一鍵畢業帳號 cheat）— 不推上 GitHub Pages
+cheat*.html
