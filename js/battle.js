@@ -179,6 +179,10 @@ function buildWaves(dungeon) {
     boss.isEndlessBoss = true;
     return [[boss]];
   }
+  // 多階 BOSS RAID（skipMobs + bosses 陣列）：不出小怪，每階一波 BOSS
+  if (dungeon.skipMobs && Array.isArray(dungeon.bosses) && dungeon.bosses.length > 0) {
+    return dungeon.bosses.map(b => [makeEnemy(b.name, dungeon, true, b)]);
+  }
   const waves = [];
   const waveCount = 4 + Math.floor(Math.random() * 2);  // 4-5 波小兵
   for (let w = 0; w < waveCount; w++) {
@@ -282,7 +286,7 @@ function rollMaterialDrops(d, matMul) {
   return result;
 }
 
-function makeEnemy(name, dungeon, isBoss) {
+function makeEnemy(name, dungeon, isBoss, bossConfig) {
   // 無盡塔：BOSS def=0（玩家傷害不打折）、atk 基礎值低（隨時間遞增）
   if (dungeon.isEndless) {
     return {
@@ -294,7 +298,7 @@ function makeEnemy(name, dungeon, isBoss) {
   }
   const factor = isBoss ? 4 : 1;
   const diffMul = dungeon.difficultyMul || 1;  // 影響 HP / def，但 atk 用獨立倍率
-  const baseHp = Math.max(60, Math.floor(dungeon.cp * 1.6 * factor * diffMul));
+  let baseHp = Math.max(60, Math.floor(dungeon.cp * 1.6 * factor * diffMul));
   // 主線練等友善化：atkCoef 0.08 → 0.055（降 31%），讓玩家在練角時不會被秒
   let atkCoef = 0.055;
   let atkDiffMul = diffMul;
@@ -306,12 +310,22 @@ function makeEnemy(name, dungeon, isBoss) {
   }
   // 副本可單獨覆寫 atkCoef（神級經驗副本壓低，保護高 def 但 HP 不夠的畢業玩家）
   if (typeof dungeon.atkCoefOverride === 'number') atkCoef = dungeon.atkCoefOverride;
-  return {
-    name, isBoss,
-    hp: baseHp, maxHp: baseHp,
-    atk: Math.floor(dungeon.cp * atkCoef * (isBoss ? 1.5 : 1) * atkDiffMul + 4),
-    def: Math.floor(dungeon.cp * 0.04 * (isBoss ? 1.4 : 1) * diffMul),
-  };
+  let atk = Math.floor(dungeon.cp * atkCoef * (isBoss ? 1.5 : 1) * atkDiffMul + 4);
+  const def = Math.floor(dungeon.cp * 0.04 * (isBoss ? 1.4 : 1) * diffMul);
+  // 多階 BOSS bossConfig 覆寫（hpMul / atkMul / shield 配置 / portrait）
+  if (bossConfig) {
+    if (bossConfig.hpMul) baseHp = Math.floor(baseHp * bossConfig.hpMul);
+    if (bossConfig.atkMul) atk = Math.floor(atk * bossConfig.atkMul);
+  }
+  const e = { name, isBoss, hp: baseHp, maxHp: baseHp, atk, def };
+  if (bossConfig?.shield) {
+    e.shieldConfig = bossConfig.shield;       // { firstAt, interval, hpPct, breakTime }
+    e.shieldTimer = bossConfig.shield.firstAt; // 倒數至下次護盾出現
+    e.shield = 0; e.shieldMax = 0;             // 當前護盾量
+    e.shieldBreakTimer = 0;                    // 護盾出現後的破盾倒數
+  }
+  if (bossConfig?.portrait) e.portrait = bossConfig.portrait;
+  return e;
 }
 
 function spawnNextEnemy() {
@@ -385,6 +399,9 @@ function tickBattle(dt) {
 
   // 凍結倒數
   if (BATTLE.freezes > 0) BATTLE.freezes -= dtSec;
+
+  // BOSS 護盾即死機制（雙影獵討的 shieldConfig）
+  tickBossShield(dtSec);
 
   // buff/dot/summon
   tickBuffs(dtSec);
@@ -477,6 +494,41 @@ function tickBattle(dt) {
           onBattleFail();
         }
       }
+    }
+  }
+}
+
+// BOSS 護盾即死機制（雙影獵討）
+// shieldConfig: { firstAt, interval, hpPct, breakTime }
+// shieldTimer 倒數至 0 → 給 BOSS 護盾 = maxHp × hpPct，breakTime 倒數開始
+// shield 沒打破且 breakTime 倒數至 0 → onBattleFail 全隊即死
+function tickBossShield(dt) {
+  const e = BATTLE.enemy;
+  if (!e || !e.shieldConfig || e.hp <= 0) return;
+  const cfg = e.shieldConfig;
+  // 護盾未啟動：倒數至 shieldTimer 達 0 → 啟動護盾
+  if (e.shield <= 0) {
+    e.shieldTimer -= dt;
+    if (e.shieldTimer <= 0) {
+      e.shield = Math.floor(e.maxHp * cfg.hpPct);
+      e.shieldMax = e.shield;
+      e.shieldBreakTimer = cfg.breakTime;
+      if (typeof logLine === 'function') logLine(`<span class="lg-fail">⚠ ${e.name} 凝聚虛無護盾！${cfg.breakTime} 秒內打破否則全隊即死！</span>`, '');
+    }
+    return;
+  }
+  // 護盾啟動中：破盾倒數
+  e.shieldBreakTimer -= dt;
+  if (e.shieldBreakTimer <= 0) {
+    // 5 秒沒破 → 全隊即死
+    if (typeof logLine === 'function') logLine(`<span class="lg-fail">✘ 護盾未破！${e.name} 釋放虛無吞噬，全隊即死！</span>`, '');
+    BATTLE.player.hp = 0;
+    BATTLE._dead = true;
+    if (BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') {
+      if (window.MP_API) MP_API.broadcast('player-dead', { dungeonId: BATTLE.dungeonId });
+    } else {
+      // solo：直接觸發戰敗
+      if (typeof onBattleFail === 'function') onBattleFail();
     }
   }
 }
@@ -838,6 +890,19 @@ function applyDamage(dmg, isCrit) {
     BATTLE._endlessTotalDmg += dmg;
     BATTLE._endlessTeamDmg += dmg;
     updateEndlessTier();
+  } else if (BATTLE.enemy.shield > 0) {
+    // 護盾優先扣（雙影獵討機制）；溢出傷害扣 HP
+    const absorbed = Math.min(BATTLE.enemy.shield, dmg);
+    BATTLE.enemy.shield -= absorbed;
+    const overflow = dmg - absorbed;
+    if (overflow > 0) BATTLE.enemy.hp -= overflow;
+    if (BATTLE.enemy.shield <= 0) {
+      // 護盾打破 → 重置計時，等下次出現
+      BATTLE.enemy.shield = 0; BATTLE.enemy.shieldMax = 0;
+      BATTLE.enemy.shieldBreakTimer = 0;
+      BATTLE.enemy.shieldTimer = BATTLE.enemy.shieldConfig.interval;
+      if (typeof logLine === 'function') logLine(`<span class="lg-clear">✓ 護盾粉碎！</span>`, '');
+    }
   } else {
     BATTLE.enemy.hp -= dmg;
   }
@@ -884,6 +949,18 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
       BATTLE._endlessTotalDmg += dmg;
       BATTLE._endlessTeamDmg += dmg;
       updateEndlessTier();
+    } else if (e.shield > 0) {
+      // 護盾優先扣 + 溢出傷害給 HP
+      const absorbed = Math.min(e.shield, dmg);
+      e.shield -= absorbed;
+      const overflow = dmg - absorbed;
+      if (overflow > 0) e.hp -= overflow;
+      if (e.shield <= 0) {
+        e.shield = 0; e.shieldMax = 0;
+        e.shieldBreakTimer = 0;
+        e.shieldTimer = e.shieldConfig.interval;
+        if (typeof logLine === 'function') logLine(`<span class="lg-clear">✓ 護盾粉碎！</span>`, '');
+      }
     } else {
       e.hp -= dmg;
     }
@@ -1089,6 +1166,27 @@ function onDungeonClear() {
     GAME_STATE.gainMaterial(name, qty, _battleCharId);  // 材料給戰鬥角色
     matMsgs.push(`${name} +${qty}`);
   }
+  // 副本層級必掉材料（雙影獵討星淵碎片 / 星龍鱗片）
+  if (d.guaranteedMats) {
+    for (const [n, [min, max]] of Object.entries(d.guaranteedMats)) {
+      const q = min + Math.floor(Math.random() * (max - min + 1));
+      GAME_STATE.gainMaterial(n, q, _battleCharId);
+      matDrops[n] = (matDrops[n] || 0) + q;
+      matMsgs.push(`★ ${n} +${q}`);
+    }
+  }
+  // 副本層級機率掉特殊材料（永恆星辰）
+  if (Array.isArray(d.bonusMats)) {
+    for (const b of d.bonusMats) {
+      if (Math.random() < (b.chance || 0)) {
+        const [min, max] = b.qty || [1, 1];
+        const q = min + Math.floor(Math.random() * (max - min + 1));
+        GAME_STATE.gainMaterial(b.name, q, _battleCharId);
+        matDrops[b.name] = (matDrops[b.name] || 0) + q;
+        matMsgs.push(`✨ ${b.name} +${q}`);
+      }
+    }
+  }
   const mat = matMsgs[0] ? matMsgs[0].split(' ')[0] : '粗鋼';
   const matRoll = Object.values(matDrops).reduce((a, b) => a + b, 0);
 
@@ -1127,6 +1225,10 @@ function onDungeonClear() {
       slot = GAME_DATA.EQUIPMENT_SLOTS[Math.floor(Math.random() * GAME_DATA.EQUIPMENT_SLOTS.length)];
     }
     let pool = GAME_DATA.ITEMS.equipment.filter(e => e.slot === slot && e.tier <= tierCap && e.tier >= Math.max(1, forceMinTier));
+    // 副本層級覆寫：武器位限定特定 id 清單（雙影獵討只掉 ur2 系列）
+    if (slot === 'weapon' && Array.isArray(d.weaponDropOverride)) {
+      pool = GAME_DATA.ITEMS.equipment.filter(e => d.weaponDropOverride.includes(e.id));
+    }
     // 雪羽 Phase 7：武器掉落不過濾 owner — 完全隨機，掉到別角色武器只能分解拿材料
     // （之前是 pool = pool.filter(e => e.owner === bpId)，現在拿掉以增加驚喜感）
     // 高機率掉低階、低機率掉高階（偏向當前等級）

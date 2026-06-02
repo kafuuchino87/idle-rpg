@@ -2088,12 +2088,23 @@ function renderEnemyCards() {
     }
     wave.forEach((e, i) => {
       const card = document.createElement('div');
-      card.className = 'fighter-card enemy-card' + (BATTLE._endlessMode ? ' endless-boss-card' : '');
+      const useBigCard = BATTLE._endlessMode || e.portrait;  // 多階 BOSS 也用大卡
+      card.className = 'fighter-card enemy-card' + (useBigCard ? ' endless-boss-card' : '');
       card.dataset.idx = i;
-      // 無盡塔 BOSS：用立繪取代像素圖、卡片大張
+      // 立繪優先順序：BOSS 個別 portrait > 無盡塔 dungeon.bossPortrait > 像素 portrait
       const dungeon = GAME_DATA.getDungeon(BATTLE.dungeonId);
-      const portraitHtml = (BATTLE._endlessMode && dungeon && dungeon.bossPortrait)
-        ? `<img src="${dungeon.bossPortrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`
+      let portraitHtml = '';
+      if (e.portrait) {
+        portraitHtml = `<img src="${e.portrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`;
+      } else if (BATTLE._endlessMode && dungeon && dungeon.bossPortrait) {
+        portraitHtml = `<img src="${dungeon.bossPortrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`;
+      }
+      // 護盾條（只有有 shieldConfig 的 BOSS 才渲染）
+      const shieldHtml = e.shieldConfig
+        ? `<div class="enemy-shield" style="margin-top:2px;height:6px;background:#3a1a4a;border-radius:3px;overflow:hidden;display:none">
+             <div class="shield-fill" style="height:100%;background:linear-gradient(90deg,#ff5e5e,#a000ff);width:0%"></div>
+           </div>
+           <div class="shield-text" style="font-size:10px;color:#ff8a8a;text-align:center;margin-top:1px;display:none"></div>`
         : '';
       card.innerHTML = `
         <div class="card-frame">
@@ -2106,10 +2117,11 @@ function renderEnemyCards() {
           <div class="hp-fill"></div>
           <span class="hp-text"></span>
         </div>
+        ${shieldHtml}
       `;
       root.appendChild(card);
-      // 非無盡塔加像素 portrait（無盡塔用 img 立繪）
-      if (!BATTLE._endlessMode) {
+      // 沒立繪的加像素 portrait
+      if (!portraitHtml) {
         const portrait = card.querySelector('.portrait');
         if (portrait && typeof renderEnemyPortrait === 'function') {
           const cv = renderEnemyPortrait(e.name, 140);
@@ -2146,6 +2158,21 @@ function renderEnemyCards() {
     } else {
       if (fill) fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
       if (txt) txt.textContent = `${Math.max(0, Math.floor(e.hp))} / ${e.maxHp}`;
+    }
+    // 護盾條 + 即死倒數
+    const shieldEl = card.querySelector('.enemy-shield');
+    const shieldTxt = card.querySelector('.shield-text');
+    if (shieldEl && shieldTxt) {
+      if (e.shield > 0) {
+        shieldEl.style.display = 'block';
+        shieldTxt.style.display = 'block';
+        const shFill = shieldEl.querySelector('.shield-fill');
+        if (shFill) shFill.style.width = ((e.shield / e.shieldMax) * 100) + '%';
+        shieldTxt.textContent = `⚠ 護盾 ${Math.floor(e.shield).toLocaleString()} / ${e.shieldMax.toLocaleString()} · 破盾 ${Math.max(0, e.shieldBreakTimer).toFixed(1)}s`;
+      } else {
+        shieldEl.style.display = 'none';
+        shieldTxt.style.display = 'none';
+      }
     }
     card.classList.toggle('active-target', e === BATTLE.enemy);
     // Debuff badges

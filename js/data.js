@@ -519,6 +519,42 @@ const REGIONS = [
         bossPortrait: 'assets/portraits/raid-calamity.png',
         enemies: ['虛影侍從（災厄）', '夢魘碎片（災厄）', '鏡面碎魂（災厄）', '逆世執事（災厄）'],
         boss: '災厄·虛影鏡之主宰' },
+      // ===== 星淵之獵（雙階 BOSS RAID，組隊本，必須有補師才能通關）=====
+      // Phase 1：星淵獸（豹）→ Phase 2：虛宙星龍（最終 BOSS）
+      // 兩階都有「護盾即死」機制：5 秒內不破護盾全隊即死
+      { id: 'raid-stardragon', name: '星淵 · 雙影獵討', cp: 600000, unlock: 'raid-calamity', requiredLv: 99,
+        isRaid: true, baseTime: 60, expBase: 50000, goldBase: 80000,
+        difficultyMul: 25, atkCoefOverride: 0.005,
+        skipMobs: true,  // 不出小怪，直接兩階 BOSS
+        bosses: [
+          { name: '星淵獸', portrait: 'assets/portraits/raid-beast.png',
+            shield: { firstAt: 12, interval: 18, hpPct: 0.06, breakTime: 5 } },
+          { name: '虛宙星龍', portrait: 'assets/portraits/raid-dragon.png',
+            hpMul: 2.2, atkMul: 1.4,  // 最終 BOSS 強化
+            shield: { firstAt: 10, interval: 15, hpPct: 0.08, breakTime: 5 } },
+        ],
+        // 通關必掉星淵材料；低機率掉永恆星辰；UR 武器只掉 ur2 系列（不掉 ur1）
+        guaranteedMats: { '星淵碎片': [3, 5], '星龍鱗片': [2, 4] },
+        bonusMats: [{ name: '永恆星辰', chance: 0.05, qty: [1, 1] }],
+        weaponDropOverride: ['eq-weap-ur2', 'eq-mirror-ur2'],  // 武器位掉落限定此清單
+        lore: [
+          '星淵的封印崩裂於萬年沉睡之後。',
+          '夜空中現出兩道光影 — 黑豹的咆哮與星龍的哀鳴。',
+          '它們是宇宙誕生時的原初獸群，從未死去，只是被遺忘。',
+          '只有同心協力的隊伍才能踏出歸途。',
+        ],
+        warning: '此為雙階 BOSS 副本，建議三人團 + 補師（雪羽 B 路線）才能通關。BOSS 每段時間會凝聚護盾，5 秒內不打破則全隊即死。',
+        rewards: [
+          { label: '經驗值', value: '50,000', color: 'var(--exp)' },
+          { label: '金幣',   value: '80,000', color: 'var(--gold)' },
+          { label: '★ 星淵碎片', value: '必掉 ×3~5（UR 武器材料）', color: 'var(--shard)' },
+          { label: '★ 星龍鱗片', value: '必掉 ×2~4（UR 武器材料）', color: 'var(--shard)' },
+          { label: '★ 永恆星辰', value: '低機率掉落（極限強化用）', color: 'var(--hp-enemy)' },
+          { label: 'UR 武器', value: '星淵·噬月矛 / 星龍·夢淵鏡（2% 機率）', color: 'var(--hp-enemy)' },
+        ],
+        bossPortrait: 'assets/portraits/raid-dragon.png',  // 預覽用龍當代表
+        enemies: [],
+        boss: '虛宙星龍' },
     ],
   },
 ];
@@ -798,6 +834,10 @@ const ITEMS = {
     '蝕痕神核': { tag: '終焉', rarity: 'UR', icon: '✦' },
     '終焉印石': { tag: '終焉', rarity: 'UR', icon: '✶' },
     '異界之鎚': { tag: '鍛造', rarity: 'UR', icon: '🔨' },
+    // 星淵雙影獵討材料（雙階 BOSS RAID 專屬）
+    '星淵碎片': { tag: '星淵', rarity: 'UR', icon: '★' },
+    '星龍鱗片': { tag: '星淵', rarity: 'UR', icon: '★' },
+    '永恆星辰': { tag: '星淵', rarity: 'UR', icon: '☆' },
   },
   // 5 部位 × 5 階品質
   equipment: [
@@ -891,6 +931,22 @@ const ITEMS = {
       fixed: {
         label: '虛無之眼：攻擊 +(160+強化×16)、暴擊 +10%、暴傷 +30%、對王 +(20%+強化×1.2%)、技能傷害 +(20%+強化×1.2%)',
         effect: { atk: 'forge:160+16', crit: 0.10, critDmg: 0.30, vsBoss: 'forge:0.20+0.012', skillDmg: 'forge:0.20+0.012' },
+      },
+    },
+
+    // ===== 星淵之獵 UR 武器（雙影獵討專屬掉落，比 ur1 更強）=====
+    { id: 'eq-weap-ur2', slot: 'weapon', owner: 'tsukirin', name: '星淵·噬月矛', rarity: 'UR', tier: 5,
+      stats: { atk: 1100, crit: 0.30, critDmg: 1.00 },
+      fixed: {
+        label: '星淵噬月：攻擊 +(220+強化×22)、暴擊 +12%、暴傷 +50%、對王 +(25%+強化×1.5%)、技能傷害 +(25%+強化×1.5%)、減傷 +5%',
+        effect: { atk: 'forge:220+22', crit: 0.12, critDmg: 0.50, vsBoss: 'forge:0.25+0.015', skillDmg: 'forge:0.25+0.015', dmgReduce: 0.05 },
+      },
+    },
+    { id: 'eq-mirror-ur2', slot: 'weapon', owner: 'eve', name: '星龍·夢淵鏡', rarity: 'UR', tier: 5,
+      stats: { atk: 1100, crit: 0.30, critDmg: 1.00 },
+      fixed: {
+        label: '夢淵星龍：攻擊 +(220+強化×22)、暴擊 +12%、暴傷 +50%、對王 +(25%+強化×1.5%)、技能傷害 +(25%+強化×1.5%)、減傷 +5%',
+        effect: { atk: 'forge:220+22', crit: 0.12, critDmg: 0.50, vsBoss: 'forge:0.25+0.015', skillDmg: 'forge:0.25+0.015', dmgReduce: 0.05 },
       },
     },
   ],
