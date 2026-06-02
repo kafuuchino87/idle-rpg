@@ -1048,7 +1048,7 @@ const SMITH_EFFECTS = [
   { stage: 18, label: 'MP 上限 +30',   effect: { maxMp: 30 } },
   { stage: 21, label: '速度 +3%',      effect: { spd: 0.03 } },
   { stage: 24, label: 'CD 縮減 +3%',   effect: { cdReduce: 0.03 } },
-  { stage: 27, label: '暴擊率 +3%',    effect: { crit: 0.03 } },
+  { stage: 27, label: '無視防禦 +5%',  effect: { defPierce: 0.05 } },
   { stage: 30, label: '★攻擊力 +60',   effect: { atk: 60 } },
 ];
 const SMITH_MAX_STAGE = 30;
