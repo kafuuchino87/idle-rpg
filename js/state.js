@@ -1006,6 +1006,10 @@ function exchangeShard(exchangeId) {
     const bag = activeBag();
     if (bag) bag.rerollTokens = (bag.rerollTokens || 0) + r.qty;
     label = `詞綴重抽券 ×${r.qty}`;
+  } else if (r.kind === 'potion') {
+    gainPotion(r.id, r.qty);
+    const p = GAME_DATA.findPotion(r.id);
+    label = `${p ? p.name : r.id} ×${r.qty}`;
   }
   scheduleSave();
   return { ok: true, label, costShard: ex.cost };

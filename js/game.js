@@ -963,7 +963,6 @@ function renderShop() {
     { key: 'mp', title: '秘力藥水', desc: '戰鬥中綁定第二槽自動回復；MP 用盡技能會跳過' },
     { key: 'buff', title: '戰鬥藥劑', desc: '綁定第三槽，效果結束時自動再喝' },
     { key: 'scroll', title: '加成卷軸', desc: '使用後啟動全域 buff（30 分鐘），不需綁定' },
-    { key: 'forge', title: '強化卷軸', desc: '極限強化（+11 ~ +18）時可使用，保護降級' },
   ];
   let html = '';
   for (const s of sections) {
