@@ -742,6 +742,61 @@ button.primary:hover { filter: brightness(1.1); }
   background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 100%);
   pointer-events: none;
 }
+/* ===== BOSS 護盾即死視覺（雙影獵討 Phase 2 機制） ===== */
+.enemy-card.shield-active {
+  animation: shield-pulse 0.8s ease-in-out infinite;
+}
+.enemy-card.shield-active .card-frame {
+  border: 3px solid #ff2e6e !important;
+  box-shadow:
+    0 0 30px rgba(255, 46, 110, 0.8),
+    0 0 60px rgba(160, 0, 255, 0.6),
+    inset 0 0 30px rgba(160, 0, 255, 0.4) !important;
+}
+@keyframes shield-pulse {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50%      { filter: brightness(1.2) saturate(1.6); }
+}
+/* 護盾倒數大字（蓋在 portrait 中央） */
+.shield-countdown-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  font-size: 96px;
+  font-weight: 900;
+  color: #ff2e6e;
+  text-shadow:
+    0 0 20px #ff2e6e,
+    0 0 40px #a000ff,
+    0 0 60px #fff,
+    2px 2px 0 #000;
+  z-index: 10;
+  animation: shield-count-pulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes shield-count-pulse {
+  from { transform: scale(1); opacity: 0.95; }
+  to   { transform: scale(1.15); opacity: 1; }
+}
+/* 護盾條（替換原本暗色背景，改成更明顯的紫紅漸層） */
+.enemy-shield {
+  height: 10px !important;
+  background: #1a0a1a !important;
+  border: 1px solid #5a1a3a;
+  box-shadow: 0 0 8px rgba(255, 46, 110, 0.5);
+}
+.shield-fill {
+  background: linear-gradient(90deg, #ff2e6e 0%, #a000ff 100%) !important;
+  box-shadow: 0 0 12px #ff2e6e;
+  animation: shield-fill-pulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes shield-fill-pulse {
+  from { opacity: 0.85; }
+  to   { opacity: 1; }
+}
 
 .fighter-card {
   display: flex;

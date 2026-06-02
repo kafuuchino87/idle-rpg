@@ -2101,16 +2101,19 @@ function renderEnemyCards() {
       } else if (BATTLE._endlessMode && dungeon && dungeon.bossPortrait) {
         portraitHtml = `<img src="${dungeon.bossPortrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`;
       }
-      // 護盾條（只有有 shieldConfig 的 BOSS 才渲染）
+      // 護盾條 + 大字倒數覆蓋層（只在有 shieldConfig 的 BOSS 渲染）
       const shieldHtml = e.shieldConfig
-        ? `<div class="enemy-shield" style="margin-top:2px;height:6px;background:#3a1a4a;border-radius:3px;overflow:hidden;display:none">
-             <div class="shield-fill" style="height:100%;background:linear-gradient(90deg,#ff5e5e,#a000ff);width:0%"></div>
-           </div>
-           <div class="shield-text" style="font-size:10px;color:#ff8a8a;text-align:center;margin-top:1px;display:none"></div>`
+        ? `<div class="enemy-shield" style="margin-top:4px;border-radius:5px;overflow:hidden;display:none">
+             <div class="shield-fill" style="height:100%;width:0%"></div>
+           </div>`
+        : '';
+      // 護盾倒數覆蓋（顯示大字 N 秒倒數，只在有 shieldConfig 才有）
+      const countdownHtml = e.shieldConfig
+        ? `<div class="shield-countdown-overlay" style="display:none">0</div>`
         : '';
       card.innerHTML = `
         <div class="card-frame">
-          <div class="portrait">${portraitHtml}</div>
+          <div class="portrait">${portraitHtml}${countdownHtml}</div>
           <div class="enemy-debuffs"></div>
         </div>
         <div class="card-name">${e.name}</div>
@@ -2161,20 +2164,24 @@ function renderEnemyCards() {
       if (fill) fill.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + '%';
       if (txt) txt.textContent = `${Math.max(0, Math.floor(e.hp))} / ${e.maxHp}`;
     }
-    // 護盾條 + 即死倒數
+    // 護盾條 + 大字倒數覆蓋（取代文字版）
     const shieldEl = card.querySelector('.enemy-shield');
-    const shieldTxt = card.querySelector('.shield-text');
-    if (shieldEl && shieldTxt) {
-      if (e.shield > 0) {
+    const countdownEl = card.querySelector('.shield-countdown-overlay');
+    if (e.shield > 0) {
+      card.classList.add('shield-active');
+      if (shieldEl) {
         shieldEl.style.display = 'block';
-        shieldTxt.style.display = 'block';
         const shFill = shieldEl.querySelector('.shield-fill');
         if (shFill) shFill.style.width = ((e.shield / e.shieldMax) * 100) + '%';
-        shieldTxt.textContent = `⚠ 護盾 ${Math.floor(e.shield).toLocaleString()} / ${e.shieldMax.toLocaleString()} · 破盾 ${Math.max(0, e.shieldBreakTimer).toFixed(1)}s`;
-      } else {
-        shieldEl.style.display = 'none';
-        shieldTxt.style.display = 'none';
       }
+      if (countdownEl) {
+        countdownEl.style.display = 'flex';
+        countdownEl.textContent = Math.max(0, e.shieldBreakTimer).toFixed(1);
+      }
+    } else {
+      card.classList.remove('shield-active');
+      if (shieldEl) shieldEl.style.display = 'none';
+      if (countdownEl) countdownEl.style.display = 'none';
     }
     card.classList.toggle('active-target', e === BATTLE.enemy);
     // Debuff badges
