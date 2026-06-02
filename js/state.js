@@ -727,9 +727,10 @@ function resonanceExpFor(rl) {
   return Math.floor(1000 * Math.pow(1.04, rl));
 }
 
-// 共鳴上限規則：atk/def/hp 無上限；其他屬性每屬性最多 50 點
-const RESONANCE_DEFAULT = { atk: 0, def: 0, hp: 0, crit: 0, critDmg: 0, spd: 0, dmgReduce: 0, cdReduce: 0, vsBoss: 0, skillDmg: 0, maxMp: 0 };
+// 共鳴上限規則：atk/def/hp 無上限；expMul/goldMul 上限 100；其他屬性 50 點
+const RESONANCE_DEFAULT = { atk: 0, def: 0, hp: 0, crit: 0, critDmg: 0, spd: 0, dmgReduce: 0, cdReduce: 0, vsBoss: 0, skillDmg: 0, maxMp: 0, expMul: 0, goldMul: 0 };
 const RESONANCE_UNCAPPED = new Set(['atk', 'def', 'hp']);
+const RESONANCE_CAP_100 = new Set(['expMul', 'goldMul']);
 const RESONANCE_CAP = 50;
 
 function _normalizeResonance() {
@@ -742,7 +743,9 @@ function getResonanceUnspent() {
   return STATE.resonance - total;
 }
 function getResonanceCap(stat) {
-  return RESONANCE_UNCAPPED.has(stat) ? Infinity : RESONANCE_CAP;
+  if (RESONANCE_UNCAPPED.has(stat)) return Infinity;
+  if (RESONANCE_CAP_100.has(stat)) return 100;
+  return RESONANCE_CAP;
 }
 
 function allocateResonance(stat, count) {
@@ -1578,5 +1581,5 @@ window.GAME_STATE = {
   findItem, getCharacterBlueprint, createEquipInstance,
   dequeueUnlock,
   resonanceExpFor, getResonanceUnspent, allocateResonance, resetResonance, getResonanceCap,
-  RESONANCE_CAP, RESONANCE_UNCAPPED,
+  RESONANCE_CAP, RESONANCE_UNCAPPED, RESONANCE_CAP_100,
 };

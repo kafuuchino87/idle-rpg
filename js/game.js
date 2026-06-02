@@ -1358,6 +1358,8 @@ function renderResonance() {
     { key: 'vsBoss',    name: '對 BOSS', delta: '+1% / 點' },
     { key: 'skillDmg',  name: '技能傷害',delta: '+0.5% / 點' },
     { key: 'maxMp',     name: 'MP 上限', delta: '+10 / 點' },
+    { key: 'expMul',    name: '經驗加倍', delta: '+2% / 點（上限 100 點 = +200%）' },
+    { key: 'goldMul',   name: '金幣加倍', delta: '+2% / 點（上限 100 點 = +200%）' },
   ];
   const rows = stats.map(s => {
     const cur = pts[s.key] || 0;

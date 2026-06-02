@@ -1047,9 +1047,13 @@ function onDungeonClear() {
   // 全域 buff 加成（卷軸）
   const expBuff = GAME_STATE.getGlobalBuffMod('expMul');
   const goldBuff = GAME_STATE.getGlobalBuffMod('goldMul');
+  // 共鳴點數加成（每點 +2%，上限 100 點 = +200%）
+  const resPts = GAME_STATE.state.resonancePoints || {};
+  const resExpBonus = (resPts.expMul || 0) * 0.02;
+  const resGoldBonus = (resPts.goldMul || 0) * 0.02;
   const dropBuff = GAME_STATE.getGlobalBuffMod('dropMul');
-  expMul *= (1 + expBuff);
-  goldMul *= (1 + goldBuff);
+  expMul *= (1 + expBuff + resExpBonus);
+  goldMul *= (1 + goldBuff + resGoldBonus);
   equipDropChance *= (1 + dropBuff);
   matMul *= (1 + dropBuff);
 
