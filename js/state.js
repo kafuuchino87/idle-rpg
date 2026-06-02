@@ -948,6 +948,7 @@ function effectiveStats(charId) {
     cdReduceRaw: s._cdReduceRaw,   // 套用上限前的原始值（UI 用）
     vsBoss: s.vsBoss,
     skillDmg: s.skillDmg || 0,
+    defPierce: s.defPierce || 0,
     maxMp: Math.floor(s.maxMp),
     mpRegen: Math.round(s.mpRegen * 10) / 10,
     mpPerHit: Math.floor(s.mpPerHit),
