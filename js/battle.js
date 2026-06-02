@@ -293,13 +293,14 @@ function makeEnemy(name, dungeon, isBoss) {
   const factor = isBoss ? 4 : 1;
   const diffMul = dungeon.difficultyMul || 1;  // 影響 HP / def，但 atk 用獨立倍率
   const baseHp = Math.max(60, Math.floor(dungeon.cp * 1.6 * factor * diffMul));
-  let atkCoef = 0.08;
+  // 主線練等友善化：atkCoef 0.08 → 0.055（降 31%），讓玩家在練角時不會被秒
+  let atkCoef = 0.055;
   let atkDiffMul = diffMul;
   if (dungeon.isRaid) {
     atkCoef = 0.025;
     atkDiffMul = Math.min(diffMul, 2.0);
   } else if (dungeon.special) {
-    atkCoef = 0.05;
+    atkCoef = 0.035;  // 特殊副本也跟著降（從 0.05）
   }
   return {
     name, isBoss,
