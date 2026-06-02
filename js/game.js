@@ -2386,12 +2386,22 @@ function renderForge() {
         ? `<span style="color:#5dd07c">成功 ${(cost.successRate*100).toFixed(0)}%</span> · <span style="color:#999">失敗 ${(cost.failRate*100).toFixed(0)}%</span> · <span style="color:#ff5e5e">降級 ${(cost.downgradeRate*100).toFixed(0)}%</span>`
         : `<span>成功率 ${(cost.successRate*100).toFixed(0)}%</span>`;
       const tier = cost.isAdvanced ? `<span style="color:#ff8a3c;font-size:10px;margin-left:4px">[極限強化]</span>` : '';
+      // 保護卷選項（只在極限強化顯示）
+      const PROTECT_ID = 'scroll-forge-protect';
+      const protectHave = (_activeBag().potions && _activeBag().potions[PROTECT_ID]) || 0;
+      const protectHtml = cost.canDowngrade
+        ? `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-top:3px;cursor:pointer">
+             <input type="checkbox" data-forge-protect="${instId}" ${protectHave > 0 ? '' : 'disabled'}>
+             <span>使用強化保護卷（持有 ${protectHave} 張，降級時觸發保護）</span>
+           </label>`
+        : '';
       bottom = `
         <div class="forge-cost">
           <span class="${goldOk ? 'ok' : 'no'}">金 ${cost.goldCost.toLocaleString()}</span>
           ${matsHtml}
         </div>
         <div class="forge-cost" style="margin-top:2px">${rateHtml}${tier}</div>
+        ${protectHtml}
         <button class="primary" ${goldOk && allMatOk ? '' : 'disabled'} data-forge-inst="${instId}">強化 +${lvl + 1}</button>
       `;
     }
@@ -2406,7 +2416,12 @@ function renderForge() {
   }
 
   root.querySelectorAll('button[data-forge-inst]').forEach(btn => {
-    btn.onclick = () => doForge(btn.dataset.forgeInst);
+    btn.onclick = () => {
+      const instId = btn.dataset.forgeInst;
+      const cb = root.querySelector(`input[data-forge-protect="${instId}"]`);
+      const useProtect = !!(cb && cb.checked);
+      doForge(instId, useProtect);
+    };
   });
 }
 
@@ -2543,7 +2558,7 @@ function statLabel(k, v, forge) {
   return `${names[k] || k} ${display}`;
 }
 
-function doForge(instId) {
+function doForge(instId, useProtect) {
   const inst = _activeBag().equipment[instId];
   if (!inst) return;
   const curLv = inst.forge || 0;
@@ -2554,26 +2569,37 @@ function doForge(instId) {
   for (const m of cost.mats) {
     if ((bag[m.name] || 0) < m.qty) return toast(`${m.name} 不足`, 'error');
   }
+  // 保護卷檢查（只對極限強化有效）
+  const PROTECT_ID = 'scroll-forge-protect';
+  const protectHave = (_activeBag().potions && _activeBag().potions[PROTECT_ID]) || 0;
+  const willUseProtect = !!useProtect && cost.canDowngrade && protectHave > 0;
+  if (useProtect && cost.canDowngrade && protectHave <= 0) {
+    return toast('保護卷不足，請至商店購買 (50 魂晶/張)', 'error');
+  }
   // 扣資源
   GAME_STATE.gainGold(-cost.goldCost);
   for (const m of cost.mats) GAME_STATE.consumeMaterial(m.name, m.qty);
+  if (willUseProtect) GAME_STATE.consumePotion(PROTECT_ID, 1);
   // 三段擲骰
   const roll = Math.random();
   if (roll < cost.successRate) {
     inst.forge = curLv + 1;
-    toast(`★ 強化成功！+${inst.forge}`, 'gold');
+    toast(`★ 強化成功！+${inst.forge}` + (willUseProtect ? '（保護卷未消耗效果）' : ''), 'gold');
   } else if (roll < cost.successRate + cost.failRate) {
     // 純失敗（材料消耗，等級不變）
-    toast(`強化失敗，材料消耗，等級不變`, 'error');
+    toast(`強化失敗，材料消耗，等級不變` + (willUseProtect ? '（保護卷未觸發）' : ''), 'error');
   } else if (cost.canDowngrade) {
-    // 降級（不能低於安全等級 FORGE_SAFE_LEVEL）
-    const safeLv = GAME_DATA.FORGE_SAFE_LEVEL || 10;
-    if (curLv > safeLv) {
-      inst.forge = curLv - 1;
-      toast(`✘ 強化失敗降級！+${inst.forge}`, 'error');
+    // 降級命中 — 若用保護卷則轉為「等級不變」
+    if (willUseProtect) {
+      toast(`✓ 保護卷觸發！本來降級，等級維持 +${curLv}`, 'gold');
     } else {
-      // 已在安全層級之上的「失敗 = 等級不變」（10→11 失敗不會掉回 9）
-      toast(`強化失敗（安全層級保護，等級不變）`, 'error');
+      const safeLv = GAME_DATA.FORGE_SAFE_LEVEL || 10;
+      if (curLv > safeLv) {
+        inst.forge = curLv - 1;
+        toast(`✘ 強化失敗降級！+${inst.forge}`, 'error');
+      } else {
+        toast(`強化失敗（安全層級保護，等級不變）`, 'error');
+      }
     }
   } else {
     toast(`強化失敗，材料消耗`, 'error');

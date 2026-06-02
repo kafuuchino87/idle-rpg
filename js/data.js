@@ -623,6 +623,8 @@ const POTIONS = [
   { id: 'scroll-exp-30',  name: '經驗加倍卷',   type: 'buff', kind: 'global', stat: 'expMul',  value: 1.0, duration: 1800, rarity: 'SR', cost: { gold: 2500, mats: { '精鋼': 3 } }, desc: '經驗 +100%，持續 30 分鐘', category: 'scroll' },
   { id: 'scroll-gold-30', name: '黃金加倍卷',   type: 'buff', kind: 'global', stat: 'goldMul', value: 0.5, duration: 1800, rarity: 'SR', cost: { gold: 2500, mats: { '精鋼': 3 } }, desc: '金錢 +50%，持續 30 分鐘', category: 'scroll' },
   { id: 'scroll-drop-30', name: '幸運神符',     type: 'buff', kind: 'global', stat: 'dropMul', value: 0.30, duration: 1800, rarity: 'SSR', cost: { gold: 6000, mats: { '星鋼': 3, '神鋼': 1 } }, desc: '裝備掉率與材料掉落 +30%，持續 30 分鐘', category: 'scroll' },
+  // ── 強化保護卷（一次性消耗，敲極限強化時可選用） ──
+  { id: 'scroll-forge-protect', name: '強化保護卷', type: 'forge-protect', rarity: 'SR', cost: { shard: 50 }, desc: '極限強化 (+11 ~ +18) 時使用，失敗保護不會降級 (50 魂晶/張)', category: 'scroll' },
 ];
 function findPotion(id) { return POTIONS.find(p => p.id === id); }
 

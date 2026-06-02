@@ -1368,15 +1368,18 @@ function buyPotion(pid, qty = 1) {
   if (!p) return { ok: false, reason: '找不到該藥水' };
   const bag = activeBag();
   if (!bag) return { ok: false, reason: '無 active 角色' };
-  const totalGold = p.cost.gold * qty;
-  if (STATE.gold < totalGold) return { ok: false, reason: '金幣不足' };
+  const totalGold = (p.cost.gold || 0) * qty;
+  const totalShard = (p.cost.shard || 0) * qty;
+  if (totalGold > 0 && STATE.gold < totalGold) return { ok: false, reason: '金幣不足' };
+  if (totalShard > 0 && STATE.shard < totalShard) return { ok: false, reason: `魂晶不足 (需 ${totalShard})` };
   if (p.cost.mats) {
     for (const [name, q] of Object.entries(p.cost.mats)) {
       const need = q * qty;
       if ((bag.materials[name] || 0) < need) return { ok: false, reason: `${name} 不足 (需 ${need})` };
     }
   }
-  gainGold(-totalGold);
+  if (totalGold > 0) gainGold(-totalGold);
+  if (totalShard > 0) gainShard(-totalShard);
   if (p.cost.mats) for (const [name, q] of Object.entries(p.cost.mats)) consumeMaterial(name, q * qty);
   gainPotion(pid, qty);
   return { ok: true };
