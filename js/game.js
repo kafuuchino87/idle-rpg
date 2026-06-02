@@ -2319,9 +2319,15 @@ function renderDungeonList() {
             showRaidPreview(d.id);
             return;
           }
+          // 特殊副本（修行/材料/神祠）：host 開戰時廣播給隊友自動跟上
+          if (d.special && window.MP_API && MP_API.isHost() && MP_API.isConnected()) {
+            MP_API.broadcastRaidLaunch(d.id);
+            const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
+            toast(`房主開特殊副本 — ${teamSize} 人團：${d.name}`, 'gold');
+          }
           PIXEL.setScene({ regionId: r.id });
           const ok = startBattle(d.id, activeId);
-          if (ok) toast(`出征 ${d.name}`);
+          if (ok && !(d.special && window.MP_API && MP_API.isHost())) toast(`出征 ${d.name}`);
           renderDungeonList();
         };
       }

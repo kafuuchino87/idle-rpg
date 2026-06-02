@@ -140,9 +140,9 @@ function startBattle(dungeonId, charId) {
   BATTLE._teamWipeFired = false;  // 重置全隊滅旗標
   BATTLE._wavePending = false;  // 重置 wave 切換 pending 旗標
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
-  // 多人模式判定：襲擊戰 / 無盡塔 + 已連線 → host / guest，其他 → solo
+  // 多人模式判定：襲擊戰 / 無盡塔 / 特殊副本 + 已連線 → host / guest，其他 → solo
   BATTLE._mpMode = 'solo';
-  if ((dungeon.isRaid || dungeon.isEndless) && window.MP_API && MP_API.isConnected()) {
+  if ((dungeon.isRaid || dungeon.isEndless || dungeon.special) && window.MP_API && MP_API.isConnected()) {
     BATTLE._mpMode = MP_API.isHost() ? 'host' : 'guest';
   }
   BATTLE._lastEnemySync = 0;
@@ -302,6 +302,8 @@ function makeEnemy(name, dungeon, isBoss) {
   } else if (dungeon.special) {
     atkCoef = 0.035;  // 特殊副本也跟著降（從 0.05）
   }
+  // 副本可單獨覆寫 atkCoef（神級經驗副本壓低，保護高 def 但 HP 不夠的畢業玩家）
+  if (typeof dungeon.atkCoefOverride === 'number') atkCoef = dungeon.atkCoefOverride;
   return {
     name, isBoss,
     hp: baseHp, maxHp: baseHp,
