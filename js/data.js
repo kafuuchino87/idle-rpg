@@ -435,10 +435,10 @@ const REGIONS = [
         bonusMengjingChance: 0.12,
         enemies: ['神鋼巨人', '永晶守衛'], boss: '神鋼巨像（神格）' },
       // ===== 神級經驗副本（畢業 + 終焉套後農共鳴經驗）=====
-      // 設計：給平均 DPS 200 萬玩家，戰鬥節奏 5-10 秒，經驗 4x sp-exp
+      // 設計：給平均 DPS 200 萬玩家，戰鬥節奏 15-20 秒（HP/atk 3x 強化）
       { id: 'sp-exp-elite', name: '神祠秘境', cp: 100000, unlock: 'sp-exp', requiredLv: 99,
         special: 'exp', baseTime: 60, expBase: 50000, goldBase: 35000,
-        difficultyMul: 2.5, atkCoefOverride: 0.012,  // atk 獨立壓低，保護畢業玩家不被秒
+        difficultyMul: 7.5, atkCoefOverride: 0.012,  // diffMul 7.5：HP/atk 整體 ×3（從 2.5）
         dropMats: ['神鋼', '永晶', '夢晶', '蝕痕碎片'],
         enemies: ['神祠執行者', '虛位幻獸'], boss: '神祠主祭（神格・神）' },
     ],
