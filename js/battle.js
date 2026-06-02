@@ -878,7 +878,8 @@ function computeDamage(rawAtk, isCrit) {
   }
   const enemy = BATTLE.enemy;
   if (!enemy) return 0;
-  const base = Math.max(1, rawAtk * mod - enemy.def * 0.4);
+  const pierce = Math.min(0.95, BATTLE.player.defPierce || 0);
+  const base = Math.max(1, rawAtk * mod - enemy.def * 0.4 * (1 - pierce));
   const critMul = (BATTLE.player.critDmg || 1.8) + critBonus;
   const dmg = Math.floor(base * (0.9 + Math.random() * 0.2) * (isCrit ? critMul : 1));
   return dmg;
@@ -937,9 +938,10 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
   const critMul = BATTLE.player.critDmg || 1.8;
   const rawAtk = BATTLE.player.atk * mult * buffMod * (skillMod || 1);
 
+  const aoePierce = Math.min(0.95, BATTLE.player.defPierce || 0);
   for (const e of BATTLE.currentWave) {
     if (e.hp <= 0) continue;
-    let base = Math.max(1, rawAtk - e.def * 0.4);
+    let base = Math.max(1, rawAtk - e.def * 0.4 * (1 - aoePierce));
     let dmg = Math.floor(base * (0.9 + Math.random() * 0.2) * (isCrit ? critMul : 1));
     if (e.isBoss) {
       if (sk.vsBossBonus) dmg = Math.floor(dmg * (1 + sk.vsBossBonus));

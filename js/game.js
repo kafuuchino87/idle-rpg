@@ -632,6 +632,7 @@ function renderCharDetail() {
         <div class="stat-row-pair"><span>CD減</span><b>${((s.cdReduce || 0) * 100).toFixed(0)}%${s.cdReduceRaw > s.cdReduce ? `<span style="color:var(--gold);font-size:9px;margin-left:4px" title="原始 ${(s.cdReduceRaw * 100).toFixed(0)}% 被上限壓低">(上限)</span>` : ''}</b></div>
         <div class="stat-row-pair"><span>對 BOSS</span><b>+${((s.vsBoss || 0) * 100).toFixed(0)}%</b></div>
         <div class="stat-row-pair"><span>技能傷害</span><b>+${((s.skillDmg || 0) * 100).toFixed(0)}%</b></div>
+        <div class="stat-row-pair"><span>無視防禦</span><b>${((s.defPierce || 0) * 100).toFixed(0)}%${(s.defPierce || 0) >= 0.95 ? '<span style="color:var(--gold);font-size:9px;margin-left:4px">(上限)</span>' : ''}</b></div>
       </div>
       <div class="stat-card mp-card">
         <div class="stat-card-title">秘力組</div>
@@ -1362,6 +1363,7 @@ function renderResonance() {
     { key: 'cdReduce',  name: 'CD 縮減', delta: '+0.5% / 點（總值 ≤ 50%）' },
     { key: 'vsBoss',    name: '對 BOSS', delta: '+1% / 點' },
     { key: 'skillDmg',  name: '技能傷害',delta: '+0.5% / 點' },
+    { key: 'defPierce', name: '無視防禦',delta: '+1.5% / 點（上限 50 點 = 75%；硬上限 95%）' },
     { key: 'maxMp',     name: 'MP 上限', delta: '+10 / 點' },
     { key: 'expMul',    name: '經驗加倍', delta: '+2% / 點（上限 100 點 = +200%）' },
     { key: 'goldMul',   name: '金幣加倍', delta: '+2% / 點（上限 100 點 = +200%）' },

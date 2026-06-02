@@ -759,7 +759,7 @@ function resonanceExpFor(rl) {
 }
 
 // 共鳴上限規則：atk/def/hp 無上限；expMul/goldMul 上限 100；其他屬性 50 點
-const RESONANCE_DEFAULT = { atk: 0, def: 0, hp: 0, crit: 0, critDmg: 0, spd: 0, dmgReduce: 0, cdReduce: 0, vsBoss: 0, skillDmg: 0, maxMp: 0, expMul: 0, goldMul: 0 };
+const RESONANCE_DEFAULT = { atk: 0, def: 0, hp: 0, crit: 0, critDmg: 0, spd: 0, dmgReduce: 0, cdReduce: 0, vsBoss: 0, skillDmg: 0, defPierce: 0, maxMp: 0, expMul: 0, goldMul: 0 };
 const RESONANCE_UNCAPPED = new Set(['atk', 'def', 'hp']);
 const RESONANCE_CAP_100 = new Set(['expMul', 'goldMul']);
 const RESONANCE_CAP = 50;
@@ -902,6 +902,7 @@ function effectiveStats(charId) {
   if (s.cdReduce == null)  s.cdReduce = 0;
   if (s.vsBoss == null)    s.vsBoss = 0;
   if (s.skillDmg == null)  s.skillDmg = 0;
+  if (s.defPierce == null) s.defPierce = 0;
   // ===== MP 屬性 =====
   if (s.maxMp == null) s.maxMp = 400;
   else s.maxMp += 400;
@@ -926,11 +927,13 @@ function effectiveStats(charId) {
   s.cdReduce  += (pts.cdReduce || 0) * 0.005;   // 50pts = +25%
   s.vsBoss    += (pts.vsBoss || 0) * 0.01;      // 50pts = +50%
   s.skillDmg  += (pts.skillDmg || 0) * 0.005;   // 50pts = +25%
+  s.defPierce += (pts.defPierce || 0) * 0.015;  // 50pts = +75% 無視防禦
   s.maxMp     += (pts.maxMp || 0) * 10;         // 50pts = +500 (400→900)
 
   // ===== 屬性上限 =====
   s._cdReduceRaw = s.cdReduce;  // 保留原始值給 UI 顯示「達上限」提示
   if (s.cdReduce > 0.50) s.cdReduce = 0.50;  // CD 縮減硬上限 50%（防止技能秒放）
+  if (s.defPierce > 0.95) s.defPierce = 0.95;  // 無視防禦上限 95%（保留 5% 給敵方）
 
   return {
     atk: Math.floor(s.atk),
@@ -968,6 +971,7 @@ function combatPower(charId) {
     (s.cdReduce || 0) * 1000 +      // 30% → 300 (was 75)
     (s.vsBoss || 0) * 800 +         // 0% → 0
     (s.skillDmg || 0) * 1000 +      // 0% → 0
+    (s.defPierce || 0) * 1500 +     // 50% → 750 (高權重 — 無視防禦是 endgame 核心)
     // ── MP 池（超過基礎部分）──
     Math.max(0, (s.maxMp || 400) - 400) * 0.5
   );
