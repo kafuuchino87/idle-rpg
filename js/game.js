@@ -1792,8 +1792,8 @@ window.showCraftPreview = function(equipId) {
     `;
   }
 
-  // 強化 +10 後的最終屬性試算
-  const FORGE_MAX = 10;
+  // 強化滿後的最終屬性試算（顯示用，採用 FORGE_MAX）
+  const FORGE_MAX = GAME_DATA.FORGE_MAX || 18;
   const fmul = GAME_DATA.forgeMultiplier ? GAME_DATA.forgeMultiplier(FORGE_MAX) : (1 + FORGE_MAX * 0.12);
   const finalStats = {};
   for (const [k, v] of Object.entries(def.stats || {})) {
@@ -2360,7 +2360,7 @@ function renderForge() {
     const def = GAME_DATA.findEquipment(inst.itemId);
     if (!def) continue;
     const lvl = inst.forge || 0;
-    const maxLvl = 15;
+    const maxLvl = GAME_DATA.FORGE_MAX || 18;
 
     // base stat 顯示（套用強化倍率）
     const statStr = Object.entries(def.stats).map(([k, v]) => statLabel(k, v, lvl)).join(' · ');
@@ -2376,14 +2376,23 @@ function renderForge() {
     } else {
       const cost = GAME_DATA.forgeCost(lvl);
       const goldOk = GAME_STATE.state.gold >= cost.goldCost;
-      const matOk = (_activeBag().materials[cost.mat] || 0) >= cost.matCost;
+      const bag = _activeBag().materials || {};
+      const matChecks = cost.mats.map(m => ({ ...m, ok: (bag[m.name] || 0) >= m.qty }));
+      const allMatOk = matChecks.every(m => m.ok);
+      const matsHtml = matChecks.map(m =>
+        `<span class="${m.ok ? 'ok' : 'no'}">${m.name} x${m.qty}</span>`
+      ).join('');
+      const rateHtml = cost.canDowngrade
+        ? `<span style="color:#5dd07c">成功 ${(cost.successRate*100).toFixed(0)}%</span> · <span style="color:#999">失敗 ${(cost.failRate*100).toFixed(0)}%</span> · <span style="color:#ff5e5e">降級 ${(cost.downgradeRate*100).toFixed(0)}%</span>`
+        : `<span>成功率 ${(cost.successRate*100).toFixed(0)}%</span>`;
+      const tier = cost.isAdvanced ? `<span style="color:#ff8a3c;font-size:10px;margin-left:4px">[極限強化]</span>` : '';
       bottom = `
         <div class="forge-cost">
           <span class="${goldOk ? 'ok' : 'no'}">金 ${cost.goldCost.toLocaleString()}</span>
-          <span class="${matOk ? 'ok' : 'no'}">${cost.mat} x${cost.matCost}</span>
-          <span>成功率 ${(cost.successRate * 100).toFixed(0)}%</span>
+          ${matsHtml}
         </div>
-        <button class="primary" ${goldOk && matOk ? '' : 'disabled'} data-forge-inst="${instId}">強化 +${lvl + 1}</button>
+        <div class="forge-cost" style="margin-top:2px">${rateHtml}${tier}</div>
+        <button class="primary" ${goldOk && allMatOk ? '' : 'disabled'} data-forge-inst="${instId}">強化 +${lvl + 1}</button>
       `;
     }
     block.innerHTML = `
@@ -2537,14 +2546,35 @@ function statLabel(k, v, forge) {
 function doForge(instId) {
   const inst = _activeBag().equipment[instId];
   if (!inst) return;
-  const cost = GAME_DATA.forgeCost(inst.forge || 0);
+  const curLv = inst.forge || 0;
+  const cost = GAME_DATA.forgeCost(curLv);
+  // 檢查資源（金 + 所有材料）
   if (GAME_STATE.state.gold < cost.goldCost) return toast('金幣不足', 'error');
-  if ((_activeBag().materials[cost.mat] || 0) < cost.matCost) return toast(`${cost.mat} 不足`, 'error');
+  const bag = _activeBag().materials || {};
+  for (const m of cost.mats) {
+    if ((bag[m.name] || 0) < m.qty) return toast(`${m.name} 不足`, 'error');
+  }
+  // 扣資源
   GAME_STATE.gainGold(-cost.goldCost);
-  GAME_STATE.consumeMaterial(cost.mat, cost.matCost);
-  if (Math.random() < cost.successRate) {
-    inst.forge = (inst.forge || 0) + 1;
-    toast(`強化成功！+${inst.forge}`, 'gold');
+  for (const m of cost.mats) GAME_STATE.consumeMaterial(m.name, m.qty);
+  // 三段擲骰
+  const roll = Math.random();
+  if (roll < cost.successRate) {
+    inst.forge = curLv + 1;
+    toast(`★ 強化成功！+${inst.forge}`, 'gold');
+  } else if (roll < cost.successRate + cost.failRate) {
+    // 純失敗（材料消耗，等級不變）
+    toast(`強化失敗，材料消耗，等級不變`, 'error');
+  } else if (cost.canDowngrade) {
+    // 降級（不能低於安全等級 FORGE_SAFE_LEVEL）
+    const safeLv = GAME_DATA.FORGE_SAFE_LEVEL || 10;
+    if (curLv > safeLv) {
+      inst.forge = curLv - 1;
+      toast(`✘ 強化失敗降級！+${inst.forge}`, 'error');
+    } else {
+      // 已在安全層級之上的「失敗 = 等級不變」（10→11 失敗不會掉回 9）
+      toast(`強化失敗（安全層級保護，等級不變）`, 'error');
+    }
   } else {
     toast(`強化失敗，材料消耗`, 'error');
   }

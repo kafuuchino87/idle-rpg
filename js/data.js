@@ -1057,16 +1057,60 @@ function findEquipment(id) { return ITEMS.equipment.find(e => e.id === id); }
 // --------------------------------------------------------------------------
 // 強化曲線
 // --------------------------------------------------------------------------
+// 強化曲線
+// Lv 0~9：普通材料、純成功/失敗，不會降級
+// Lv 10~17：用無盡塔材料、有降級機率（等級越高降級越大、成功越小），不能掉破 10
+const FORGE_MAX = 18;
+const FORGE_SAFE_LEVEL = 10;  // < 10 是「安全強化」，不會降級
 function forgeCost(level) {
-  const goldCost = Math.floor(40 * Math.pow(1.55, level));
-  let mat = '粗鋼', matCost = 1;
-  if (level < 3)       { mat = '粗鋼'; matCost = 2 + level; }
-  else if (level < 6)  { mat = '精鋼'; matCost = 2 + (level - 3); }
-  else if (level < 10) { mat = '星鋼'; matCost = 2 + (level - 6); }
-  else if (level < 13) { mat = '神鋼'; matCost = 2 + (level - 10); }
-  else                 { mat = '夢晶'; matCost = 1 + (level - 13); }
-  const successRate = Math.max(0.25, 1 - level * 0.05);
-  return { goldCost, mat, matCost, successRate };
+  // ===== Lv 0~9：普通強化（保留原邏輯） =====
+  if (level < FORGE_SAFE_LEVEL) {
+    const goldCost = Math.floor(40 * Math.pow(1.55, level));
+    let mat = '粗鋼', matCost = 1;
+    if (level < 3)       { mat = '粗鋼'; matCost = 2 + level; }
+    else if (level < 6)  { mat = '精鋼'; matCost = 2 + (level - 3); }
+    else                 { mat = '星鋼'; matCost = 2 + (level - 6); }
+    const successRate = Math.max(0.55, 1 - level * 0.05);
+    return {
+      goldCost, mats: [{ name: mat, qty: matCost }],
+      successRate, failRate: 1 - successRate, downgradeRate: 0,
+      isAdvanced: false, canDowngrade: false,
+    };
+  }
+  // ===== Lv 10~17：無盡塔材料 + 降級風險 =====
+  // 機率曲線（成功 / 失敗 / 降級）
+  const TABLE = {
+    10: { s: 0.70, d: 0.05 },  // 10→11：成 70 / 失 25 / 降 5
+    11: { s: 0.60, d: 0.10 },
+    12: { s: 0.50, d: 0.15 },
+    13: { s: 0.40, d: 0.25 },
+    14: { s: 0.30, d: 0.35 },
+    15: { s: 0.25, d: 0.40 },
+    16: { s: 0.15, d: 0.50 },
+    17: { s: 0.10, d: 0.60 },  // 17→18：成 10 / 失 30 / 降 60
+  };
+  const t = TABLE[level] || TABLE[17];
+  // 材料配方（蝕痕碎片 / 蝕痕神核 / 終焉印石 / 異界之鎚）
+  const RECIPES = {
+    10: { gold: 500_000,   mats: [{ name: '蝕痕碎片', qty: 30 }, { name: '神鋼', qty: 5 }] },
+    11: { gold: 800_000,   mats: [{ name: '蝕痕碎片', qty: 50 }, { name: '神鋼', qty: 8 }] },
+    12: { gold: 1_200_000, mats: [{ name: '蝕痕碎片', qty: 80 }, { name: '蝕痕神核', qty: 5 }] },
+    13: { gold: 1_800_000, mats: [{ name: '蝕痕碎片', qty: 100 }, { name: '蝕痕神核', qty: 10 }] },
+    14: { gold: 2_500_000, mats: [{ name: '蝕痕神核', qty: 15 }, { name: '終焉印石', qty: 3 }] },
+    15: { gold: 3_500_000, mats: [{ name: '蝕痕神核', qty: 25 }, { name: '終焉印石', qty: 5 }] },
+    16: { gold: 5_000_000, mats: [{ name: '終焉印石', qty: 10 }, { name: '異界之鎚', qty: 2 }] },
+    17: { gold: 7_000_000, mats: [{ name: '終焉印石', qty: 20 }, { name: '異界之鎚', qty: 5 }] },
+  };
+  const recipe = RECIPES[level] || RECIPES[17];
+  return {
+    goldCost: recipe.gold,
+    mats: recipe.mats,
+    successRate: t.s,
+    downgradeRate: t.d,
+    failRate: 1 - t.s - t.d,
+    isAdvanced: true,
+    canDowngrade: true,
+  };
 }
 function forgeMultiplier(level) { return 1 + level * 0.12; }
 
@@ -1129,7 +1173,8 @@ window.GAME_DATA = {
   CHARACTERS, REGIONS, ITEMS, SKILLS, PASSIVES, RECIPES, MATERIAL_RECIPES, GEMS, SETS, POTIONS, CHESTS, SHARD_EXCHANGE,
   EQUIPMENT_SLOTS, SLOT_LABELS, AFFIX_POOL,
   MAX_LEVEL,
-  forgeCost, forgeMultiplier, expForLevel, resonanceMultiplier,
+  forgeCost, forgeMultiplier, FORGE_MAX, FORGE_SAFE_LEVEL,
+  expForLevel, resonanceMultiplier,
   getRegionByDungeon, getDungeon, getCharacterBlueprint,
   rollAffixes, findEquipment, resolveFixedValue,
   findRecipe, findMaterialRecipe, findGem, socketsForRarity,
