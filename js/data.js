@@ -1114,7 +1114,17 @@ function forgeCost(level) {
     canDowngrade: true,
   };
 }
-function forgeMultiplier(level) { return 1 + level * 0.12; }
+// 強化倍率曲線
+// Lv 0~10：線性 +12% / 等（保留原曲線，安全強化區）
+// Lv 11~18：高階指數增長（讓滿 +18 武器/裝備白值大幅提升，給玩家追求動力）
+// 滿 +18 ≈ ×7.4（原本 ×3.16），主要拉武器白值
+function forgeMultiplier(level) {
+  if (level <= 10) return 1 + level * 0.12;
+  const base = 1 + 10 * 0.12;        // Lv 10 起跳 ×2.2
+  const extra = level - 10;
+  // +18 = 2.2 + 8*0.25 + 64*0.05 = 7.4
+  return base + extra * 0.25 + extra * extra * 0.05;
+}
 
 // --------------------------------------------------------------------------
 // 經驗曲線：1 ~ 99 級
