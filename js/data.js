@@ -528,10 +528,11 @@ const REGIONS = [
         difficultyMul: 25, atkCoefOverride: 0.005,
         skipMobs: true,  // 不出小怪，直接兩階 BOSS
         bosses: [
-          { name: '星淵獸', portrait: 'assets/portraits/raid-beast.png',
-            shield: { firstAt: 12, interval: 18, hpPct: 0.06, breakTime: 5 } },
+          // Phase 1 — 星淵獸：純血戰，無護盾機制（熱身關）
+          { name: '星淵獸', portrait: 'assets/portraits/raid-beast.png' },
+          // Phase 2 — 虛宙星龍：護盾即死機制 + HP/atk 強化（真正考驗）
           { name: '虛宙星龍', portrait: 'assets/portraits/raid-dragon.png',
-            hpMul: 2.2, atkMul: 1.4,  // 最終 BOSS 強化
+            hpMul: 2.2, atkMul: 1.4,
             shield: { firstAt: 10, interval: 15, hpPct: 0.08, breakTime: 5 } },
         ],
         // 通關必掉星淵材料；低機率掉永恆星辰；UR 武器只掉 ur2 系列（不掉 ur1）
