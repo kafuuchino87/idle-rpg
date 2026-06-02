@@ -443,11 +443,13 @@ const REGIONS = [
         enemies: ['神祠執行者', '虛位幻獸'], boss: '神祠主祭（神格・神）' },
       // ===== 神級材料副本（畢業 + 終焉套後農高階普通材料）=====
       // 同神祠秘境難度，但獎勵走材料路線；不掉無盡塔材料（蝕痕系列只能無盡塔出）
+      // 額外：低機率掉神格寶箱（神窟系列唯一能出神箱的）
       { id: 'sp-mat-elite', name: '神工秘境', cp: 100000, unlock: 'sp-mat', requiredLv: 99,
         special: 'mat', baseTime: 60, expBase: 1500, goldBase: 50000,
         difficultyMul: 7.5, atkCoefOverride: 0.012,
         dropMats: ['神鋼', '永晶', '夢晶'],
-        bonusMengjingChance: 0.25,  // 夢晶高機率（從 0.12 提升）
+        bonusMengjingChance: 0.25,
+        chestDropOverride: { divine: 0.03 },  // 3% 神格寶箱
         enemies: ['神工執行者', '虛位匠靈'], boss: '神工大師（神格・神）' },
     ],
   },

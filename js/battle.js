@@ -245,6 +245,8 @@ function rollChestDrop(d) {
   } else if (d.cp >= 200) {
     p = { wood: 0.05, silver: 0, gold: 0, divine: 0 };          // 早期：5%
   }
+  // 副本級覆寫（特定副本可覆寫個別寶箱機率，例如神工秘境給神格機率）
+  if (d.chestDropOverride) p = { ...p, ...d.chestDropOverride };
   // 從高階到低階 roll，命中即返回
   if (Math.random() < p.divine) return 'chest-divine';
   if (Math.random() < p.gold)   return 'chest-gold';
