@@ -312,7 +312,9 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
   // 副本可單獨覆寫 atkCoef（神級經驗副本壓低，保護高 def 但 HP 不夠的畢業玩家）
   if (typeof dungeon.atkCoefOverride === 'number') atkCoef = dungeon.atkCoefOverride;
   let atk = Math.floor(dungeon.cp * atkCoef * (isBoss ? 1.5 : 1) * atkDiffMul + 4);
-  const def = Math.floor(dungeon.cp * 0.04 * (isBoss ? 1.4 : 1) * diffMul);
+  // def 倍率可單獨覆寫（避免 raid 副本 def 隨 diffMul 25 爆膨脹）
+  const defMul = (typeof dungeon.defScaleOverride === 'number') ? dungeon.defScaleOverride : diffMul;
+  const def = Math.floor(dungeon.cp * 0.04 * (isBoss ? 1.4 : 1) * defMul);
   // 多階 BOSS bossConfig 覆寫（hpMul / atkMul / shield 配置 / portrait）
   if (bossConfig) {
     if (bossConfig.hpMul) baseHp = Math.floor(baseHp * bossConfig.hpMul);
