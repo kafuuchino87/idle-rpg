@@ -106,10 +106,11 @@ function startBattle(dungeonId, charId) {
   const stats = GAME_STATE.effectiveStats(charId);
   const cp = GAME_STATE.combatPower(charId);
 
-  const ratio = cp / dungeon.cp;
+  // 副本可單獨覆寫進場門檻（minCpOverride）— 適合難度高但鼓勵低戰力組隊嘗試的副本
+  const minCp = (typeof dungeon.minCpOverride === 'number') ? dungeon.minCpOverride : dungeon.cp * 0.4;
   // 無盡塔不檢查戰力（依累積傷害給獎勵，弱也能打）
-  if (ratio < 0.4 && !dungeon.isEndless) {
-    logLine(`戰力不足，無法挑戰 <b>${dungeon.name}</b>（需要 ${dungeon.cp} CP，目前 ${cp}）`, 'lg-fail');
+  if (cp < minCp && !dungeon.isEndless) {
+    logLine(`戰力不足，無法挑戰 <b>${dungeon.name}</b>（需要 ${Math.floor(minCp).toLocaleString()} CP，目前 ${cp.toLocaleString()}）`, 'lg-fail');
     return false;
   }
   BATTLE.speedMul = 1.0;   // 戰速固定，通關快慢由角色攻速 + 傷害決定

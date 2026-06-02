@@ -523,6 +523,7 @@ const REGIONS = [
       // Phase 1：星淵獸（豹）→ Phase 2：虛宙星龍（最終 BOSS）
       // 兩階都有「護盾即死」機制：5 秒內不破護盾全隊即死
       { id: 'raid-stardragon', name: '星淵 · 雙影獵討', cp: 600000, unlock: 'raid-calamity', requiredLv: 99,
+        minCpOverride: 100000,  // 進場門檻 10 萬戰力（鼓勵低戰力組隊嘗試）
         isRaid: true, baseTime: 60, expBase: 50000, goldBase: 80000,
         difficultyMul: 25, atkCoefOverride: 0.005,
         skipMobs: true,  // 不出小怪，直接兩階 BOSS
