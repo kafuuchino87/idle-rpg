@@ -441,6 +441,14 @@ const REGIONS = [
         difficultyMul: 7.5, atkCoefOverride: 0.012,  // diffMul 7.5：HP/atk 整體 ×3（從 2.5）
         dropMats: ['神鋼', '永晶', '夢晶', '蝕痕碎片'],
         enemies: ['神祠執行者', '虛位幻獸'], boss: '神祠主祭（神格・神）' },
+      // ===== 神級材料副本（畢業 + 終焉套後農高階材料 + 蝕痕碎片）=====
+      // 同神祠秘境難度，但獎勵走材料路線
+      { id: 'sp-mat-elite', name: '神工秘境', cp: 100000, unlock: 'sp-mat', requiredLv: 99,
+        special: 'mat', baseTime: 60, expBase: 1500, goldBase: 50000,
+        difficultyMul: 7.5, atkCoefOverride: 0.012,  // 與神祠秘境同難度
+        dropMats: ['神鋼', '永晶', '夢晶', '蝕痕碎片', '蝕痕神核'],
+        bonusMengjingChance: 0.25,  // 夢晶高機率（從 0.12 提升）
+        enemies: ['神工執行者', '虛位匠靈'], boss: '神工大師（神格・神）' },
     ],
   },
   // ===== 無盡塔（30 秒限時，依累積傷害領獎）=====
