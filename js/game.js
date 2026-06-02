@@ -972,19 +972,24 @@ function renderShop() {
       <div class="shop-grid">`;
     for (const p of items) {
       const have = (_activeBag().potions && _activeBag().potions[p.id]) || 0;
-      const goldOk = st.gold >= p.cost.gold;
+      const goldCost = p.cost.gold || 0;
+      const shardCost = p.cost.shard || 0;
+      const goldOk = st.gold >= goldCost;
+      const shardOk = st.shard >= shardCost;
       const matsOk = !p.cost.mats || Object.entries(p.cost.mats).every(([n, q]) => (_activeBag().materials[n] || 0) >= q);
-      const ok = goldOk && matsOk;
+      const ok = goldOk && shardOk && matsOk;
       const matsStr = p.cost.mats ? Object.entries(p.cost.mats).map(([n, q]) => {
         const h = _activeBag().materials[n] || 0;
         return `<span class="${h >= q ? 'ok' : 'no'}">${n} ${h}/${q}</span>`;
       }).join(' ') : '';
+      const goldStr = goldCost > 0 ? `<span class="${goldOk ? 'ok' : 'no'}">金 ${goldCost.toLocaleString()}</span>` : '';
+      const shardStr = shardCost > 0 ? `<span class="${shardOk ? 'ok' : 'no'}" style="color:var(--shard)">魂晶 ${shardCost.toLocaleString()}</span>` : '';
       html += `<div class="shop-row ${ok ? '' : 'locked'}">
         <div class="shop-info">
           <div class="shop-name bag-item ${p.rarity}" style="display:inline-block;padding:1px 6px">${p.name}</div>
           <span style="color:var(--muted);font-size:10px;margin-left:6px">持有 ${have}</span>
           <div class="shop-desc">${p.desc}</div>
-          <div class="shop-cost"><span class="${goldOk ? 'ok' : 'no'}">金 ${p.cost.gold.toLocaleString()}</span> ${matsStr}</div>
+          <div class="shop-cost">${goldStr} ${shardStr} ${matsStr}</div>
         </div>
         <div class="shop-buy">
           <button class="primary" data-buy="${p.id}" data-qty="1" ${ok ? '' : 'disabled'}>買 ×1</button>
