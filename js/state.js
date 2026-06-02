@@ -193,6 +193,37 @@ function loadState() {
     selfHealEquipment(parsed);
     // Wave 30.3：補發遺失的 starter 練習裝（每 slot 獨立 + 強制存檔）
     healMissingStarterGear(parsed);
+    // Wave 31：強化系統大改後，一次性把所有裝備 forge 歸零讓玩家體驗新曲線
+    // 只跑一次，靠 forgeResetV1 旗標（存在 STATE 上）
+    if (!parsed.forgeResetV1) {
+      let totalCount = 0, totalLv = 0;
+      if (parsed.characters) {
+        for (const cid in parsed.characters) {
+          const bag = parsed.characters[cid].bag;
+          if (!bag || !bag.equipment) continue;
+          let csCount = 0;
+          for (const instId in bag.equipment) {
+            const inst = bag.equipment[instId];
+            if (inst && inst.forge > 0) {
+              totalLv += inst.forge;
+              inst.forge = 0;
+              csCount++;
+            }
+          }
+          if (csCount > 0) {
+            if (!bag.materials) bag.materials = {};
+            // 補償（每件 +0~+10 累積消耗約：星鋼 50、精鋼 30、神鋼 5）
+            const refund = { '星鋼': 50 * csCount, '精鋼': 30 * csCount, '神鋼': 5 * csCount };
+            for (const [n, q] of Object.entries(refund)) {
+              bag.materials[n] = (bag.materials[n] || 0) + q;
+            }
+            totalCount += csCount;
+          }
+        }
+      }
+      parsed.forgeResetV1 = true;
+      console.log(`[forgeResetV1] 重置 ${totalCount} 件裝備強化（總計 ${totalLv} 等），退補償材料`);
+    }
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
     } catch (e) {
