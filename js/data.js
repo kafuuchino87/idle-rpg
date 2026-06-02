@@ -454,11 +454,11 @@ const REGIONS = [
         expBase: 0, goldBase: 0,  // 無盡塔不掉 exp/gold，獎勵由階梯給
         // 階梯：累積傷害 → 終焉材料獎勵；V 階給異界之鎚
         damageTiers: [
-          { dmg: 10_000_000,  label: 'I',   rewards: { mats: { '蝕痕碎片': 3 } } },
-          { dmg: 25_000_000,  label: 'II',  rewards: { mats: { '蝕痕碎片': 5, '蝕痕神核': 1 } } },
-          { dmg: 45_000_000,  label: 'III', rewards: { mats: { '蝕痕碎片': 8, '蝕痕神核': 3, '終焉印石': 1 } } },
-          { dmg: 90_000_000,  label: 'IV',  rewards: { mats: { '蝕痕碎片': 12, '蝕痕神核': 6, '終焉印石': 3 } } },
-          { dmg: 180_000_000, label: 'V',   rewards: { mats: { '蝕痕碎片': 20, '蝕痕神核': 10, '終焉印石': 6, '異界之鎚': 1 } } },
+          { dmg: 10_000_000,  label: 'I',   rewards: { mats: { '蝕痕碎片': 3 }, shard: 20 } },
+          { dmg: 25_000_000,  label: 'II',  rewards: { mats: { '蝕痕碎片': 5, '蝕痕神核': 1 }, shard: 50 } },
+          { dmg: 45_000_000,  label: 'III', rewards: { mats: { '蝕痕碎片': 8, '蝕痕神核': 3, '終焉印石': 1 }, shard: 100 } },
+          { dmg: 90_000_000,  label: 'IV',  rewards: { mats: { '蝕痕碎片': 12, '蝕痕神核': 6, '終焉印石': 3 }, shard: 200 } },
+          { dmg: 180_000_000, label: 'V',   rewards: { mats: { '蝕痕碎片': 20, '蝕痕神核': 10, '終焉印石': 6, '異界之鎚': 1 }, shard: 400 } },
         ],
         lore: [
           '在虛無之塔的頂端，鏡之終焉沉眠。',
@@ -470,11 +470,11 @@ const REGIONS = [
         rewards: [
           { label: '時限', value: '30 秒（BOSS 無 HP 上限，越打越痛）', color: 'var(--accent)' },
           { label: '入場', value: '消耗 1 張虛無通行證（寶箱掉落）', color: 'var(--shard)' },
-          { label: '階梯 I', value: '10M 傷害 → 蝕痕碎片 ×3', color: 'var(--muted)' },
-          { label: '階梯 II', value: '25M → +蝕痕碎片 ×5、神核 ×1', color: 'var(--hp-self)' },
-          { label: '階梯 III', value: '45M → +碎片 ×8、神核 ×3、印石 ×1（畢業 DPS 極限）', color: 'var(--exp)' },
-          { label: '階梯 IV', value: '90M → +碎片 ×12、神核 ×6、印石 ×3（雙人合作）', color: 'var(--gold)' },
-          { label: '階梯 V', value: '180M → +碎片 ×20、神核 ×10、印石 ×6、★異界之鎚 ×1（鍛造用）', color: 'var(--hp-enemy)' },
+          { label: '階梯 I', value: '10M 傷害 → 蝕痕碎片 ×3、魂晶 +20', color: 'var(--muted)' },
+          { label: '階梯 II', value: '25M → +蝕痕碎片 ×5、神核 ×1、魂晶 +50', color: 'var(--hp-self)' },
+          { label: '階梯 III', value: '45M → +碎片 ×8、神核 ×3、印石 ×1、魂晶 +100', color: 'var(--exp)' },
+          { label: '階梯 IV', value: '90M → +碎片 ×12、神核 ×6、印石 ×3、魂晶 +200', color: 'var(--gold)' },
+          { label: '階梯 V', value: '180M → +碎片 ×20、神核 ×10、印石 ×6、★異界之鎚 ×1、魂晶 +400', color: 'var(--hp-enemy)' },
           { label: '多人', value: '團隊累積傷害共享、每人各扣 1 張通行證', color: 'var(--accent)' },
         ],
         bossPortrait: 'assets/portraits/endless-boss.png',
@@ -686,7 +686,7 @@ const CHESTS = {
       { kind: 'shard', min: 3, max: 8, weight: 8 },
       { kind: 'gem-random', tier: [1, 2], weight: 3 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 0.5 },  // 0.5%
-      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.3 },  // 銀箱 0.3%
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.1 },  // 銀箱 0.1%（降）
     ],
   },
   'chest-gold': {
@@ -706,7 +706,7 @@ const CHESTS = {
       { kind: 'gem-random', tier: [2, 3], weight: 7 },
       { kind: 'equip-rarity', rarity: 'SR', weight: 7 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 2 },  // 2%
-      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 1.5 },  // 金箱 1.5%
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.5 },  // 金箱 0.5%（降）
     ],
   },
   'chest-divine': {
@@ -725,7 +725,7 @@ const CHESTS = {
       { kind: 'gem-random', tier: [3, 4], weight: 10 },
       { kind: 'equip-rarity', rarity: 'SSR', weight: 9 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 8 },  // 8%
-      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 5 },  // 神箱 5%
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 1.5 },  // 神箱 1.5%（降）
     ],
   },
 };

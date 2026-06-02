@@ -3532,12 +3532,13 @@ window.showResultModal = function(lc) {
   } else if (lc.isEndless) {
     lootSection.style.display = '';
     const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
-    const g = lc.endlessGranted || { mats: {}, gems: [] };
+    const g = lc.endlessGranted || { mats: {}, gems: [], shard: 0 };
     const matHtml = Object.entries(g.mats || {}).map(([n, q]) =>
       `<span class="result-loot-item" style="color:${TIER_COLOR[n] || 'var(--text)'}">${n} +${q}</span>`
     ).join('');
     const gemHtml = (g.gems || []).map(name => `<span class="result-loot-item">💎 ${name}</span>`).join('');
-    lootEl.innerHTML = (matHtml + gemHtml) || '<span class="result-loot-item">未達階梯 I，無獎勵</span>';
+    const shardHtml = (g.shard > 0) ? `<span class="result-loot-item shard">魂晶 +${g.shard}</span>` : '';
+    lootEl.innerHTML = (shardHtml + matHtml + gemHtml) || '<span class="result-loot-item">未達階梯 I，無獎勵</span>';
   } else {
     lootSection.style.display = '';
     const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
