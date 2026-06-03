@@ -579,10 +579,13 @@ const REGIONS = [
           ],
         },
         bosses: [
+          // 鏡夢縛魂的 BOSS 從零設計，不沿用雙影獵討的週期即死護盾。
+          // 所有技能獨立列在 BOSS 物件上（openingAttack / 之後會加更多）。
           { name: '幻夢之主', portrait: 'assets/portraits/raid-mirror.png',
             portraitTall: true,        // ← 立繪是直幅，戰鬥卡片改 3:4 比例顯示完整
             hpOverride: 10_000_000_000, // ← 精確 100 億 HP
-            // 開場拔刀斬：戰鬥一開始 BOSS 進入 3 秒蓄力姿態，凝聚 20 億盾
+            // ── 技能 1：開場拔刀斬 ──
+            // 戰鬥一開始 BOSS 進入 3 秒蓄力姿態，凝聚 20 億盾
             // 3 秒內不破盾 → 衝刺一刀，造成玩家最大生命 90% 傷害（不一定即死）
             openingAttack: {
               name: '拔刀斬',
@@ -590,7 +593,7 @@ const REGIONS = [
               shieldHp: 2_000_000_000,  // 20 億盾
               damageOnFail: 0.9,        // 90% maxHp
             },
-            shield: { firstAt: 5, interval: 30, hpFixed: 15_000_000, breakTime: 5 } },
+          },
         ],
         bonusMats: [
           { name: '永恆星辰', chance: 0.05, qty: [1, 1] },
@@ -607,7 +610,7 @@ const REGIONS = [
           '心智被蝕、靈魂被縛——直至忘卻自我，化為她的一員。',
           '若能斬斷幻象、直擊真實，便可帶走她遺落的縛魂之物。',
         ],
-        warning: '單階 BOSS 副本。每 30 秒凝聚「分身結界」，5 秒內不破則全隊即死。建議三人團 + 補師通關。',
+        warning: '單階 BOSS 副本，HP 100 億。開場 BOSS 進入 3 秒拔刀蓄力（20 億盾），破不掉會吃 90% 最大生命一刀。建議三人團 + 補師通關。',
         rewards: [
           { label: '經驗值', value: '60,000', color: 'var(--exp)' },
           { label: '金幣',   value: '100,000', color: 'var(--gold)' },
