@@ -883,9 +883,13 @@ function renderCraft() {
       `;
     }).filter(Boolean).join('');
     const emptyMsg = rows ? '' : '<div style="text-align:center;color:var(--muted);font-size:11px;padding:20px">此部位無配方</div>';
+    const ringHint = _craftSlot === 'ring'
+      ? '<div style="font-size:11px;color:var(--accent);margin-bottom:10px;line-height:1.6;padding:6px 10px;background:rgba(160,108,213,0.1);border-left:3px solid var(--accent);border-radius:4px">💍 戒指通用無左右之分 — 製作完成後到背包選擇要裝在「戒指(左)」或「戒指(右)」格子。詞綴用魂晶兌換的「詞綴重抽券」可洗。</div>'
+      : '';
     body = `
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">用素材製作中低階裝備。UR 裝備僅由「襲擊戰」副本掉落，不可製作。</div>
       ${slotBar}
+      ${ringHint}
       <div class="craft-list">${rows}${emptyMsg}</div>`;
   } else {
     // 材料升階

@@ -615,8 +615,8 @@ const RECIPES = [
   { id: 'craft-oracle-top',  name: '神諭·織縷袍', target: 'eq-top-oracle',  cost: { gold: 90000, mats: { '神鋼': 90, '永晶': 40, '夢晶': 4 } }, requiredLv: 95 },
   { id: 'craft-oracle-bot',  name: '神諭·織縷袴', target: 'eq-bot-oracle',  cost: { gold: 80000, mats: { '神鋼': 80, '永晶': 35, '夢晶': 3 } }, requiredLv: 95 },
   { id: 'craft-oracle-feet', name: '神諭·織縷履', target: 'eq-feet-oracle', cost: { gold: 80000, mats: { '神鋼': 80, '永晶': 35, '夢晶': 3 } }, requiredLv: 95 },
-  // ===== 戒指（純詞綴，最高 SSR，可重抽券洗詞綴）=====
-  { id: 'craft-ring-n',   name: '練習戒指', target: 'eq-ring-n',   cost: { gold: 200,   mats: { '粗鋼': 5 } },                          requiredLv: 1 },
+  // ===== 戒指（純詞綴，最高 SSR，可重抽券洗詞綴；通用無左右之分，裝備時自選格子）=====
+  // 練習戒指 N 不開製作（僅創角時起始發），玩家從 R 開始做
   { id: 'craft-ring-r',   name: '寒鐵戒指', target: 'eq-ring-r',   cost: { gold: 1200,  mats: { '精鋼': 12 } },                         requiredLv: 15 },
   { id: 'craft-ring-sr',  name: '星辰戒指', target: 'eq-ring-sr',  cost: { gold: 5000,  mats: { '星鋼': 22, '精鋼': 10 } },             requiredLv: 35 },
   { id: 'craft-ring-ssr', name: '永夜戒指', target: 'eq-ring-ssr', cost: { gold: 20000, mats: { '神鋼': 28, '永晶': 10, '星鋼': 12 } }, requiredLv: 60 },
