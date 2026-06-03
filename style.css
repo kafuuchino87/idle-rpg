@@ -1660,6 +1660,130 @@ button.primary:hover { filter: brightness(1.1); }
 .overlay.hidden { display: none; }
 @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* ==========================================================================
+ * Cutscene（BOSS 開場動畫）
+ * ========================================================================*/
+.cutscene-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  overflow: hidden;
+}
+.cutscene-overlay.show { opacity: 1; }
+.cutscene-overlay.hide { opacity: 0; }
+.cutscene-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.85) 100%),
+    radial-gradient(ellipse at center top, rgba(160, 108, 213, 0.18), transparent 60%);
+  pointer-events: none;
+  z-index: 1;
+}
+.cutscene-portrait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  animation: cutscenePortraitIn 1.2s ease;
+}
+.cutscene-portrait img {
+  max-height: 86vh;
+  max-width: 92vw;
+  filter: drop-shadow(0 0 60px rgba(160, 108, 213, 0.5));
+  animation: cutsceneFloat 6s ease-in-out infinite;
+}
+@keyframes cutscenePortraitIn {
+  from { opacity: 0; transform: scale(1.06) translateY(20px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes cutsceneFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+.cutscene-textbox {
+  position: absolute;
+  bottom: 5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(820px, 90vw);
+  background: linear-gradient(180deg, rgba(20, 22, 34, 0.92), rgba(10, 12, 22, 0.96));
+  border: 1px solid rgba(160, 108, 213, 0.5);
+  border-radius: 10px;
+  padding: 18px 24px;
+  z-index: 3;
+  box-shadow: 0 0 30px rgba(160, 108, 213, 0.35), inset 0 0 0 1px rgba(255,255,255,0.04);
+  animation: cutsceneTextboxIn 0.6s ease 0.3s both;
+}
+@keyframes cutsceneTextboxIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.cutscene-speaker {
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  text-shadow: 0 0 8px rgba(160, 108, 213, 0.6);
+  min-height: 22px;
+}
+.cutscene-line {
+  color: #f0f0f0;
+  font-size: 17px;
+  line-height: 1.8;
+  letter-spacing: 1px;
+  min-height: 56px;
+  margin-bottom: 14px;
+  text-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+.cutscene-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.cutscene-actions button {
+  padding: 8px 18px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  background: rgba(160, 108, 213, 0.15);
+  border: 1px solid rgba(160, 108, 213, 0.5);
+  color: #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cutscene-actions button:hover {
+  background: rgba(160, 108, 213, 0.35);
+  border-color: var(--accent);
+}
+.cutscene-actions .cutscene-skip {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+.cutscene-actions .cutscene-start {
+  background: linear-gradient(180deg, #ff5e7a, #c83a55);
+  border-color: #ff5e7a;
+  color: #fff;
+  font-weight: 700;
+  padding: 10px 26px;
+  font-size: 15px;
+  box-shadow: 0 0 16px rgba(255, 94, 122, 0.5);
+}
+.cutscene-actions .cutscene-start:hover {
+  background: linear-gradient(180deg, #ff7e94, #d84f6c);
+  box-shadow: 0 0 24px rgba(255, 94, 122, 0.75);
+}
+
 .overlay-card {
   background: var(--bg2);
   border: 1px solid var(--line);

@@ -146,6 +146,26 @@ function startBattle(dungeonId, charId) {
   BATTLE._teamWipeFired = false;  // 重置全隊滅旗標
   BATTLE._wavePending = false;  // 重置 wave 切換 pending 旗標
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
+  BATTLE.ringErosionStacks = 0;  // 蝕念戒指疊層（每戰鬥重置）
+  // 快取已裝戒指的觸發效果（procId / proc 來自戒指 def）
+  BATTLE.ringProcs = (() => {
+    const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0 };
+    if (!cs.equip || !cs.bag || !cs.bag.equipment) return p;
+    for (const slot of ['ring1', 'ring2']) {
+      const id = cs.equip[slot];
+      if (!id) continue;
+      const inst = cs.bag.equipment[id];
+      if (!inst) continue;
+      const def = GAME_DATA.findEquipment(inst.itemId);
+      if (!def || !def.proc) continue;
+      if (def.proc.cdResetChance) p.cdResetChance = Math.max(p.cdResetChance, def.proc.cdResetChance);
+      if (def.proc.skillStackAtk) {
+        p.skillStackAtkValue = def.proc.skillStackAtk.value;
+        p.skillStackAtkMax = def.proc.skillStackAtk.maxStacks;
+      }
+    }
+    return p;
+  })();
   // 多人模式判定：襲擊戰 / 無盡塔 / 特殊副本 + 已連線 → host / guest，其他 → solo
   BATTLE._mpMode = 'solo';
   if ((dungeon.isRaid || dungeon.isEndless || dungeon.special) && window.MP_API && MP_API.isConnected()) {
@@ -768,6 +788,30 @@ function castSkill(sk, sidHint) {
   if (BATTLE.player.cdReduce) cd *= (1 - BATTLE.player.cdReduce);
   BATTLE.skillCDs[sid] = cd;
 
+  // ── 幻夢戒指：30% 機率重置該技能 CD（先設 CD 再判定，視覺上玩家會看到 CD 條跑滿後立刻變 0）──
+  if (BATTLE.ringProcs && BATTLE.ringProcs.cdResetChance > 0 && Math.random() < BATTLE.ringProcs.cdResetChance) {
+    delete BATTLE.skillCDs[sid];
+    logLine(`<span class="lg-clear">★ 幻夢戒指觸發：${sk.name} CD 重置！</span>`, '');
+  }
+
+  // ── 蝕念戒指：每次釋放技能疊一層（攻擊 +5%，最多 10 層，戰鬥內持續）──
+  if (BATTLE.ringProcs && BATTLE.ringProcs.skillStackAtkValue > 0) {
+    const max = BATTLE.ringProcs.skillStackAtkMax;
+    BATTLE.ringErosionStacks = Math.min((BATTLE.ringErosionStacks || 0) + 1, max);
+    const stacks = BATTLE.ringErosionStacks;
+    BATTLE.buffs = BATTLE.buffs.filter(b => !b._ringErosion);
+    BATTLE.buffs.push({
+      atk: BATTLE.ringProcs.skillStackAtkValue * stacks,
+      dur: 9999, _maxDur: 9999,
+      _name: `蝕念 ×${stacks}`,
+      _ringErosion: true,
+    });
+    if (stacks === max && stacks > (BATTLE._ringErosionLoggedMax || 0)) {
+      logLine(`<span class="lg-skill">★ 蝕念戒指達到滿層 ×${max}（攻擊 +${Math.round(BATTLE.ringProcs.skillStackAtkValue * max * 100)}%）</span>`, '');
+      BATTLE._ringErosionLoggedMax = max;
+    }
+  }
+
   logLine(`<span class="lg-skill">${sk.name}</span> 發動！`, '');
   if (window.battleAnim) battleAnim('player', 'attacking');
   if (window.flashSkillButton) flashSkillButton(sid);
@@ -1211,6 +1255,27 @@ function onDungeonClear() {
         GAME_STATE.gainMaterial(b.name, q, _battleCharId);
         matDrops[b.name] = (matDrops[b.name] || 0) + q;
         matMsgs.push(`✨ ${b.name} +${q}`);
+      }
+    }
+  }
+  // 副本層級機率掉特殊裝備（UR 戒指等）— 額外掉落，不佔通用裝備掉落配額
+  let bonusEquipMsg = '';
+  if (Array.isArray(d.bonusEquipment)) {
+    for (const b of d.bonusEquipment) {
+      if (Math.random() < (b.chance || 0)) {
+        const items = b.items || (b.itemId ? [b.itemId] : []);
+        if (!items.length) continue;
+        const pickedId = items[Math.floor(Math.random() * items.length)];
+        const pickedDef = GAME_DATA.findEquipment(pickedId);
+        if (!pickedDef) continue;
+        const instId = GAME_STATE.createEquipInstance(pickedId, true, _battleCharId);
+        const inst = _battleCs && _battleCs.bag && _battleCs.bag.equipment ? _battleCs.bag.equipment[instId] : null;
+        const affixDesc = (inst && inst.affixes && inst.affixes.length)
+          ? '【' + inst.affixes.map(a => `${a.label}+${a.value}`).join('/') + '】'
+          : '';
+        bonusEquipMsg = `<span class="lg-drop">★★ 獲得 [${pickedDef.rarity}] ${pickedDef.name}${affixDesc}</span>`;
+        logLine(bonusEquipMsg, '');
+        matMsgs.push(`★★ ${pickedDef.name}`);
       }
     }
   }

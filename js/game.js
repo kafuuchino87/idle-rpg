@@ -1786,44 +1786,150 @@ window.showRaidPreview = function(dungeonId) {
   setTimeout(() => win.classList.remove('flash-open'), 600);
   // 綁定按鈕
   body.querySelector('button[data-raid-start]')?.addEventListener('click', () => {
-    // 無盡塔：先檢查並扣入場券
+    // 無盡塔：先檢查並扣入場券（早退失敗）
     if (d.isEndless) {
       const ok = GAME_STATE.consumePass('pass-endless', 1);
       if (!ok) {
         toast('入場券不足！從寶箱中可低機率掉落「虛無通行證」', 'error');
         return;
       }
-      // 房主開無盡塔也要廣播，讓 guest 自動跟進並扣自己入場券
-      if (window.MP_API && MP_API.isHost() && MP_API.isConnected()) {
-        MP_API.broadcastRaidLaunch(d.id);
-        const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
-        toast(`房主開無盡塔 — ${teamSize} 人團進入：${d.name}（扣 1 張通行證）`, 'gold');
-      } else {
-        toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
-      }
-    } else {
-      // 房主：廣播 raid-launch 給朋友
-      if (window.MP_API && MP_API.isHost()) {
-        MP_API.broadcastRaidLaunch(d.id);
-        const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
-        toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
-      } else {
-        toast(`進入襲擊戰：${d.name}`, 'error');
-      }
     }
-    // 關閉上一場的結算彈窗（避免擋住戰鬥畫面）
-    const resultOverlay = document.getElementById('resultOverlay');
-    if (resultOverlay) resultOverlay.classList.add('hidden');
-    win.style.display = '';
-    win.classList.add('hidden');
-    PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
-    startBattle(d.id, GAME_STATE.state.activeCharId);
+    // 真正開戰邏輯（廣播 + 切場景 + startBattle），cutscene 結束時呼叫
+    const launch = () => {
+      if (d.isEndless) {
+        if (window.MP_API && MP_API.isHost() && MP_API.isConnected()) {
+          MP_API.broadcastRaidLaunch(d.id);
+          const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
+          toast(`房主開無盡塔 — ${teamSize} 人團進入：${d.name}（扣 1 張通行證）`, 'gold');
+        } else {
+          toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
+        }
+      } else {
+        if (window.MP_API && MP_API.isHost()) {
+          MP_API.broadcastRaidLaunch(d.id);
+          const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
+          toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
+        } else {
+          toast(`進入襲擊戰：${d.name}`, 'error');
+        }
+      }
+      const resultOverlay = document.getElementById('resultOverlay');
+      if (resultOverlay) resultOverlay.classList.add('hidden');
+      win.style.display = '';
+      win.classList.add('hidden');
+      PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
+      startBattle(d.id, GAME_STATE.state.activeCharId);
+    };
+    // 若有開場動畫先放，跑完才 launch；沒有就直接 launch
+    if (d.cutscene && typeof showRaidCutscene === 'function') {
+      showRaidCutscene(d.cutscene, launch);
+    } else {
+      launch();
+    }
   });
   body.querySelector('button[data-raid-close]')?.addEventListener('click', () => {
     win.style.display = '';
     win.classList.add('hidden');
   });
 };
+
+// ============================================================================
+// 開場動畫（cutscene）— 依 dungeon.cutscene 顯示 BOSS 立繪 + 逐字台詞
+// ============================================================================
+function showRaidCutscene(cutscene, onComplete) {
+  if (!cutscene || !Array.isArray(cutscene.lines) || cutscene.lines.length === 0) {
+    if (onComplete) onComplete();
+    return;
+  }
+  // 已存在的 cutscene overlay 先清掉（避免重複）
+  const existing = document.getElementById('cutsceneOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cutsceneOverlay';
+  overlay.className = 'cutscene-overlay';
+  overlay.innerHTML = `
+    <div class="cutscene-vignette"></div>
+    <div class="cutscene-portrait">
+      <img src="${cutscene.portrait}" alt="BOSS" />
+    </div>
+    <div class="cutscene-textbox">
+      <div class="cutscene-speaker"></div>
+      <div class="cutscene-line"></div>
+      <div class="cutscene-actions">
+        <button class="cutscene-skip">跳過動畫</button>
+        <button class="cutscene-next">繼續 ▼</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.classList.add('show'), 50);
+
+  const speakerEl = overlay.querySelector('.cutscene-speaker');
+  const lineEl = overlay.querySelector('.cutscene-line');
+  const nextBtn = overlay.querySelector('.cutscene-next');
+  const skipBtn = overlay.querySelector('.cutscene-skip');
+
+  let lineIdx = 0;
+  let typewriterTimer = null;
+  let lineDone = false;  // 當前行打完字了嗎
+
+  function finish() {
+    if (typewriterTimer) { clearInterval(typewriterTimer); typewriterTimer = null; }
+    overlay.classList.remove('show');
+    overlay.classList.add('hide');
+    setTimeout(() => overlay.remove(), 500);
+    if (onComplete) onComplete();
+  }
+
+  function advance() {
+    // 若當前行還在打字 → 跳到打完
+    if (!lineDone && typewriterTimer) {
+      clearInterval(typewriterTimer); typewriterTimer = null;
+      lineEl.textContent = cutscene.lines[lineIdx - 1].text;
+      lineDone = true;
+      if (lineIdx >= cutscene.lines.length) {
+        nextBtn.textContent = '⚔ 開始攻略';
+        nextBtn.classList.add('cutscene-start');
+      } else {
+        nextBtn.textContent = '繼續 ▼';
+      }
+      return;
+    }
+    // 已打完當前行 → 切下一行或結束
+    if (lineIdx >= cutscene.lines.length) {
+      finish();
+      return;
+    }
+    const line = cutscene.lines[lineIdx];
+    lineIdx++;
+    lineDone = false;
+    speakerEl.textContent = line.speaker || '';
+    lineEl.textContent = '';
+    nextBtn.textContent = '⏭ 跳過此句';
+    nextBtn.classList.remove('cutscene-start');
+    let chIdx = 0;
+    typewriterTimer = setInterval(() => {
+      lineEl.textContent += line.text[chIdx];
+      chIdx++;
+      if (chIdx >= line.text.length) {
+        clearInterval(typewriterTimer); typewriterTimer = null;
+        lineDone = true;
+        if (lineIdx >= cutscene.lines.length) {
+          nextBtn.textContent = '⚔ 開始攻略';
+          nextBtn.classList.add('cutscene-start');
+        } else {
+          nextBtn.textContent = '繼續 ▼';
+        }
+      }
+    }, 55);
+  }
+
+  advance();
+  nextBtn.onclick = advance;
+  skipBtn.onclick = finish;
+}
+window.showRaidCutscene = showRaidCutscene;
 
 // ============================================================================
 // 製作藍圖預覽
@@ -3220,9 +3326,24 @@ function renderBag() {
 function equipItem(slot, instId) {
   const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
   if (!cs.equip) cs.equip = {};
-  // 戒指防雙開：若該戒指目前在另一個戒指格，清空那一格
+  // 戒指防雙開：同一 inst 不能同時在左右兩格
   if (slot === 'ring1' && cs.equip.ring2 === instId) cs.equip.ring2 = null;
   if (slot === 'ring2' && cs.equip.ring1 === instId) cs.equip.ring1 = null;
+  // 戒指 procId 互斥：不能同時裝兩個有相同特效（procId）的戒指
+  if (slot === 'ring1' || slot === 'ring2') {
+    const otherSlot = slot === 'ring1' ? 'ring2' : 'ring1';
+    const otherId = cs.equip[otherSlot];
+    if (otherId && otherId !== instId) {
+      const inst = cs.bag.equipment[instId];
+      const otherInst = cs.bag.equipment[otherId];
+      const def = inst && GAME_DATA.findEquipment(inst.itemId);
+      const otherDef = otherInst && GAME_DATA.findEquipment(otherInst.itemId);
+      if (def && otherDef && def.procId && def.procId === otherDef.procId) {
+        toast(`不能裝兩個相同特效的戒指（${def.name}）`, 'error');
+        return;
+      }
+    }
+  }
   cs.equip[slot] = instId;
   toast('已裝備');
   renderBag();

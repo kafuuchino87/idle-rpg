@@ -559,6 +559,58 @@ const REGIONS = [
         bossPortrait: 'assets/portraits/raid-dragon.png',  // 預覽用龍當代表
         enemies: [],
         boss: '虛宙星龍' },
+      // ===== 鏡夢縛魂（單階 BOSS RAID + 開場動畫，畢業後最終本）=====
+      // 幻夢之主：紅絲帶縛萬千分身，凡入此境者被蝕去自我
+      // 機制：每 30 秒凝聚「分身結界」護盾，5 秒內不破則全隊即死
+      // 掉落：低機率 UR 戒指（幻夢 / 蝕念 隨機一枚）
+      { id: 'raid-mirror', name: '鏡夢 · 縛魂', cp: 700000, unlock: 'raid-stardragon', requiredLv: 99,
+        minCpOverride: 100000,
+        isRaid: true, baseTime: 60, expBase: 60000, goldBase: 100000,
+        difficultyMul: 60,
+        atkCoefOverride: 0.018,
+        defScaleOverride: 2.5,
+        skipMobs: true,  // 不出小怪，直接 BOSS
+        cutscene: {
+          portrait: 'assets/portraits/raid-mirror.png',
+          lines: [
+            { speaker: '？？？', text: '……竟敢闖入我的鏡夢？' },
+            { speaker: '幻夢之主', text: '紅絲帶縛萬千分身，迷途者，你能辨真我嗎？' },
+            { speaker: '幻夢之主', text: '凡入此境者，皆將心智被蝕、靈魂被縛。' },
+            { speaker: '幻夢之主', text: '你的影子，將映入我的鏡中，化為我的一員。' },
+            { speaker: '？？？', text: '——除非，你的劍能斬斷幻象，直擊真實。' },
+          ],
+        },
+        bosses: [
+          { name: '幻夢之主', portrait: 'assets/portraits/raid-mirror.png',
+            shield: { firstAt: 5, interval: 30, hpFixed: 15_000_000, breakTime: 5 } },
+        ],
+        bonusMats: [
+          { name: '永恆星辰', chance: 0.05, qty: [1, 1] },
+          { name: '神鋼', chance: 0.50, qty: [10, 20] },
+          { name: '永晶', chance: 0.30, qty: [3, 6] },
+        ],
+        bonusEquipment: [
+          // 3% 機率掉一枚 UR 戒指（從清單隨機）
+          { items: ['eq-ring-ur-dream', 'eq-ring-ur-erosion'], chance: 0.03, label: 'UR 戒指' },
+        ],
+        lore: [
+          '鏡湖之畔，住著一位「幻夢之主」。',
+          '紅絲帶纏繞萬千分身，凡入此境者皆迷失於鏡像。',
+          '心智被蝕、靈魂被縛——直至忘卻自我，化為她的一員。',
+          '若能斬斷幻象、直擊真實，便可帶走她遺落的縛魂之物。',
+        ],
+        warning: '單階 BOSS 副本。每 30 秒凝聚「分身結界」，5 秒內不破則全隊即死。建議三人團 + 補師通關。',
+        rewards: [
+          { label: '經驗值', value: '60,000', color: 'var(--exp)' },
+          { label: '金幣',   value: '100,000', color: 'var(--gold)' },
+          { label: '神鋼',   value: '50% 機率 ×10~20', color: 'var(--shard)' },
+          { label: '永晶',   value: '30% 機率 ×3~6', color: 'var(--shard)' },
+          { label: '★ 永恆星辰', value: '5% 機率（極限強化材料）', color: 'var(--hp-enemy)' },
+          { label: '★★ UR 戒指', value: '3% 機率：幻夢戒指 / 蝕念戒指（隨機一枚）', color: 'var(--hp-enemy)' },
+        ],
+        bossPortrait: 'assets/portraits/raid-mirror.png',
+        enemies: [],
+        boss: '幻夢之主' },
     ],
   },
 ];
@@ -972,6 +1024,15 @@ const ITEMS = {
     { id: 'eq-ring-r',    slot: 'ring', name: '寒鐵戒指', rarity: 'R',   tier: 1, stats: {} },
     { id: 'eq-ring-sr',   slot: 'ring', name: '星辰戒指', rarity: 'SR',  tier: 2, stats: {} },
     { id: 'eq-ring-ssr',  slot: 'ring', name: '永夜戒指', rarity: 'SSR', tier: 3, stats: {} },
+    // ===== UR 戒指（鏡夢縛魂 RAID 低機率掉，有觸發類固定效果 procId，左右不可同 procId）=====
+    { id: 'eq-ring-ur-dream', slot: 'ring', name: '幻夢戒指', rarity: 'UR', tier: 4, stats: {},
+      procId: 'cd-reset',
+      proc: { cdResetChance: 0.30 },
+      fixed: { label: '幻夢回響：釋放技能時 30% 機率重置該技能 CD' } },
+    { id: 'eq-ring-ur-erosion', slot: 'ring', name: '蝕念戒指', rarity: 'UR', tier: 4, stats: {},
+      procId: 'skill-stack-atk',
+      proc: { skillStackAtk: { value: 0.05, maxStacks: 10 } },
+      fixed: { label: '蝕念匯流：釋放技能時獲得 1 層「蝕念」（攻擊 +5%），最多 10 層，戰鬥結束重置' } },
   ],
 };
 
@@ -1193,9 +1254,9 @@ const RING_AFFIX_POOL = [
 ];
 
 function rollAffixes(rarity, isRing = false) {
-  // 戒指比一般裝備多 1 條詞綴（N=1/R=2/SR=3/SSR=4），最高 SSR
+  // 戒指比一般裝備多 1 條詞綴（N=1/R=2/SR=3/SSR=4），UR 戒指 5 條（RAID 限定）
   const counts = isRing
-    ? { N: 1, R: 2, SR: 3, SSR: 4 }
+    ? { N: 1, R: 2, SR: 3, SSR: 4, UR: 5 }
     : { N: 0, R: 1, SR: 2, SSR: 3, UR: 4 };
   const n = counts[rarity] || 0;
   const pool = isRing ? RING_AFFIX_POOL : AFFIX_POOL;
