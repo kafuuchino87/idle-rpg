@@ -144,6 +144,13 @@ function startBattle(dungeonId, charId) {
   BATTLE._cleared = false;  // 重置通關旗標
   BATTLE._dead = false;     // 重置陣亡旗標（組隊用）
   BATTLE._teamWipeFired = false;  // 重置全隊滅旗標
+  // 多人：清掉所有 peer 的 sticky dead 旗標（不然上一場死的記憶帶到新場）
+  if (window.MP_API && typeof MP_API.getPlayers === 'function') {
+    const peers = MP_API.getPlayers();
+    for (const pid in peers) {
+      if (peers[pid] && peers[pid].battleState) peers[pid].battleState.dead = false;
+    }
+  }
   BATTLE._wavePending = false;  // 重置 wave 切換 pending 旗標
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
   BATTLE.ringErosionStacks = 0;  // 蝕念戒指疊層（每戰鬥重置）
