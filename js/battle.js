@@ -438,8 +438,10 @@ function tickBattle(dt) {
 
   // 玩家行動（陣亡狀態不行動）
   if (!BATTLE._dead) {
-    // 攻擊速度上限 5 — 避免共鳴/buff/裝備堆滿後出現極端值
-    const effSpd = Math.min(5, BATTLE.player.spd * (1 + getBuffMod('spdMul')));
+    // 攻擊速度上限 5（avoid 共鳴/buff/裝備堆滿出極端值）；某些 buff（如虛無一閃）可突破上限至 10
+    const hasUncap = BATTLE.buffs.some(b => b.spdUncap);
+    const spdCap = hasUncap ? 10 : 5;
+    const effSpd = Math.min(spdCap, BATTLE.player.spd * (1 + getBuffMod('spdMul')));
     if (!BATTLE.player.nextAtk) BATTLE.player.nextAtk = 1 / effSpd;
     BATTLE.player.nextAtk -= dtSec;
     if (BATTLE.player.nextAtk <= 0) {
@@ -740,7 +742,10 @@ function basicAttack() {
   // 普攻也要 roll 暴擊（之前忘了套）
   const effCrit = BATTLE.player.crit + getBuffMod('crit');
   const isCrit = Math.random() < effCrit;
-  const dmg = computeDamage(BATTLE.player.atk * 1.0, isCrit);
+  // 普攻附加傷害（buff 觸發，如雪羽 A 虛無一閃期間）
+  const basicBonus = BATTLE.buffs.reduce((s, b) => s + (b.basicBonusAtk || 0), 0);
+  const basicMul = 1 + basicBonus;
+  const dmg = computeDamage(BATTLE.player.atk * basicMul, isCrit);
   if (window.battleAnim) battleAnim('player', isCrit ? 'attacking' : 'attacking');
   applyDamage(dmg, isCrit);
   // 普攻回藍
