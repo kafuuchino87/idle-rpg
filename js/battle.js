@@ -115,6 +115,11 @@ function startBattle(dungeonId, charId) {
   }
   BATTLE.speedMul = 1.0;   // 戰速固定，通關快慢由角色攻速 + 傷害決定
   BATTLE.startTime = performance.now();
+  // 清掉舊戰鬥還沒跑的 stopBattle 延遲（避免覆蓋新戰鬥的 running 旗標）
+  if (BATTLE._pendingStopTimer) {
+    clearTimeout(BATTLE._pendingStopTimer);
+    BATTLE._pendingStopTimer = null;
+  }
 
   BATTLE.running = true;
   BATTLE.paused = false;
@@ -1122,7 +1127,7 @@ function onEndlessTimeUp() {
   logLine(`<span class="lg-clear">⏱ 時間到！累積傷害 ${(totalDmg/1e6).toFixed(2)}M，達成階梯：${BATTLE.lastClear.endlessTierLabel}</span>`, '');
   GAME_STATE.scheduleSave();
   if (BATTLE.onClear) BATTLE.onClear();
-  setTimeout(() => stopBattle(), 400);
+  BATTLE._pendingStopTimer = setTimeout(() => { BATTLE._pendingStopTimer = null; stopBattle(); }, 400);
 }
 
 function onDungeonClear() {
@@ -1346,7 +1351,8 @@ function onDungeonClear() {
   GAME_STATE.scheduleSave();
   if (BATTLE.onClear) BATTLE.onClear();
 
-  setTimeout(() => {
+  BATTLE._pendingStopTimer = setTimeout(() => {
+    BATTLE._pendingStopTimer = null;
     const did = BATTLE.dungeonId;
     const isRaid = GAME_DATA.getDungeon(did)?.isRaid;
     // Wave 29.3：用 BATTLE.charId（戰鬥角色）而非 activeCharId（UI 角色）取 cs

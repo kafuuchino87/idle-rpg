@@ -2101,14 +2101,14 @@ function renderEnemyCards() {
       } else if (BATTLE._endlessMode && dungeon && dungeon.bossPortrait) {
         portraitHtml = `<img src="${dungeon.bossPortrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`;
       }
-      // 護盾條 + 大字倒數覆蓋層（只在有 shieldConfig 的 BOSS 渲染）
-      const shieldHtml = e.shieldConfig
+      // 護盾條 + 大字倒數覆蓋層 — 對所有 BOSS 都建好（display 控制），避免後續護盾啟動時 sig 沒變沒重建
+      const shieldHtml = e.isBoss
         ? `<div class="enemy-shield" style="margin-top:4px;border-radius:5px;overflow:hidden;display:none">
              <div class="shield-fill" style="height:100%;width:0%"></div>
            </div>`
         : '';
-      // 護盾倒數覆蓋（顯示大字 N 秒倒數，只在有 shieldConfig 才有）
-      const countdownHtml = e.shieldConfig
+      // 護盾倒數覆蓋（對所有 BOSS 都建好，display 控制）
+      const countdownHtml = e.isBoss
         ? `<div class="shield-countdown-overlay" style="display:none">0</div>`
         : '';
       card.innerHTML = `
