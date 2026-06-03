@@ -1174,21 +1174,22 @@ const AFFIX_POOL = [
   { stat: 'atkPct',    label: '神威',  min: 0.01, max: 0.03, integer: false },
 ];
 
-// 戒指詞綴池（每條數值為一般裝備的 2 倍；戒指 N=1/R=2/SR=3/SSR=4 條）
+// 戒指詞綴池（新最低 = 一般最高，新最高 = 一般最高 ×2，戒指詞綴永遠強於一般裝備上限）
+// 戒指 N=1/R=2/SR=3/SSR=4 條
 const RING_AFFIX_POOL = [
-  { stat: 'atk',       label: '銳利',  min: 8,    max: 36,   integer: true },
-  { stat: 'def',       label: '堅固',  min: 6,    max: 24,   integer: true },
-  { stat: 'hp',        label: '強健',  min: 50,   max: 200,  integer: true },
-  { stat: 'crit',      label: '靈巧',  min: 0.02, max: 0.08, integer: false },
-  { stat: 'critDmg',   label: '凶險',  min: 0.10, max: 0.40, integer: false },
-  { stat: 'spd',       label: '迅捷',  min: 0.06, max: 0.20, integer: false },
-  { stat: 'dmgReduce', label: '堅韌',  min: 0.02, max: 0.08, integer: false },
-  { stat: 'skillDmg',  label: '兇猛',  min: 0.04, max: 0.16, integer: false },
-  { stat: 'cdReduce',  label: '急進',  min: 0.02, max: 0.06, integer: false },
-  { stat: 'vsBoss',    label: '獵首',  min: 0.04, max: 0.12, integer: false },
-  { stat: 'defPierce', label: '破甲',  min: 0.02, max: 0.06, integer: false },
-  { stat: 'maxMp',     label: '精魄',  min: 40,   max: 160,  integer: true },
-  { stat: 'atkPct',    label: '神威',  min: 0.02, max: 0.06, integer: false },
+  { stat: 'atk',       label: '銳利',  min: 18,   max: 36,   integer: true },
+  { stat: 'def',       label: '堅固',  min: 12,   max: 24,   integer: true },
+  { stat: 'hp',        label: '強健',  min: 100,  max: 200,  integer: true },
+  { stat: 'crit',      label: '靈巧',  min: 0.04, max: 0.08, integer: false },
+  { stat: 'critDmg',   label: '凶險',  min: 0.20, max: 0.40, integer: false },
+  { stat: 'spd',       label: '迅捷',  min: 0.10, max: 0.20, integer: false },
+  { stat: 'dmgReduce', label: '堅韌',  min: 0.04, max: 0.08, integer: false },
+  { stat: 'skillDmg',  label: '兇猛',  min: 0.08, max: 0.16, integer: false },
+  { stat: 'cdReduce',  label: '急進',  min: 0.03, max: 0.06, integer: false },
+  { stat: 'vsBoss',    label: '獵首',  min: 0.06, max: 0.12, integer: false },
+  { stat: 'defPierce', label: '破甲',  min: 0.03, max: 0.06, integer: false },
+  { stat: 'maxMp',     label: '精魄',  min: 80,   max: 160,  integer: true },
+  { stat: 'atkPct',    label: '神威',  min: 0.03, max: 0.06, integer: false },
 ];
 
 function rollAffixes(rarity, isRing = false) {

@@ -224,6 +224,27 @@ function loadState() {
       parsed.forgeResetV1 = true;
       console.log(`[forgeResetV1] 重置 ${totalCount} 件裝備強化（總計 ${totalLv} 等），退補償材料`);
     }
+    // 一次性遷移：戒指詞綴池範圍修正 — 把所有舊戒指 reroll（新池 = 原最高 ~ 原最高×2）
+    if (!parsed.ringAffixFixV1) {
+      let ringCount = 0;
+      if (parsed.characters) {
+        for (const cid in parsed.characters) {
+          const bag = parsed.characters[cid].bag;
+          if (!bag || !bag.equipment) continue;
+          for (const instId in bag.equipment) {
+            const inst = bag.equipment[instId];
+            if (!inst) continue;
+            const def = GAME_DATA.findEquipment(inst.itemId);
+            if (def && def.slot === 'ring') {
+              inst.affixes = GAME_DATA.rollAffixes(def.rarity, true);
+              ringCount++;
+            }
+          }
+        }
+      }
+      parsed.ringAffixFixV1 = true;
+      console.log(`[ringAffixFixV1] 重抽 ${ringCount} 枚戒指詞綴（新範圍）`);
+    }
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
     } catch (e) {
