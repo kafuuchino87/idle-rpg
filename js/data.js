@@ -282,24 +282,24 @@ const SKILLS = {
   // ── 路線 B：白翼聖姫（治癒、護盾、AOE）──
   'sacred-bloom': {
     name: '聖光綻放', tag: '治療+AOE', kind: 'arcane', path: 'B',
-    desc: '聖光綻放：對全體 400% AOE + 自身與隊友各回復 15% 最大 HP。CD 8s。',
-    mult: 4.0, aoe: true, heal: 0.15, healAlly: true, cd: 8.0, mpCost: 180, costTier: 'medium',
+    desc: '聖光綻放：對全體 320% AOE + 自身與隊友各回復 15% 最大 HP。CD 8s。',
+    mult: 3.2, aoe: true, heal: 0.15, healAlly: true, cd: 8.0, mpCost: 180, costTier: 'medium',
   },
   'dawn-aria': {
     name: '曙光連歌', tag: '治癒連擊', kind: 'arcane', path: 'B',
-    desc: '聖光詠唱：四段 AOE 連擊共 1400%（每段 350%），每段自身與隊友各回 5% HP（合計 20%）。CD 10s。',
-    mult: [3.5, 3.5, 3.5, 3.5], aoe: true, healPerHit: 0.05, healAlly: true, cd: 10, mpCost: 180, costTier: 'medium',
+    desc: '聖光詠唱：四段 AOE 連擊共 1120%（每段 280%），每段自身與隊友各回 5% HP（合計 20%）。CD 10s。',
+    mult: [2.8, 2.8, 2.8, 2.8], aoe: true, healPerHit: 0.05, healAlly: true, cd: 10, mpCost: 180, costTier: 'medium',
   },
   'white-aegis': {
-    name: '白翼結界', tag: '★護盾+AOE★', kind: 'arcane', path: 'B', requireTier: 2,
-    desc: '光輝結界：對全體 600% AOE + 受到傷害 -50% 持續 10 秒 + 自身與隊友各回復 25% 最大 HP。CD 16s。',
-    mult: 6.0, aoe: true, buff: { dmgReduce: 0.5, dur: 10 }, heal: 0.25, healAlly: true,
-    cd: 16, mpCost: 180, costTier: 'medium',
+    name: '白翼結界', tag: '★護盾★', kind: 'self', path: 'B', requireTier: 2,
+    desc: '光輝結界：受到傷害 -50% 持續 10 秒、自身與隊友各回復 25% 最大 HP。CD 16s。',
+    mult: 0, buff: { dmgReduce: 0.5, dur: 10 }, heal: 0.25, healAlly: true,
+    cd: 16, isBuff: true, mpCost: 90, costTier: 'light',
   },
   'feather-eden': {
     name: '羽落聖光', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】羽翼降下聖光：三段 AOE 共 3150%（每段 1050%）+ 自身與隊友 HP 回滿 + 8 秒減傷 30%。CD 30s。',
-    mult: [10.5, 10.5, 10.5], aoe: true, heal: 1.0, healAlly: true, buff: { dmgReduce: 0.3, dur: 8 },
+    desc: '【終極奧義】羽翼降下聖光：三段 AOE 共 2550%（每段 850%）+ 自身與隊友 HP 回滿 + 8 秒減傷 30%。CD 30s。',
+    mult: [8.5, 8.5, 8.5], aoe: true, heal: 1.0, healAlly: true, buff: { dmgReduce: 0.3, dur: 8 },
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
