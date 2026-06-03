@@ -1311,12 +1311,12 @@ function onDungeonClear() {
     chestMsg = ` <span class="lg-chest">獲得 ${c.name}（背包點開）</span>`;
   }
 
-  // 異界之鎚掉落：依副本類型給不同低機率（鍛造終焉鎧用，已壓低避免太通膨）
+  // 異界之鎚掉落：依副本類型給不同低機率（鍛造終焉鎧用）
   let hammerMsg = '';
   let hammerChance = 0;
-  if (d.isRaid) hammerChance = 0.015;          // 襲擊戰 1.5%（降 4 → 1.5）
-  else if (d.special) hammerChance = 0.007;    // 神窟 0.7%（降 2 → 0.7）
-  else if (d.cp >= 6000) hammerChance = 0.002; // 主線高階 0.2%（降 0.5 → 0.2）
+  if (d.isRaid) hammerChance = 0.04;           // 襲擊戰 4%
+  else if (d.special) hammerChance = 0.02;     // 神窟 2%
+  else if (d.cp >= 6000) hammerChance = 0.005; // 主線高階 0.5%
   if (hammerChance > 0 && Math.random() < hammerChance) {
     GAME_STATE.gainMaterial('異界之鎚', 1, _battleCharId);
     hammerMsg = ` <span class="lg-drop">🔨 異界之鎚 ×1</span>`;

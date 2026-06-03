@@ -736,7 +736,7 @@ const CHESTS = {
       { kind: 'shard', min: 3, max: 8, weight: 8 },
       { kind: 'gem-random', tier: [1, 2], weight: 3 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 0.5 },  // 0.5%
-      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.1 },  // 銀箱 0.1%（降）
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.3 },  // 銀箱 0.3%
     ],
   },
   'chest-gold': {
@@ -756,7 +756,7 @@ const CHESTS = {
       { kind: 'gem-random', tier: [2, 3], weight: 7 },
       { kind: 'equip-rarity', rarity: 'SR', weight: 7 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 2 },  // 2%
-      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 0.5 },  // 金箱 0.5%（降）
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 1.5 },  // 金箱 1.5%
     ],
   },
   'chest-divine': {
@@ -775,7 +775,7 @@ const CHESTS = {
       { kind: 'gem-random', tier: [3, 4], weight: 10 },
       { kind: 'equip-rarity', rarity: 'SSR', weight: 9 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 8 },  // 8%
-      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 1.5 },  // 神箱 1.5%（降）
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 5 },  // 神箱 5%
     ],
   },
 };
