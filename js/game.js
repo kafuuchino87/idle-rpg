@@ -1789,6 +1789,20 @@ window.showRaidPreview = function(dungeonId) {
   setTimeout(() => win.classList.remove('flash-open'), 600);
   // 綁定按鈕
   body.querySelector('button[data-raid-start]')?.addEventListener('click', () => {
+    // ★ 預先驗證 CP / 等級 — 失敗就 toast 早退，不發廣播、不播 cutscene
+    //   否則就會「動畫播完才知道進不去」的鬼狀態
+    const _cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+    const _myCP = _cs ? GAME_STATE.combatPower(_cs.id) : 0;
+    const _minCp = (typeof d.minCpOverride === 'number') ? d.minCpOverride : d.cp * 0.4;
+    if (d.requiredLv && _cs && _cs.level < d.requiredLv) {
+      const need = d.requiredLv >= 99 ? '畢業（主線練到 Lv 99）' : `Lv ${d.requiredLv}`;
+      toast(`需要${need}才能挑戰 ${d.name}（目前 Lv ${_cs.level}）`, 'error');
+      return;
+    }
+    if (_myCP < _minCp && !d.isEndless) {
+      toast(`戰力不足，需要 ${Math.floor(_minCp).toLocaleString()} CP（目前 ${_myCP.toLocaleString()}）`, 'error');
+      return;
+    }
     // 無盡塔：先檢查並扣入場券（早退失敗）
     if (d.isEndless) {
       const ok = GAME_STATE.consumePass('pass-endless', 1);
@@ -4654,6 +4668,13 @@ function hookMpCallbacks() {
       const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
       if (!cs || (d.requiredLv && cs.level < d.requiredLv)) {
         toast(`你的等級不足（需 Lv ${d.requiredLv}），無法跟團`, 'error');
+        return;
+      }
+      // CP 預檢 — 不足就早退，避免播 cutscene 後才發現進不去
+      const _guestCP = GAME_STATE.combatPower(cs.id);
+      const _guestMinCp = (typeof d.minCpOverride === 'number') ? d.minCpOverride : d.cp * 0.4;
+      if (_guestCP < _guestMinCp && !d.isEndless) {
+        toast(`你的戰力不足（需要 ${Math.floor(_guestMinCp).toLocaleString()} CP，目前 ${_guestCP.toLocaleString()}），無法跟團`, 'error');
         return;
       }
       // 無盡塔：guest 也要扣自己 1 張入場券（按設定「每人扣 1 張」）
