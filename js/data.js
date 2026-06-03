@@ -675,6 +675,9 @@ const POTIONS = [
   { id: 'scroll-drop-30', name: '幸運神符',     type: 'buff', kind: 'global', stat: 'dropMul', value: 0.30, duration: 1800, rarity: 'SSR', cost: { gold: 6000, mats: { '星鋼': 3, '神鋼': 1 } }, desc: '裝備掉率與材料掉落 +30%，持續 30 分鐘', category: 'scroll' },
   // ── 強化保護卷（一次性消耗，敲極限強化時可選用；只能透過魂晶兌換取得，不在商店列表） ──
   { id: 'scroll-forge-protect', name: '強化保護卷', type: 'forge-protect', rarity: 'SR', cost: { shard: 50 }, desc: '極限強化 (+11 ~ +18) 時使用，失敗保護不會降級 (50 魂晶/張)', category: 'hidden' },
+  // ── 高級加倍卷（魂晶兌換專屬，+300% 1 小時，可疊加普通卷軸）──
+  { id: 'scroll-exp-60h',  name: '高級經驗加倍卷', type: 'buff', kind: 'global', stat: 'expMul',  value: 3.0, duration: 3600, rarity: 'SSR', cost: { shard: 200 }, desc: '經驗 +300%，持續 60 分鐘（可疊加普通加倍卷）', category: 'hidden' },
+  { id: 'scroll-gold-60h', name: '高級黃金加倍卷', type: 'buff', kind: 'global', stat: 'goldMul', value: 3.0, duration: 3600, rarity: 'SSR', cost: { shard: 200 }, desc: '金錢 +300%，持續 60 分鐘（可疊加普通加倍卷）', category: 'hidden' },
 ];
 function findPotion(id) { return POTIONS.find(p => p.id === id); }
 
@@ -692,6 +695,9 @@ const SHARD_EXCHANGE = [
   { id: 'sx-reroll',  name: '詞綴重抽券 ×1', cost: 200, reward: { kind: 'reroll-token', qty: 1 }, desc: '重新隨機某件裝備的所有詞綴' },
   // 強化保護卷
   { id: 'sx-forge-protect', name: '強化保護卷 ×1', cost: 50, reward: { kind: 'potion', id: 'scroll-forge-protect', qty: 1 }, desc: '極限強化 (+11 ~ +18) 時可選用，失敗保護不會降級' },
+  // 高級加倍卷（可疊加普通加倍卷）
+  { id: 'sx-scroll-exp-elite',  name: '高級經驗加倍卷 ×1', cost: 200, reward: { kind: 'potion', id: 'scroll-exp-60h',  qty: 1 }, desc: '經驗 +300%、持續 60 分鐘，可疊加普通經驗卷' },
+  { id: 'sx-scroll-gold-elite', name: '高級黃金加倍卷 ×1', cost: 200, reward: { kind: 'potion', id: 'scroll-gold-60h', qty: 1 }, desc: '金錢 +300%、持續 60 分鐘，可疊加普通黃金卷' },
 ];
 function findShardExchange(id) { return SHARD_EXCHANGE.find(s => s.id === id); }
 
