@@ -669,12 +669,16 @@ function tickBossShield(dt) {
 // ============================================================================
 // 幻夢之主（鏡夢縛魂 RAID）— BOSS 技能排程系統
 // ----------------------------------------------------------------------------
-// 拔刀斬結束後啟動，依序施放 7 招技能 + 半血階段轉換
-// Phase 1（覺醒前）：分身映鏡 → 鏡花水月 → 紅絲縛魂 → 萬影連舞 (循環)
-// Phase 2（覺醒後）：絲帶天降 → 鏡牢禁錮 → 萬影連舞 → 鏡花水月 (循環、間隔短)
+// 拔刀斬結束後啟動，每招結束後固定 5 秒 CD → 立刻進下一招
+// Phase 1（覺醒前，5 招循環）：
+//   萬影連舞 → 紅絲縛魂 → 鏡花水月 → 分身映鏡 → 萬影連舞 (重複)
+//   設計：暖機→debuff→必打斷→DPS 檢→快速收尾
+// Phase 2（覺醒後，5 招循環，整體節奏拉緊）：
+//   絲帶天降 → 萬影連舞 → 鏡牢禁錮 → 鏡花水月 → 絲帶天降 (重複)
+//   設計：AoE→連擊→鎖人→補血→AoE，全程持續壓力
 // ============================================================================
-const MIRROR_SKILLS_P1 = ['cloneSummon', 'flowerMoon', 'ribbonBind', 'shadowDance'];
-const MIRROR_SKILLS_P2 = ['ribbonRain', 'mirrorCage', 'shadowDance', 'flowerMoon'];
+const MIRROR_SKILLS_P1 = ['shadowDance', 'ribbonBind', 'flowerMoon', 'cloneSummon', 'shadowDance'];
+const MIRROR_SKILLS_P2 = ['ribbonRain', 'shadowDance', 'mirrorCage', 'flowerMoon', 'ribbonRain'];
 
 // 每招施放前 BOSS 角色側邊吐一句話（precast 1.5 秒）
 const MIRROR_CALLOUTS = {
@@ -696,7 +700,7 @@ function initMirrorBoss() {
   BATTLE.mirrorBoss = {
     skillIdx: 0,
     cdTimer: 0,
-    skillCD: 20,  // 拔刀斬結束後 20 秒進入第一個排程技能
+    skillCD: 5,    // 拔刀斬結束 5 秒進第一招
     awakened: false,
     active: null,
   };
@@ -738,9 +742,7 @@ function tickMirrorBoss(dt) {
     castMirrorSkill(skillId);
     mb.skillIdx++;
     mb.cdTimer = 0;
-    // 覺醒後 CD 縮短 30%
-    const base = mb.awakened ? 15 : 22;
-    mb.skillCD = base + Math.random() * 4;
+    mb.skillCD = 5;  // 每招結束後固定 5 秒就進下一招（之前 22-26 / 15-19）
   }
 }
 
@@ -849,7 +851,7 @@ function castMirrorAwakening() {
   BATTLE.mirrorBoss.awakened = true;
   BATTLE.mirrorBoss.skillIdx = 0;
   BATTLE.mirrorBoss.cdTimer = 0;
-  BATTLE.mirrorBoss.skillCD = 5;  // 覺醒後 5 秒就開始攻擊
+  BATTLE.mirrorBoss.skillCD = 5;  // 覺醒後也是 5 秒間隔（跟一般循環一致）
   // 清掉舊招式狀態
   BATTLE.mirrorBoss.active = null;
   e.cloneDR = 0; e.cloneCount = 0; BATTLE.player.caged = false;
@@ -1126,7 +1128,14 @@ function tickDots(dt) {
         }
         trackDamage(dmg, d.sourceId, false);
         if (window.floatDamage) floatDamage('🔥 ' + dmg, 'dot');
-        if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) { onEnemyDown(); return false; }
+        // 鏡夢縛魂：DoT 把 HP 打到 0 也要進入死亡動畫
+        if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) {
+          if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest' && !BATTLE.bossDying) {
+            enterMirrorBossDying();
+            return false;
+          }
+          if (!BATTLE.bossDying) { onEnemyDown(); return false; }
+        }
       }
     }
     return d.dur > 0;
@@ -1239,7 +1248,14 @@ function tickSummons(dt) {
         }
         trackDamage(dmg, s.sourceId, isCrit);
         if (window.floatDamage) floatDamage('🦊 ' + (isCrit ? 'CRIT! ' : '') + dmg, isCrit ? 'crit' : 'summon');
-        if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) { onEnemyDown(); return s.dur > 0; }
+        // 鏡夢縛魂：召喚物把 HP 打到 0 也要進入死亡動畫
+        if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) {
+          if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest' && !BATTLE.bossDying) {
+            enterMirrorBossDying();
+            return s.dur > 0;
+          }
+          if (!BATTLE.bossDying) { onEnemyDown(); return s.dur > 0; }
+        }
       }
     }
     return s.dur > 0;
