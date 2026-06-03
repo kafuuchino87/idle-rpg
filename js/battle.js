@@ -740,9 +740,7 @@ function basicAttack() {
   // 普攻也要 roll 暴擊（之前忘了套）
   const effCrit = BATTLE.player.crit + getBuffMod('crit');
   const isCrit = Math.random() < effCrit;
-  // 普攻倍率加成（basicAtkMul）— 給「普攻向」職業（如雪羽 B 補師）強化
-  const basicMul = 1 + (BATTLE.player.basicAtkMul || 0);
-  const dmg = computeDamage(BATTLE.player.atk * basicMul, isCrit);
+  const dmg = computeDamage(BATTLE.player.atk * 1.0, isCrit);
   if (window.battleAnim) battleAnim('player', isCrit ? 'attacking' : 'attacking');
   applyDamage(dmg, isCrit);
   // 普攻回藍
