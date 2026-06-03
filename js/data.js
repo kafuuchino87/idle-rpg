@@ -567,7 +567,7 @@ const REGIONS = [
         minCpOverride: 100000,
         isRaid: true, baseTime: 60, expBase: 60000, goldBase: 100000,
         difficultyMul: 60,
-        atkCoefOverride: 0.005,    // 大幅下修（從 0.018），BOSS 平A 不會秒玩家，危險靠護盾即死
+        atkCoefOverride: 0.0005,   // 【測試模式】平 A 幾乎無傷，原值 0.005
         defScaleOverride: 2.5,
         skipMobs: true,  // 不出小怪，直接 BOSS
         cutscene: {
@@ -592,7 +592,7 @@ const REGIONS = [
               name: '拔刀斬',
               chargeTime: 3,
               shieldHp: 2_000_000_000,  // 20 億盾
-              damageOnFail: 0.9,        // 90% maxHp
+              damageOnFail: 0.01,       // 【測試模式】1% maxHp（原值 0.9）
             },
           },
         ],

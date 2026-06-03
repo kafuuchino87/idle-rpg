@@ -788,7 +788,7 @@ function castFlowerMoon() {
 function castRibbonBind() {
   BATTLE.mirrorBoss.active = {
     id: 'ribbonBind', timer: 6, name: '紅絲縛魂',
-    dotPct: 0.08, dotTick: 1, dmgThreshold: 500_000_000, dmgDealt: 0,
+    dotPct: 0.01, dotTick: 1, dmgThreshold: 500_000_000, dmgDealt: 0,  // 【測試模式】dotPct 原值 0.08
   };
   // 玩家攻速 -50% buff
   BATTLE.buffs.push({ spdMul: -0.5, dur: 6, _maxDur: 6, _name: '紅絲纏縛', _ribbonBind: true });
@@ -800,7 +800,7 @@ function castRibbonBind() {
 function castShadowDance() {
   BATTLE.mirrorBoss.active = {
     id: 'shadowDance', timer: 2.0, name: '萬影連舞',
-    hitsLeft: 6, hitTimer: 0.3, hitInterval: 0.3, dmgPerHit: 0.08,
+    hitsLeft: 6, hitTimer: 0.3, hitInterval: 0.3, dmgPerHit: 0.01,  // 【測試模式】原值 0.08
   };
   logLine(`<span class="lg-fail">✦【萬影連舞】BOSS 化作殘影連擊！6 段 × 8% 最大生命，每段給玩家暴擊 +5%！</span>`, '');
   fireBossSkillAnim('shadowDance', { duration: 2.0 });
@@ -810,7 +810,7 @@ function castShadowDance() {
 function castRibbonRain() {
   BATTLE.mirrorBoss.active = {
     id: 'ribbonRain', timer: 4.0, name: '絲帶天降',
-    ribbonsCast: 0, ribbonsTotal: 12, hitChance: 0.30, dmgPerHit: 0.08,
+    ribbonsCast: 0, ribbonsTotal: 12, hitChance: 0.30, dmgPerHit: 0.01,  // 【測試模式】dmgPerHit 原值 0.08
     interval: 4.0 / 12, accumulator: 0,
   };
   logLine(`<span class="lg-fail">✦【絲帶天降】螢幕落下 12 條紅絲！4 秒內隨機命中玩家！</span>`, '');
@@ -821,7 +821,7 @@ function castRibbonRain() {
 function castMirrorCage() {
   BATTLE.mirrorBoss.active = {
     id: 'mirrorCage', timer: 8, name: '鏡牢禁錮',
-    cageHp: 500_000_000, cageMaxHp: 500_000_000, failDmgPct: 0.60,
+    cageHp: 500_000_000, cageMaxHp: 500_000_000, failDmgPct: 0.01,  // 【測試模式】failDmgPct 原值 0.60
   };
   BATTLE.player.caged = true;
   logLine(`<span class="lg-fail">✦【鏡牢禁錮】玩家被鎖入鏡牢！對 BOSS 的傷害會打到鏡牢上 — 8 秒擊破 5 億 HP 鏡牢，否則扣 60% 生命！</span>`, '');
@@ -872,15 +872,16 @@ function tickMirrorActive(dt) {
     }
     case 'cloneSummon': {
       if (a.timer <= 0) {
-        // 時間到：依殘餘分身數每個扣 30%
+        // 時間到：依殘餘分身數每個扣 30%（測試模式 1%）
         const remaining = Math.max(0, BATTLE.enemy.cloneCount || 0);
         if (remaining > 0) {
-          const dmg = Math.floor(BATTLE.player.maxHp * 0.30 * remaining);
+          const explodePct = 0.01;  // 【測試模式】原值 0.30
+          const dmg = Math.floor(BATTLE.player.maxHp * explodePct * remaining);
           BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
           logLine(`<span class="lg-fail">✘ 分身自爆！${remaining} 個分身共 ${dmg.toLocaleString()} 傷害！</span>`, '');
           fireBossSkillAnim('cloneExplode', { count: remaining });
           if (BATTLE._mpMode === 'host' && window.MP_API) {
-            MP_API.broadcast('boss-skill-fail', { id: 'cloneSummon', dmgPct: 0.30 * remaining });
+            MP_API.broadcast('boss-skill-fail', { id: 'cloneSummon', dmgPct: explodePct * remaining });
           }
           if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
         }
