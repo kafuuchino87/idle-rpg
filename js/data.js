@@ -525,9 +525,9 @@ const REGIONS = [
       { id: 'raid-stardragon', name: '星淵 · 雙影獵討', cp: 600000, unlock: 'raid-calamity', requiredLv: 99,
         minCpOverride: 100000,
         isRaid: true, baseTime: 60, expBase: 50000, goldBase: 80000,
-        difficultyMul: 25,         // 仍給 HP 爆量
-        atkCoefOverride: 0.015,    // BOSS atk 上修（玩家會被打痛）
-        defScaleOverride: 2.5,     // BOSS def 降到 2.5x（從 25x 降下來，搭配 defPierce 可實際出傷）
+        difficultyMul: 50,         // HP 大幅上修（玩家 DPS 已破 1900 萬 / 場，舊 25x 太快通關）
+        atkCoefOverride: 0.015,    // BOSS atk
+        defScaleOverride: 2.5,     // BOSS def（不跟 difficultyMul，獨立 2.5x）
         skipMobs: true,  // 不出小怪，直接兩階 BOSS
         bosses: [
           // Phase 1 — 星淵獸：純血戰，無護盾機制（熱身關）
