@@ -615,6 +615,11 @@ const RECIPES = [
   { id: 'craft-oracle-top',  name: '神諭·織縷袍', target: 'eq-top-oracle',  cost: { gold: 90000, mats: { '神鋼': 90, '永晶': 40, '夢晶': 4 } }, requiredLv: 95 },
   { id: 'craft-oracle-bot',  name: '神諭·織縷袴', target: 'eq-bot-oracle',  cost: { gold: 80000, mats: { '神鋼': 80, '永晶': 35, '夢晶': 3 } }, requiredLv: 95 },
   { id: 'craft-oracle-feet', name: '神諭·織縷履', target: 'eq-feet-oracle', cost: { gold: 80000, mats: { '神鋼': 80, '永晶': 35, '夢晶': 3 } }, requiredLv: 95 },
+  // ===== 戒指（純詞綴，最高 SSR，可重抽券洗詞綴）=====
+  { id: 'craft-ring-n',   name: '練習戒指', target: 'eq-ring-n',   cost: { gold: 200,   mats: { '粗鋼': 5 } },                          requiredLv: 1 },
+  { id: 'craft-ring-r',   name: '寒鐵戒指', target: 'eq-ring-r',   cost: { gold: 1200,  mats: { '精鋼': 12 } },                         requiredLv: 15 },
+  { id: 'craft-ring-sr',  name: '星辰戒指', target: 'eq-ring-sr',  cost: { gold: 5000,  mats: { '星鋼': 22, '精鋼': 10 } },             requiredLv: 35 },
+  { id: 'craft-ring-ssr', name: '永夜戒指', target: 'eq-ring-ssr', cost: { gold: 20000, mats: { '神鋼': 28, '永晶': 10, '星鋼': 12 } }, requiredLv: 60 },
   // UR 只能襲擊戰掉，不開放製作
 ];
 
@@ -828,8 +833,11 @@ function socketsForRarity(rarity) {
 // --------------------------------------------------------------------------
 // 物品：5 部位裝備（武器/頭/上衣/下衣/腳）+ 材料 + 詞綴池
 // --------------------------------------------------------------------------
-const EQUIPMENT_SLOTS = ['weapon', 'head', 'top', 'bottom', 'feet'];
-const SLOT_LABELS = { weapon: '武器', head: '頭', top: '上衣', bottom: '下衣', feet: '腳' };
+const EQUIPMENT_SLOTS = ['weapon', 'head', 'top', 'bottom', 'feet', 'ring1', 'ring2'];
+const SLOT_LABELS = { weapon: '武器', head: '頭', top: '上衣', bottom: '下衣', feet: '腳', ring1: '戒指(左)', ring2: '戒指(右)', ring: '戒指' };
+// 戒指：單一 def.slot='ring'，可裝在 ring1 或 ring2 兩個格子
+function isRingSlot(slot) { return slot === 'ring1' || slot === 'ring2'; }
+function slotAcceptsItem(slot, defSlot) { return defSlot === slot || (isRingSlot(slot) && defSlot === 'ring'); }
 
 const ITEMS = {
   materials: {
@@ -959,6 +967,11 @@ const ITEMS = {
         effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
       },
     },
+    // ===== 戒指（純詞綴，無 stats / 無 fixed / 無 owner，N~SSR 製作取得，可用重抽券洗詞綴）=====
+    { id: 'eq-ring-n',    slot: 'ring', name: '練習戒指', rarity: 'N',   tier: 0, stats: {} },
+    { id: 'eq-ring-r',    slot: 'ring', name: '寒鐵戒指', rarity: 'R',   tier: 1, stats: {} },
+    { id: 'eq-ring-sr',   slot: 'ring', name: '星辰戒指', rarity: 'SR',  tier: 2, stats: {} },
+    { id: 'eq-ring-ssr',  slot: 'ring', name: '永夜戒指', rarity: 'SSR', tier: 3, stats: {} },
   ],
 };
 
@@ -1144,6 +1157,7 @@ function resolveFixedValue(value, forge) {
 }
 
 // 隨機詞綴池（裝備掉落時依稀有度給 N=0/R=1/SR=2/SSR=3/UR=4 條）
+// 詞綴允許重複（同一裝備可能抽到 2 個神威）
 const AFFIX_POOL = [
   { stat: 'atk',       label: '銳利',  min: 4,    max: 18,   integer: true },
   { stat: 'def',       label: '堅固',  min: 3,    max: 12,   integer: true },
@@ -1160,14 +1174,34 @@ const AFFIX_POOL = [
   { stat: 'atkPct',    label: '神威',  min: 0.01, max: 0.03, integer: false },
 ];
 
-function rollAffixes(rarity) {
-  const counts = { N: 0, R: 1, SR: 2, SSR: 3, UR: 4 };
+// 戒指詞綴池（每條數值為一般裝備的 2 倍；戒指 N=1/R=2/SR=3/SSR=4 條）
+const RING_AFFIX_POOL = [
+  { stat: 'atk',       label: '銳利',  min: 8,    max: 36,   integer: true },
+  { stat: 'def',       label: '堅固',  min: 6,    max: 24,   integer: true },
+  { stat: 'hp',        label: '強健',  min: 50,   max: 200,  integer: true },
+  { stat: 'crit',      label: '靈巧',  min: 0.02, max: 0.08, integer: false },
+  { stat: 'critDmg',   label: '凶險',  min: 0.10, max: 0.40, integer: false },
+  { stat: 'spd',       label: '迅捷',  min: 0.06, max: 0.20, integer: false },
+  { stat: 'dmgReduce', label: '堅韌',  min: 0.02, max: 0.08, integer: false },
+  { stat: 'skillDmg',  label: '兇猛',  min: 0.04, max: 0.16, integer: false },
+  { stat: 'cdReduce',  label: '急進',  min: 0.02, max: 0.06, integer: false },
+  { stat: 'vsBoss',    label: '獵首',  min: 0.04, max: 0.12, integer: false },
+  { stat: 'defPierce', label: '破甲',  min: 0.02, max: 0.06, integer: false },
+  { stat: 'maxMp',     label: '精魄',  min: 40,   max: 160,  integer: true },
+  { stat: 'atkPct',    label: '神威',  min: 0.02, max: 0.06, integer: false },
+];
+
+function rollAffixes(rarity, isRing = false) {
+  // 戒指比一般裝備多 1 條詞綴（N=1/R=2/SR=3/SSR=4），最高 SSR
+  const counts = isRing
+    ? { N: 1, R: 2, SR: 3, SSR: 4 }
+    : { N: 0, R: 1, SR: 2, SSR: 3, UR: 4 };
   const n = counts[rarity] || 0;
-  const pool = [...AFFIX_POOL];
+  const pool = isRing ? RING_AFFIX_POOL : AFFIX_POOL;
   const picks = [];
-  for (let i = 0; i < n && pool.length; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    const a = pool.splice(idx, 1)[0];
+  for (let i = 0; i < n; i++) {
+    // 允許重複：直接從 pool 隨機抽，不消除已抽過的條目
+    const a = pool[Math.floor(Math.random() * pool.length)];
     const value = a.min + Math.random() * (a.max - a.min);
     const final = a.integer ? Math.round(value) : Math.round(value * 1000) / 1000;
     picks.push({ stat: a.stat, label: a.label, value: final });
@@ -1304,7 +1338,8 @@ function getCharacterBlueprint(id) { return CHARACTERS.find(c => c.id === id); }
 
 window.GAME_DATA = {
   CHARACTERS, REGIONS, ITEMS, SKILLS, PASSIVES, RECIPES, MATERIAL_RECIPES, GEMS, SETS, POTIONS, CHESTS, SHARD_EXCHANGE,
-  EQUIPMENT_SLOTS, SLOT_LABELS, AFFIX_POOL,
+  EQUIPMENT_SLOTS, SLOT_LABELS, AFFIX_POOL, RING_AFFIX_POOL,
+  isRingSlot, slotAcceptsItem,
   MAX_LEVEL,
   forgeCost, forgeMultiplier, FORGE_MAX, FORGE_SAFE_LEVEL,
   expForLevel, resonanceMultiplier,

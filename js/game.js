@@ -829,6 +829,7 @@ function renderCraft() {
       { key: 'top', label: '上衣' },
       { key: 'bottom', label: '下衣' },
       { key: 'feet', label: '腳' },
+      { key: 'ring', label: '戒指' },
     ];
     const slotBar = `
       <div class="craft-slot-filter">
@@ -1516,7 +1517,7 @@ function renderEquipDetail(instId) {
   }
 
   const tokens = _activeBag().rerollTokens || 0;
-  const canReroll = def.rarity !== 'N' && inst.affixes && inst.affixes.length > 0;
+  const canReroll = inst.affixes && inst.affixes.length > 0;
   const rerollBtn = canReroll
     ? `<button class="ghost small" data-reroll="${instId}" ${tokens > 0 ? '' : 'disabled'}>重抽詞綴（券 ×${tokens}）</button>`
     : '';
@@ -1830,7 +1831,7 @@ window.showCraftPreview = function(equipId) {
   const body = document.getElementById('tabCraftPreview');
   if (!win || !body) return;
 
-  const SLOT_NAME = { weapon: '武器', head: '頭部', top: '上身', bottom: '下身', feet: '腳部' };
+  const SLOT_NAME = { weapon: '武器', head: '頭部', top: '上身', bottom: '下身', feet: '腳部', ring: '戒指' };
   const STAT_NAME = {
     atk: '攻擊', def: '防禦', hp: '生命', crit: '暴擊率', critDmg: '暴擊傷害',
     spd: '速度', dmgReduce: '減傷', cdReduce: 'CD 縮減', vsBoss: '對王傷害',
@@ -2448,6 +2449,7 @@ function renderForge() {
   if (!cs || !cs.equip) return;
 
   for (const slot of GAME_DATA.EQUIPMENT_SLOTS) {
+    if (GAME_DATA.isRingSlot(slot)) continue;  // 戒指無 stats / fixed，鍛造對它無效，從鍛造頁隱藏
     const label = GAME_DATA.SLOT_LABELS[slot];
     const instId = cs.equip[slot];
     if (!instId) {
@@ -2915,15 +2917,32 @@ function renderBag() {
   if (_bagTab === 'equip') {
   const equippedInstIds = new Set(Object.values(cs.equip || {}));
   for (const slot of GAME_DATA.EQUIPMENT_SLOTS) {
-    const label = GAME_DATA.SLOT_LABELS[slot];
+    if (slot === 'ring2') continue;  // 戒指合併到 ring1 渲染（雙槽 + 雙裝備按鈕）
+    const isRingSec = slot === 'ring1';
+    const label = isRingSec ? '戒指' : GAME_DATA.SLOT_LABELS[slot];
     const sec = document.createElement('div');
     sec.className = 'bag-section';
-    sec.innerHTML = `<h4>${label}</h4>`;
+    // 戒指 section：顯示雙槽位狀態
+    if (isRingSec) {
+      const ringRow = (rk) => {
+        const id = cs.equip[rk];
+        const inst = id ? _activeBag().equipment[id] : null;
+        const def = inst ? GAME_DATA.findEquipment(inst.itemId) : null;
+        const sub = GAME_DATA.SLOT_LABELS[rk];
+        if (!def) return `<span style="color:var(--muted);font-size:11px">${sub}：（空）</span>`;
+        const forge = inst.forge || 0;
+        return `<span style="font-size:11px"><b>${sub}</b>：<span class="bag-item ${def.rarity}" style="display:inline-block;padding:0 6px;border-width:1px">${def.name}${forge ? ' +' + forge : ''}</span> <button class="ghost small" data-unequip="${rk}" style="margin-left:4px">卸下</button></span>`;
+      };
+      sec.innerHTML = `<h4>${label}</h4><div style="display:flex;gap:14px;margin-bottom:6px;flex-wrap:wrap">${ringRow('ring1')}${ringRow('ring2')}</div>`;
+    } else {
+      sec.innerHTML = `<h4>${label}</h4>`;
+    }
     const grid = document.createElement('div');
     grid.className = 'bag-grid';
     const instances = Object.entries(_activeBag().equipment).filter(([id, inst]) => {
       const def = GAME_DATA.findEquipment(inst.itemId);
-      if (!def || def.slot !== slot) return false;
+      if (!def) return false;
+      if (!GAME_DATA.slotAcceptsItem(slot, def.slot)) return false;
       // Wave 30.8：武器 owner 比對「藍圖 ID」（cs.blueprintId='tsukirin'），不是 cs.id（可能是 'tsukirin#2'）
       const bpId = cs.blueprintId || (cs.id || '').split('#')[0];
       if (slot === 'weapon' && def.owner && def.owner !== bpId) return false;
@@ -2945,7 +2964,10 @@ function renderBag() {
     });
     for (const [instId, inst] of instances) {
       const def = GAME_DATA.findEquipment(inst.itemId);
-      const isEquipped = cs.equip[slot] === instId;
+      // 戒指：判斷在哪個格子（ring1 or ring2）
+      const ringSlot = isRingSec ? (cs.equip.ring1 === instId ? 'ring1' : (cs.equip.ring2 === instId ? 'ring2' : null)) : null;
+      const isEquipped = isRingSec ? !!ringSlot : (cs.equip[slot] === instId);
+      const equippedSlotKey = isRingSec ? ringSlot : slot;
       const cell = document.createElement('div');
       cell.className = `bag-item ${def.rarity}` + (inst.locked ? ' locked' : '');
       const forge = inst.forge || 0;
@@ -2954,19 +2976,27 @@ function renderBag() {
         ? '<div style="color:var(--shard);font-size:10px;margin-top:3px">' + inst.affixes.map(a => formatAffix(a).raw).join('、') + '</div>'
         : '';
       const lockIcon = inst.locked ? '<span class="lock-badge" title="已鎖定（批次分解會跳過）">🔒</span>' : '';
+      // 戒指未裝備時提供雙按鈕；其他裝備一個按鈕
+      const equipBtns = isRingSec
+        ? `<button data-equip="ring1:${instId}" title="裝至戒指(左)">裝左</button>
+           <button data-equip="ring2:${instId}" title="裝至戒指(右)">裝右</button>`
+        : `<button data-equip="${slot}:${instId}">裝備</button>`;
+      const equippedBadge = isRingSec && ringSlot
+        ? `[裝備中：${GAME_DATA.SLOT_LABELS[ringSlot]}]`
+        : '[裝備中]';
       cell.innerHTML = `
         <div class="iname">${lockIcon}${def.name}${forge ? ` +${forge}` : ''}</div>
         <div class="itag">${def.rarity}</div>
         <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${statStr}</div>
         ${affixStr}
         ${isEquipped
-          ? `<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">[裝備中]</div>
+          ? `<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">${equippedBadge}</div>
              <div class="bag-cell-actions">
-              <button class="ghost small" data-unequip="${slot}" title="卸下此裝備（卸下後可分解）">卸下</button>
+              <button class="ghost small" data-unequip="${equippedSlotKey}" title="卸下此裝備（卸下後可分解）">卸下</button>
               <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
             </div>`
           : `<div class="bag-cell-actions">
-              <button data-equip="${slot}:${instId}">裝備</button>
+              ${equipBtns}
               <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
               <button class="danger small" data-disasm="${instId}" title="分解返還材料">分解</button>
             </div>`}
@@ -3108,6 +3138,9 @@ function renderBag() {
 function equipItem(slot, instId) {
   const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
   if (!cs.equip) cs.equip = {};
+  // 戒指防雙開：若該戒指目前在另一個戒指格，清空那一格
+  if (slot === 'ring1' && cs.equip.ring2 === instId) cs.equip.ring2 = null;
+  if (slot === 'ring2' && cs.equip.ring1 === instId) cs.equip.ring1 = null;
   cs.equip[slot] = instId;
   toast('已裝備');
   renderBag();

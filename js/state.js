@@ -81,7 +81,7 @@ function makeCharacterState(blueprintId, customName, slotIdx) {
     jobPath: null,
     jobTier: 0,
     graduated: false,
-    equip: { weapon: null, head: null, top: null, bottom: null, feet: null },
+    equip: { weapon: null, head: null, top: null, bottom: null, feet: null, ring1: null, ring2: null },
     unlockedSkills: [],
     unlockedPassives: [],
     equippedSkills: [null, null, null, null, null],
@@ -111,7 +111,7 @@ function createEquipInstance(itemId, withAffixes, charId) {
   cs.bag.equipment[instId] = {
     itemId,
     forge: 0,
-    affixes: withAffixes ? GAME_DATA.rollAffixes(def.rarity) : [],
+    affixes: withAffixes ? GAME_DATA.rollAffixes(def.rarity, def.slot === 'ring') : [],
   };
   return instId;
 }
@@ -391,13 +391,13 @@ function healMissingStarterGear(p) {
       );
       return wp ? wp.id : 'eq-weap-prac';
     }
-    return { head: 'eq-head-prac', top: 'eq-top-prac', bottom: 'eq-bot-prac', feet: 'eq-feet-prac' }[slot];
+    return { head: 'eq-head-prac', top: 'eq-top-prac', bottom: 'eq-bot-prac', feet: 'eq-feet-prac', ring1: 'eq-ring-n', ring2: 'eq-ring-n' }[slot];
   }
-  const SLOTS = ['weapon', 'head', 'top', 'bottom', 'feet'];
+  const SLOTS = ['weapon', 'head', 'top', 'bottom', 'feet', 'ring1', 'ring2'];
   console.log('[Wave 30.9] healMissingStarterGear 開始檢查');
   for (const cid in p.characters) {
     const cs = p.characters[cid];
-    if (!cs.equip) cs.equip = { weapon: null, head: null, top: null, bottom: null, feet: null };
+    if (!cs.equip) cs.equip = { weapon: null, head: null, top: null, bottom: null, feet: null, ring1: null, ring2: null };
     if (!cs.bag) cs.bag = makeEmptyBag();
     if (!cs.bag.equipment) cs.bag.equipment = {};
 
@@ -431,14 +431,17 @@ function healMissingStarterGear(p) {
       }
 
       // ── 第 2 層：bag 裡找同 slot 最高階自動穿上 ──
+      // 戒指：兩個格子都接受 def.slot='ring'，需避免兩格搶同一 inst → 用 alreadyAssigned 排除
+      const alreadyAssigned = new Set(Object.values(cs.equip).filter(Boolean));
       let bestInstId = null;
       let bestTier = -1;
       let skipReasons = [];
       for (const instId in cs.bag.equipment) {
+        if (alreadyAssigned.has(instId)) continue;
         const inst = cs.bag.equipment[instId];
         const def = GAME_DATA.findEquipment(inst.itemId);
         if (!def) { skipReasons.push(`${instId}:def-not-found`); continue; }
-        if (def.slot !== slot) continue;
+        if (!GAME_DATA.slotAcceptsItem(slot, def.slot)) continue;
         if (slot === 'weapon' && def.owner && def.owner !== cs.blueprintId) {
           skipReasons.push(`${instId}:owner-mismatch(${def.owner}!=${cs.blueprintId})`);
           continue;
@@ -467,7 +470,9 @@ function healMissingStarterGear(p) {
       }
       const instId = 'inst_' + (p.nextInstId || 1);
       p.nextInstId = (p.nextInstId || 1) + 1;
-      cs.bag.equipment[instId] = { itemId: starterId, forge: 0, affixes: [] };
+      // 戒指 N 有 1 條詞綴，其他練習裝 N 無詞綴
+      const affixes = def.slot === 'ring' ? GAME_DATA.rollAffixes(def.rarity, true) : [];
+      cs.bag.equipment[instId] = { itemId: starterId, forge: 0, affixes };
       cs.equip[slot] = instId;
       console.log(`[Wave 30.5] ✓ ${cid}.${slot} 補發 starter → ${def.name}（${instId}）`);
     }
@@ -518,6 +523,8 @@ function createCharacter(blueprintId, customName) {
     top:    'eq-top-prac',
     bottom: 'eq-bot-prac',
     feet:   'eq-feet-prac',
+    ring1:  'eq-ring-n',
+    ring2:  'eq-ring-n',
   };
   // Wave 30.7：直接寫入 cs.bag 而不依賴 createEquipInstance（避免 active 切換 race）
   for (const [slotKey, itemId] of Object.entries(starterMap)) {
@@ -527,7 +534,9 @@ function createCharacter(blueprintId, customName) {
       continue;
     }
     const instId = 'inst_' + (STATE.nextInstId++);
-    cs.bag.equipment[instId] = { itemId, forge: 0, affixes: [] };
+    // 戒指 N 有 1 條詞綴，其他練習裝 N 無詞綴
+    const affixes = def.slot === 'ring' ? GAME_DATA.rollAffixes(def.rarity, true) : [];
+    cs.bag.equipment[instId] = { itemId, forge: 0, affixes };
     cs.equip[slotKey] = instId;
     console.log(`[Wave 30.7] 創角 ${cs.id} 穿上 ${slotKey} = ${instId}（${def.name}）`);
   }
@@ -1074,10 +1083,10 @@ function rerollAffixes(instId) {
   if (!inst) return { ok: false, reason: '找不到裝備' };
   const def = GAME_DATA.findEquipment(inst.itemId);
   if (!def) return { ok: false, reason: '裝備資料異常' };
-  if (def.rarity === 'N') return { ok: false, reason: '練習裝無詞綴可重抽' };
+  if (!inst.affixes || inst.affixes.length === 0) return { ok: false, reason: '此裝備無詞綴可重抽' };
   if ((bag.rerollTokens || 0) < 1) return { ok: false, reason: '缺重抽券（商店可兌換）' };
   bag.rerollTokens -= 1;
-  inst.affixes = GAME_DATA.rollAffixes(def.rarity);
+  inst.affixes = GAME_DATA.rollAffixes(def.rarity, def.slot === 'ring');
   scheduleSave();
   return { ok: true, name: def.name, newAffixes: inst.affixes };
 }
