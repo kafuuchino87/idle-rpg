@@ -1244,7 +1244,7 @@ function toggleEquipLock(instId) {
 
 // ===== 鍛造系統（終焉套裝專屬）=====
 // 機制：每次鍛造扣 50K 金 + 1 次次數，累積進度條（100% 自動升階）；1% 跳階直接 100%
-// 升階後重置進度 + 補滿初始次數；次數用完需用異界之鎚恢復（1 把 = +20 次）
+// 升階後只重置進度條，hits 整個鍛造過程共用（從 +0 → +30）— 用槌子補才能繼續
 function smithEquip(instId) {
   const bag = activeBag();
   if (!bag) return { ok: false, reason: '無 active 角色' };
@@ -1279,12 +1279,11 @@ function smithEquip(instId) {
     jumped = true;
   }
 
-  // 升階判定
+  // 升階判定 — 進度條重置但 hits 不重置（整個鍛造過程共用一池 hits）
   let leveledUp = false;
   if (inst.smithProgress >= 100) {
     inst.smithStage = cur + 1;
     inst.smithProgress = 0;
-    inst.smithHitsLeft = GAME_DATA.SMITH_INITIAL_HITS;  // 升階後補滿
     leveledUp = true;
   }
 
