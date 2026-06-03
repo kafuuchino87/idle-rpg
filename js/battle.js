@@ -355,6 +355,11 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
   }
   if (bossConfig?.portrait) e.portrait = bossConfig.portrait;
   if (bossConfig?.portraitTall) e.portraitTall = true;
+  // 開場拔刀斬：戰鬥開始時 BOSS 進入蓄力姿態，凝聚特大護盾
+  if (bossConfig?.openingAttack) {
+    e.openingAttack = bossConfig.openingAttack;
+    e.openingState = 'pending';  // pending → active → done
+  }
   return e;
 }
 
@@ -546,6 +551,61 @@ function tickBossShield(dt) {
     }
     return;
   }
+  // ===== 開場拔刀斬（鏡夢縛魂）=====
+  // 戰鬥一開始觸發，shield = 20億，3 秒內不破則衝刺一刀打 90% maxHp
+  if (e.openingAttack && e.openingState === 'pending') {
+    e.openingState = 'active';
+    e.shield = e.openingAttack.shieldHp;
+    e.shieldMax = e.openingAttack.shieldHp;
+    e.shieldBreakTimer = e.openingAttack.chargeTime;
+    if (typeof logLine === 'function') {
+      logLine(`<span class="lg-fail">⚠ ${e.name} 進入【${e.openingAttack.name}】拔刀姿態！${e.openingAttack.chargeTime} 秒內不破盾將遭受 ${Math.round(e.openingAttack.damageOnFail * 100)}% 最大生命傷害！</span>`, '');
+    }
+    if (typeof window.bossChargingStart === 'function') window.bossChargingStart(e.openingAttack.chargeTime);
+    return;
+  }
+  if (e.openingAttack && e.openingState === 'active') {
+    e.shieldBreakTimer -= dt;
+    if (e.shield <= 0) {
+      // 玩家成功破盾 → BOSS 收招
+      e.openingState = 'done';
+      e.shield = 0; e.shieldMax = 0; e.shieldBreakTimer = 0;
+      if (typeof logLine === 'function') {
+        logLine(`<span class="lg-clear">✓ 阻止了【${e.openingAttack.name}】！BOSS 收回拔刀姿態。</span>`, '');
+      }
+      if (typeof window.bossChargingEnd === 'function') window.bossChargingEnd(true);
+    } else if (e.shieldBreakTimer <= 0) {
+      // 時間到 → BOSS 衝刺斬，造成 maxHp × damageOnFail 傷害
+      e.openingState = 'done';
+      e.shield = 0; e.shieldMax = 0; e.shieldBreakTimer = 0;
+      const dmgPct = e.openingAttack.damageOnFail;
+      const dmg = Math.floor(BATTLE.player.maxHp * dmgPct);
+      BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+      if (typeof logLine === 'function') {
+        logLine(`<span class="lg-fail">✘ 【${e.openingAttack.name}】！${e.name} 衝刺一刀造成 ${dmg.toLocaleString()} 傷害（${Math.round(dmgPct * 100)}% 最大生命）</span>`, '');
+      }
+      if (typeof window.bossSlash === 'function') window.bossSlash(e.openingAttack.name, dmg);
+      if (typeof window.bossChargingEnd === 'function') window.bossChargingEnd(false);
+      // 廣播給隊友（guest 同步扣血 + 播動畫）
+      if (BATTLE._mpMode === 'host' && window.MP_API) {
+        MP_API.broadcast('boss-slash', {
+          dungeonId: BATTLE.dungeonId,
+          dmgPct: dmgPct,
+          name: e.openingAttack.name,
+        });
+      }
+      if (BATTLE.player.hp <= 0) {
+        BATTLE._dead = true;
+        if (BATTLE._mpMode === 'host' && window.MP_API) {
+          MP_API.broadcast('player-dead', { dungeonId: BATTLE.dungeonId });
+        } else if (BATTLE._mpMode === 'solo' && typeof onBattleFail === 'function') {
+          onBattleFail();
+        }
+      }
+    }
+    return;  // 開場攻擊期間不執行下方常規護盾邏輯
+  }
+
   if (!e.shieldConfig) return;
   const cfg = e.shieldConfig;
   // 護盾未啟動：倒數至 shieldTimer 達 0 → 啟動護盾

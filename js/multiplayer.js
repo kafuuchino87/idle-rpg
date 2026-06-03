@@ -165,6 +165,8 @@ function broadcastEnemySync() {
       def: e.def,
       portrait: e.portrait || null,  // 多階 BOSS 立繪同步給 guest（雙影獵討 Phase 1/2 BOSS）
       portraitTall: !!e.portraitTall, // 直幅立繪標記（鏡夢縛魂用）
+      openingState: e.openingState || null,  // 開場拔刀斬狀態（pending / active / done）
+      openingName: e.openingAttack ? e.openingAttack.name : null,
       // 護盾資料（雙影獵討 Phase 2 護盾即死機制）— guest 只顯示，邏輯由 host 跑
       shield: e.shield || 0,
       shieldMax: e.shieldMax || 0,
@@ -362,6 +364,8 @@ function handleMessage(fromPeerId, data) {
           isBoss: e.isBoss,
           portrait: e.portrait || null,
           portraitTall: !!e.portraitTall,
+          openingState: e.openingState || null,
+          openingName: e.openingName || null,
           nextAtk: 1.4 + Math.random() * 0.4,
           // 護盾資料（guest 同步顯示，邏輯由 host 跑）
           shield: e.shield || 0,
@@ -404,6 +408,21 @@ function handleMessage(fromPeerId, data) {
       if (typeof window.logLine === 'function') window.logLine(`<span class="lg-fail">✘ 護盾未破！全隊即死！</span>`, '');
       b.player.hp = 0;
       b._dead = true;
+    }
+  }
+  // 鏡夢縛魂：開場拔刀斬 — guest 收到後同步扣血 + 播動畫
+  if (data.type === 'boss-slash' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (b && b.running && b.player && b.player.maxHp > 0) {
+      const dmgPct = data.payload.dmgPct || 0.9;
+      const name = data.payload.name || '拔刀斬';
+      const dmg = Math.floor(b.player.maxHp * dmgPct);
+      b.player.hp = Math.max(0, b.player.hp - dmg);
+      if (typeof window.logLine === 'function') {
+        window.logLine(`<span class="lg-fail">✘ 【${name}】造成 ${dmg.toLocaleString()} 傷害！（${Math.round(dmgPct * 100)}% 最大生命）</span>`, '');
+      }
+      if (typeof window.bossSlash === 'function') window.bossSlash(name, dmg);
+      if (b.player.hp <= 0) b._dead = true;
     }
   }
   // 收到 host 廣播的「無盡塔結束」→ guest 強制同步結算

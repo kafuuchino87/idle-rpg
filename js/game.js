@@ -1927,6 +1927,54 @@ function showRaidCutscene(cutscene, onComplete) {
 window.showRaidCutscene = showRaidCutscene;
 
 // ============================================================================
+// BOSS 衝刺一刀動畫（鏡夢縛魂的拔刀斬未破盾時觸發）
+// 在 BOSS card 上播 slash 動畫 + 全螢幕紅閃 + 玩家血條閃紅
+// ============================================================================
+window.bossSlash = function(skillName, dmg) {
+  // BOSS 卡片往前衝刺 + 縮放閃白
+  const card = document.querySelector('.enemy-card');
+  if (card) {
+    card.classList.remove('boss-slashing');
+    void card.offsetWidth;  // 強制重排，讓動畫可重複
+    card.classList.add('boss-slashing');
+    setTimeout(() => card.classList.remove('boss-slashing'), 700);
+  }
+  // 螢幕一閃紅 + 刀痕劃過
+  let flash = document.getElementById('bossSlashFlash');
+  if (!flash) {
+    flash = document.createElement('div');
+    flash.id = 'bossSlashFlash';
+    flash.className = 'boss-slash-flash';
+    document.body.appendChild(flash);
+  }
+  flash.classList.remove('show');
+  void flash.offsetWidth;
+  flash.classList.add('show');
+  setTimeout(() => flash.classList.remove('show'), 800);
+  // 玩家卡受擊抖動
+  const playerCard = document.querySelector('.player-card, .fighter-card.player-card, .player-side .fighter-card');
+  if (playerCard) {
+    playerCard.classList.remove('boss-slash-hit');
+    void playerCard.offsetWidth;
+    playerCard.classList.add('boss-slash-hit');
+    setTimeout(() => playerCard.classList.remove('boss-slash-hit'), 600);
+  }
+  // 大型傷害飄字
+  if (typeof window.floatDamage === 'function' && dmg) {
+    window.floatDamage('💀 ' + dmg, 'crit');
+  }
+};
+
+// 開場蓄力開始 / 結束的 hook（log 之外的視覺）
+window.bossChargingStart = function(chargeTime) {
+  // class toggle 已由 renderEnemyCards 每幀處理（看 openingState === 'active'）
+  // 這裡可加額外提示，暫無
+};
+window.bossChargingEnd = function(broken) {
+  // 同上，靠 class toggle 自動移除
+};
+
+// ============================================================================
 // 製作藍圖預覽
 // ============================================================================
 window.showCraftPreview = function(equipId) {
@@ -2358,6 +2406,8 @@ function renderEnemyCards() {
       if (countdownEl) countdownEl.style.display = 'none';
     }
     card.classList.toggle('active-target', e === BATTLE.enemy);
+    // 開場拔刀斬：BOSS 蓄力姿態 CSS class
+    card.classList.toggle('boss-charging', e.openingState === 'active');
     // Debuff badges
     const debuffEl = card.querySelector('.enemy-debuffs');
     if (debuffEl) {

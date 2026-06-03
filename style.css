@@ -719,6 +719,99 @@ button.primary:hover { filter: brightness(1.1); }
   width: 100%;
   margin: 0 auto;
 }
+
+/* ===== BOSS 蓄力拔刀姿態（紅光脈動 + 立繪輕震）===== */
+.enemy-card.boss-charging .card-frame {
+  border-color: #ff3050 !important;
+  box-shadow:
+    0 0 36px rgba(255, 50, 80, 0.9),
+    inset 0 0 50px rgba(255, 50, 80, 0.4);
+  animation: bossChargingPulse 0.45s ease-in-out infinite alternate;
+}
+@keyframes bossChargingPulse {
+  0%   { box-shadow: 0 0 30px rgba(255, 50, 80, 0.7), inset 0 0 40px rgba(255, 50, 80, 0.3); }
+  100% { box-shadow: 0 0 60px rgba(255, 80, 110, 1.0), inset 0 0 80px rgba(255, 50, 80, 0.7); }
+}
+.enemy-card.boss-charging .portrait img {
+  filter:
+    drop-shadow(0 0 24px rgba(255, 60, 90, 0.9))
+    drop-shadow(0 0 8px rgba(255, 220, 230, 0.6));
+  animation: bossChargingShake 0.08s linear infinite;
+}
+@keyframes bossChargingShake {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(-1.5px, 1px); }
+  50%  { transform: translate(1px, -1px); }
+  75%  { transform: translate(-1px, -1.5px); }
+  100% { transform: translate(0, 0); }
+}
+/* 蓄力時加層紅色「拔刀光環」 */
+.enemy-card.boss-charging .card-frame::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px dashed rgba(255, 80, 110, 0.6);
+  border-radius: 8px;
+  pointer-events: none;
+  animation: bossChargingRing 1.2s linear infinite;
+  z-index: 5;
+}
+@keyframes bossChargingRing {
+  0%   { opacity: 0.4; transform: scale(1); }
+  50%  { opacity: 1;   transform: scale(1.04); }
+  100% { opacity: 0.4; transform: scale(1.08); }
+}
+
+/* ===== BOSS 衝刺一刀（時間到觸發）===== */
+.enemy-card.boss-slashing {
+  animation: bossSlashLunge 0.7s cubic-bezier(0.3, 0, 0.4, 1);
+  z-index: 30;
+}
+@keyframes bossSlashLunge {
+  0%   { transform: translateX(0)     scale(1); }
+  20%  { transform: translateX(-12px) scale(1.05); }     /* 後拉蓄勢 */
+  45%  { transform: translateX(-220px) scale(1.15);
+         filter: brightness(1.6) drop-shadow(0 0 24px #ff3050); }  /* 衝刺 */
+  60%  { transform: translateX(-220px) scale(1.15); }
+  100% { transform: translateX(0)     scale(1); filter: none; }
+}
+
+/* 螢幕紅閃 + 對角刀痕 */
+.boss-slash-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  background:
+    linear-gradient(135deg, transparent 40%, rgba(255, 50, 80, 0.85) 49%, rgba(255, 220, 230, 1) 50%, rgba(255, 50, 80, 0.85) 51%, transparent 60%),
+    radial-gradient(ellipse at center, transparent 30%, rgba(255, 30, 60, 0.55) 100%);
+  background-size: 250% 250%, 100% 100%;
+  background-position: 0% 0%, center;
+}
+.boss-slash-flash.show {
+  animation: bossSlashFlash 0.8s ease-out;
+}
+@keyframes bossSlashFlash {
+  0%   { opacity: 0; background-position: 100% 100%, center; }
+  20%  { opacity: 1; }
+  60%  { opacity: 0.8; background-position: 0% 0%, center; }
+  100% { opacity: 0; }
+}
+
+/* 玩家受擊抖動 */
+.boss-slash-hit {
+  animation: playerSlashHit 0.6s ease-out;
+}
+@keyframes playerSlashHit {
+  0%   { transform: translateX(0); filter: none; }
+  10%  { transform: translateX(8px); filter: brightness(1.8) drop-shadow(0 0 8px #ff3050); }
+  20%  { transform: translateX(-6px); }
+  30%  { transform: translateX(5px); }
+  40%  { transform: translateX(-4px); }
+  60%  { transform: translateX(2px); }
+  100% { transform: translateX(0); filter: none; }
+}
 .endless-boss-card .portrait {
   position: relative;
   overflow: hidden;

@@ -582,6 +582,14 @@ const REGIONS = [
           { name: '幻夢之主', portrait: 'assets/portraits/raid-mirror.png',
             portraitTall: true,        // ← 立繪是直幅，戰鬥卡片改 3:4 比例顯示完整
             hpOverride: 10_000_000_000, // ← 精確 100 億 HP
+            // 開場拔刀斬：戰鬥一開始 BOSS 進入 3 秒蓄力姿態，凝聚 20 億盾
+            // 3 秒內不破盾 → 衝刺一刀，造成玩家最大生命 90% 傷害（不一定即死）
+            openingAttack: {
+              name: '拔刀斬',
+              chargeTime: 3,
+              shieldHp: 2_000_000_000,  // 20 億盾
+              damageOnFail: 0.9,        // 90% maxHp
+            },
             shield: { firstAt: 5, interval: 30, hpFixed: 15_000_000, breakTime: 5 } },
         ],
         bonusMats: [
