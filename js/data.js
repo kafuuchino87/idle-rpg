@@ -567,7 +567,7 @@ const REGIONS = [
         minCpOverride: 100000,
         isRaid: true, baseTime: 60, expBase: 60000, goldBase: 100000,
         difficultyMul: 60,
-        atkCoefOverride: 0.018,
+        atkCoefOverride: 0.005,    // 大幅下修（從 0.018），BOSS 平A 不會秒玩家，危險靠護盾即死
         defScaleOverride: 2.5,
         skipMobs: true,  // 不出小怪，直接 BOSS
         cutscene: {
@@ -580,6 +580,8 @@ const REGIONS = [
         },
         bosses: [
           { name: '幻夢之主', portrait: 'assets/portraits/raid-mirror.png',
+            portraitTall: true,        // ← 立繪是直幅，戰鬥卡片改 3:4 比例顯示完整
+            hpOverride: 10_000_000_000, // ← 精確 100 億 HP
             shield: { firstAt: 5, interval: 30, hpFixed: 15_000_000, breakTime: 5 } },
         ],
         bonusMats: [

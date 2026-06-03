@@ -712,6 +712,13 @@ button.primary:hover { filter: brightness(1.1); }
   box-shadow: 0 0 32px rgba(255, 94, 122, 0.5), inset 0 0 40px rgba(255, 94, 122, 0.2);
   background: radial-gradient(ellipse at center, rgba(255, 94, 122, 0.18) 0%, rgba(40, 0, 20, 0.7) 100%);
 }
+/* 直幅立繪 BOSS：3:4 卡片配合 portrait 比例（鏡夢縛魂用）*/
+.enemy-side.cnt-1 .endless-boss-card.tall-portrait .card-frame {
+  aspect-ratio: 3 / 4;
+  max-width: 320px;
+  width: 100%;
+  margin: 0 auto;
+}
 .endless-boss-card .portrait {
   position: relative;
   overflow: hidden;

@@ -2257,13 +2257,21 @@ function renderEnemyCards() {
     wave.forEach((e, i) => {
       const card = document.createElement('div');
       const useBigCard = BATTLE._endlessMode || e.portrait;  // 多階 BOSS 也用大卡
-      card.className = 'fighter-card enemy-card' + (useBigCard ? ' endless-boss-card' : '');
+      const isTall = !!e.portraitTall;  // 直幅立繪用 3:4 卡片
+      card.className = 'fighter-card enemy-card'
+        + (useBigCard ? ' endless-boss-card' : '')
+        + (isTall ? ' tall-portrait' : '');
       card.dataset.idx = i;
       // 立繪優先順序：BOSS 個別 portrait > 無盡塔 dungeon.bossPortrait > 像素 portrait
       const dungeon = GAME_DATA.getDungeon(BATTLE.dungeonId);
       let portraitHtml = '';
+      // 直幅圖：cover + 靠上，把臉留在可見區，下襬裁切
+      // 橫幅圖：contain，完整顯示
+      const fitStyle = isTall
+        ? 'object-fit:cover;object-position:center 18%'
+        : 'object-fit:contain';
       if (e.portrait) {
-        portraitHtml = `<img src="${e.portrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`;
+        portraitHtml = `<img src="${e.portrait}" alt="${e.name}" style="width:100%;height:100%;${fitStyle}">`;
       } else if (BATTLE._endlessMode && dungeon && dungeon.bossPortrait) {
         portraitHtml = `<img src="${dungeon.bossPortrait}" alt="${e.name}" style="width:100%;height:100%;object-fit:contain">`;
       }

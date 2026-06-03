@@ -164,6 +164,7 @@ function broadcastEnemySync() {
       atk: e.atk,
       def: e.def,
       portrait: e.portrait || null,  // 多階 BOSS 立繪同步給 guest（雙影獵討 Phase 1/2 BOSS）
+      portraitTall: !!e.portraitTall, // 直幅立繪標記（鏡夢縛魂用）
       // 護盾資料（雙影獵討 Phase 2 護盾即死機制）— guest 只顯示，邏輯由 host 跑
       shield: e.shield || 0,
       shieldMax: e.shieldMax || 0,
@@ -360,6 +361,7 @@ function handleMessage(fromPeerId, data) {
           def: e.def,
           isBoss: e.isBoss,
           portrait: e.portrait || null,
+          portraitTall: !!e.portraitTall,
           nextAtk: 1.4 + Math.random() * 0.4,
           // 護盾資料（guest 同步顯示，邏輯由 host 跑）
           shield: e.shield || 0,

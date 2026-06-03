@@ -340,9 +340,10 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
   // def 倍率可單獨覆寫（避免 raid 副本 def 隨 diffMul 25 爆膨脹）
   const defMul = (typeof dungeon.defScaleOverride === 'number') ? dungeon.defScaleOverride : diffMul;
   const def = Math.floor(dungeon.cp * 0.04 * (isBoss ? 1.4 : 1) * defMul);
-  // 多階 BOSS bossConfig 覆寫（hpMul / atkMul / shield 配置 / portrait）
+  // 多階 BOSS bossConfig 覆寫（hpOverride / hpMul / atkMul / shield 配置 / portrait）
   if (bossConfig) {
-    if (bossConfig.hpMul) baseHp = Math.floor(baseHp * bossConfig.hpMul);
+    if (typeof bossConfig.hpOverride === 'number') baseHp = bossConfig.hpOverride;
+    else if (bossConfig.hpMul) baseHp = Math.floor(baseHp * bossConfig.hpMul);
     if (bossConfig.atkMul) atk = Math.floor(atk * bossConfig.atkMul);
   }
   const e = { name, isBoss, hp: baseHp, maxHp: baseHp, atk, def };
@@ -353,6 +354,7 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
     e.shieldBreakTimer = 0;                    // 護盾出現後的破盾倒數
   }
   if (bossConfig?.portrait) e.portrait = bossConfig.portrait;
+  if (bossConfig?.portraitTall) e.portraitTall = true;
   return e;
 }
 
