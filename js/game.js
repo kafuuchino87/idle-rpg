@@ -2921,26 +2921,115 @@ function renderBag() {
   if (_bagTab === 'equip') {
   const equippedInstIds = new Set(Object.values(cs.equip || {}));
   for (const slot of GAME_DATA.EQUIPMENT_SLOTS) {
-    if (slot === 'ring2') continue;  // 戒指合併到 ring1 渲染（雙槽 + 雙裝備按鈕）
+    if (slot === 'ring2') continue;  // 戒指合併到 ring1 渲染
     const isRingSec = slot === 'ring1';
-    const label = isRingSec ? '戒指' : GAME_DATA.SLOT_LABELS[slot];
-    const sec = document.createElement('div');
-    sec.className = 'bag-section';
-    // 戒指 section：顯示雙槽位狀態
+
+    // ─────────────────────────────────────────────────────
+    // 戒指 section（自訂渲染：頂部雙槽 + 下方收藏網格）
+    // ─────────────────────────────────────────────────────
     if (isRingSec) {
-      const ringRow = (rk) => {
+      const sec = document.createElement('div');
+      sec.className = 'bag-section';
+      // 頂部雙槽 panel：顯示已裝戒指的完整資訊
+      const slotPanel = (rk) => {
         const id = cs.equip[rk];
         const inst = id ? _activeBag().equipment[id] : null;
         const def = inst ? GAME_DATA.findEquipment(inst.itemId) : null;
-        const sub = GAME_DATA.SLOT_LABELS[rk];
-        if (!def) return `<span style="color:var(--muted);font-size:11px">${sub}：（空）</span>`;
-        const forge = inst.forge || 0;
-        return `<span style="font-size:11px"><b>${sub}</b>：<span class="bag-item ${def.rarity}" style="display:inline-block;padding:0 6px;border-width:1px">${def.name}${forge ? ' +' + forge : ''}</span> <button class="ghost small" data-unequip="${rk}" style="margin-left:4px">卸下</button></span>`;
+        const label = GAME_DATA.SLOT_LABELS[rk];
+        if (!def) {
+          return `<div class="ring-slot empty">
+            <div class="ring-slot-head">${label}</div>
+            <div class="ring-slot-empty">— 空 —</div>
+          </div>`;
+        }
+        const affixHtml = (inst.affixes || []).map(a => {
+          const stat = STAT_DISPLAY_NAMES[a.stat] || a.stat;
+          const isPct = typeof a.value === 'number' && a.value < 1;
+          const valStr = isPct ? '+' + (a.value * 100).toFixed(1) + '%' : '+' + a.value;
+          return `<div class="ring-affix"><span>${a.label} <span style="color:var(--muted)">${stat}</span></span><b>${valStr}</b></div>`;
+        }).join('');
+        return `<div class="ring-slot equipped ${def.rarity}" data-inst-id="${id}">
+          <div class="ring-slot-head">${label} <span class="ring-rarity ${def.rarity}">${def.rarity}</span></div>
+          <div class="ring-slot-name">${def.name}</div>
+          <div class="ring-slot-affixes">${affixHtml || '<div style="color:var(--muted);font-size:10px">無詞綴</div>'}</div>
+          <button class="ghost small ring-unequip-btn" data-unequip="${rk}">卸下</button>
+        </div>`;
       };
-      sec.innerHTML = `<h4>${label}</h4><div style="display:flex;gap:14px;margin-bottom:6px;flex-wrap:wrap">${ringRow('ring1')}${ringRow('ring2')}</div>`;
-    } else {
-      sec.innerHTML = `<h4>${label}</h4>`;
+      sec.innerHTML = `
+        <h4>戒指</h4>
+        <div class="ring-slots-wrap">${slotPanel('ring1')}${slotPanel('ring2')}</div>
+      `;
+
+      // 下方收藏：只列「未裝備」的戒指
+      const unequipped = Object.entries(_activeBag().equipment).filter(([id, inst]) => {
+        const def = GAME_DATA.findEquipment(inst.itemId);
+        if (!def || def.slot !== 'ring') return false;
+        if (equippedInstIds.has(id)) return false;
+        return true;
+      }).sort((a, b) => {
+        const da = GAME_DATA.findEquipment(a[1].itemId);
+        const db = GAME_DATA.findEquipment(b[1].itemId);
+        if (db.tier !== da.tier) return db.tier - da.tier;
+        return (b[1].affixes || []).length - (a[1].affixes || []).length;
+      });
+
+      const stashTitle = document.createElement('div');
+      stashTitle.innerHTML = `<div class="ring-stash-title">收藏（未裝備）<span style="color:var(--muted);font-weight:400">　${unequipped.length} 件</span></div>`;
+      sec.appendChild(stashTitle);
+
+      const grid = document.createElement('div');
+      grid.className = 'bag-grid ring-grid';
+      for (const [instId, inst] of unequipped) {
+        const def = GAME_DATA.findEquipment(inst.itemId);
+        const cell = document.createElement('div');
+        cell.className = `bag-item ${def.rarity}` + (inst.locked ? ' locked' : '');
+        const affixStr = (inst.affixes || []).length
+          ? '<div style="color:var(--shard);font-size:10px;margin-top:3px">' + inst.affixes.map(a => formatAffix(a).raw).join('、') + '</div>'
+          : '';
+        const lockIcon = inst.locked ? '<span class="lock-badge" title="已鎖定（批次分解會跳過）">🔒</span>' : '';
+        cell.innerHTML = `
+          <div class="iname">${lockIcon}${def.name}</div>
+          <div class="itag">${def.rarity}</div>
+          ${affixStr}
+          <div class="ring-cell-actions">
+            <button class="ring-equip-l" data-equip="ring1:${instId}" title="裝至戒指(左)">裝左</button>
+            <button class="ring-equip-r" data-equip="ring2:${instId}" title="裝至戒指(右)">裝右</button>
+            <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
+            <button class="danger small" data-disasm="${instId}" title="分解返還材料">分解</button>
+          </div>
+        `;
+        cell.style.cursor = 'pointer';
+        cell.dataset.instId = instId;
+        cell.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          openEquipDetail(instId);
+        });
+        grid.appendChild(cell);
+      }
+      if (unequipped.length === 0) {
+        grid.innerHTML = '<div style="color:var(--muted);font-size:11px;grid-column:1/-1;padding:10px;text-align:center">收藏為空 — 到製作頁做幾枚戒指</div>';
+      }
+      sec.appendChild(grid);
+      root.appendChild(sec);
+
+      // 點擊已裝戒指的卡片開啟詳細頁（避開卸下按鈕）
+      sec.querySelectorAll('.ring-slot.equipped').forEach(card => {
+        card.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          openEquipDetail(card.dataset.instId);
+        });
+        card.style.cursor = 'pointer';
+      });
+      continue;
     }
+
+    // ─────────────────────────────────────────────────────
+    // 一般裝備 section（原邏輯）
+    // ─────────────────────────────────────────────────────
+    const label = GAME_DATA.SLOT_LABELS[slot];
+    const sec = document.createElement('div');
+    sec.className = 'bag-section';
+    sec.innerHTML = `<h4>${label}</h4>`;
     const grid = document.createElement('div');
     grid.className = 'bag-grid';
     const instances = Object.entries(_activeBag().equipment).filter(([id, inst]) => {
@@ -2968,10 +3057,7 @@ function renderBag() {
     });
     for (const [instId, inst] of instances) {
       const def = GAME_DATA.findEquipment(inst.itemId);
-      // 戒指：判斷在哪個格子（ring1 or ring2）
-      const ringSlot = isRingSec ? (cs.equip.ring1 === instId ? 'ring1' : (cs.equip.ring2 === instId ? 'ring2' : null)) : null;
-      const isEquipped = isRingSec ? !!ringSlot : (cs.equip[slot] === instId);
-      const equippedSlotKey = isRingSec ? ringSlot : slot;
+      const isEquipped = cs.equip[slot] === instId;
       const cell = document.createElement('div');
       cell.className = `bag-item ${def.rarity}` + (inst.locked ? ' locked' : '');
       const forge = inst.forge || 0;
@@ -2980,27 +3066,19 @@ function renderBag() {
         ? '<div style="color:var(--shard);font-size:10px;margin-top:3px">' + inst.affixes.map(a => formatAffix(a).raw).join('、') + '</div>'
         : '';
       const lockIcon = inst.locked ? '<span class="lock-badge" title="已鎖定（批次分解會跳過）">🔒</span>' : '';
-      // 戒指未裝備時提供雙按鈕；其他裝備一個按鈕
-      const equipBtns = isRingSec
-        ? `<button data-equip="ring1:${instId}" title="裝至戒指(左)">裝左</button>
-           <button data-equip="ring2:${instId}" title="裝至戒指(右)">裝右</button>`
-        : `<button data-equip="${slot}:${instId}">裝備</button>`;
-      const equippedBadge = isRingSec && ringSlot
-        ? `[裝備中：${GAME_DATA.SLOT_LABELS[ringSlot]}]`
-        : '[裝備中]';
       cell.innerHTML = `
         <div class="iname">${lockIcon}${def.name}${forge ? ` +${forge}` : ''}</div>
         <div class="itag">${def.rarity}</div>
         <div style="color:var(--muted);font-size:10px;margin-top:3px;line-height:1.4">${statStr}</div>
         ${affixStr}
         ${isEquipped
-          ? `<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">${equippedBadge}</div>
+          ? `<div style="color:var(--accent);font-size:10px;margin-top:4px;font-weight:600">[裝備中]</div>
              <div class="bag-cell-actions">
-              <button class="ghost small" data-unequip="${equippedSlotKey}" title="卸下此裝備（卸下後可分解）">卸下</button>
+              <button class="ghost small" data-unequip="${slot}" title="卸下此裝備（卸下後可分解）">卸下</button>
               <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
             </div>`
           : `<div class="bag-cell-actions">
-              ${equipBtns}
+              <button data-equip="${slot}:${instId}">裝備</button>
               <button class="ghost small" data-lock="${instId}" title="${inst.locked ? '解鎖' : '鎖定（避免批次分解）'}">${inst.locked ? '🔓' : '🔒'}</button>
               <button class="danger small" data-disasm="${instId}" title="分解返還材料">分解</button>
             </div>`}
