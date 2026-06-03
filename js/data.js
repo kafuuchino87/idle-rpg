@@ -180,8 +180,8 @@ const SKILLS = {
   },
   'moonwheel-waltz': {
     name: '月華輪舞', tag: '持續', kind: 'physical', path: 'A', requireTier: 2,
-    desc: '八段舞踏狀態：總 650% 攻擊力（末段 180% 暴擊強擊）。CD 10s。',
-    mult: [0.5, 0.5, 0.6, 0.6, 0.7, 0.9, 1.0, 1.8], cd: 10.0, mpCost: 270, costTier: 'heavy',
+    desc: '八段舞踏狀態：總 650% 攻擊力（末段 180% 暴擊強擊）。CD 18s。',
+    mult: [0.5, 0.5, 0.6, 0.6, 0.7, 0.9, 1.0, 1.8], cd: 18.0, mpCost: 270, costTier: 'heavy',
   },
   'endless-night': {
     name: '永夜千華舞', tag: '★大招★', kind: 'physical', path: 'A', requireTier: 3,
