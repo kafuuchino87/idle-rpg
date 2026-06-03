@@ -573,11 +573,9 @@ const REGIONS = [
         cutscene: {
           portrait: 'assets/portraits/raid-mirror.png',
           lines: [
-            { speaker: '？？？', text: '……竟敢闖入我的鏡夢？' },
-            { speaker: '幻夢之主', text: '紅絲帶縛萬千分身，迷途者，你能辨真我嗎？' },
-            { speaker: '幻夢之主', text: '凡入此境者，皆將心智被蝕、靈魂被縛。' },
-            { speaker: '幻夢之主', text: '你的影子，將映入我的鏡中，化為我的一員。' },
-            { speaker: '？？？', text: '——除非，你的劍能斬斷幻象，直擊真實。' },
+            { speaker: '？？？',     text: '……是誰，闖入我的鏡夢？' },
+            { speaker: '幻夢之主', text: '紅絲帶縛萬千分身——你能辨真我嗎？' },
+            { speaker: '幻夢之主', text: '來吧，迷途者——讓你的影子永遠映入鏡中。' },
           ],
         },
         bosses: [

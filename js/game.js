@@ -1834,7 +1834,11 @@ window.showRaidPreview = function(dungeonId) {
 };
 
 // ============================================================================
-// 開場動畫（cutscene）— 依 dungeon.cutscene 顯示 BOSS 立繪 + 逐字台詞
+// 開場動畫（cutscene）— 全自動電影流程：
+//   Phase 1：黑屏淡入白霧（雲霧繚繞）
+//   Phase 2：對話自動跑（無跳過/繼續按鈕）
+//   Phase 3：最後一句時 BOSS 從中央慢慢浮現
+//   Phase 4：對話結束 BOSS 滑向戰鬥位置 → overlay 淡出 → 開戰
 // ============================================================================
 function showRaidCutscene(cutscene, onComplete) {
   if (!cutscene || !Array.isArray(cutscene.lines) || cutscene.lines.length === 0) {
@@ -1847,87 +1851,78 @@ function showRaidCutscene(cutscene, onComplete) {
 
   const overlay = document.createElement('div');
   overlay.id = 'cutsceneOverlay';
-  overlay.className = 'cutscene-overlay';
+  overlay.className = 'cutscene-overlay auto';
   overlay.innerHTML = `
-    <div class="cutscene-vignette"></div>
-    <div class="cutscene-portrait">
+    <div class="cutscene-mist"></div>
+    <div class="cutscene-mist cutscene-mist-2"></div>
+    <div class="cutscene-portrait hidden">
       <img src="${cutscene.portrait}" alt="BOSS" />
     </div>
     <div class="cutscene-textbox">
       <div class="cutscene-speaker"></div>
       <div class="cutscene-line"></div>
-      <div class="cutscene-actions">
-        <button class="cutscene-skip">跳過動畫</button>
-        <button class="cutscene-next">繼續 ▼</button>
-      </div>
     </div>
   `;
   document.body.appendChild(overlay);
-  setTimeout(() => overlay.classList.add('show'), 50);
 
   const speakerEl = overlay.querySelector('.cutscene-speaker');
-  const lineEl = overlay.querySelector('.cutscene-line');
-  const nextBtn = overlay.querySelector('.cutscene-next');
-  const skipBtn = overlay.querySelector('.cutscene-skip');
+  const lineEl    = overlay.querySelector('.cutscene-line');
+  const portraitEl = overlay.querySelector('.cutscene-portrait');
+  const textboxEl  = overlay.querySelector('.cutscene-textbox');
 
-  let lineIdx = 0;
-  let typewriterTimer = null;
-  let lineDone = false;  // 當前行打完字了嗎
+  // 計時參數（搭配 CSS 動畫：白霧 1.5s 漸層 + 對話框 1.4s delay + 0.8s 淡入）
+  const MIST_FADE_IN    = 2300;  // 等對話框淡入完才開始打字
+  const TYPE_SPEED      = 80;    // 每字 ms
+  const POST_LINE_PAUSE = 1500;  // 一句打完後停留時間
+  const BOSS_SETTLE     = 1800;  // BOSS 滑到戰鬥位置時長
+  const OVERLAY_FADEOUT = 800;   // overlay 淡出
 
+  let cleanup = false;
   function finish() {
-    if (typewriterTimer) { clearInterval(typewriterTimer); typewriterTimer = null; }
+    if (cleanup) return;
+    cleanup = true;
     overlay.classList.remove('show');
     overlay.classList.add('hide');
-    setTimeout(() => overlay.remove(), 500);
+    setTimeout(() => { try { overlay.remove(); } catch (e) {} }, OVERLAY_FADEOUT);
     if (onComplete) onComplete();
   }
 
-  function advance() {
-    // 若當前行還在打字 → 跳到打完
-    if (!lineDone && typewriterTimer) {
-      clearInterval(typewriterTimer); typewriterTimer = null;
-      lineEl.textContent = cutscene.lines[lineIdx - 1].text;
-      lineDone = true;
-      if (lineIdx >= cutscene.lines.length) {
-        nextBtn.textContent = '⚔ 開始攻略';
-        nextBtn.classList.add('cutscene-start');
-      } else {
-        nextBtn.textContent = '繼續 ▼';
-      }
-      return;
-    }
-    // 已打完當前行 → 切下一行或結束
-    if (lineIdx >= cutscene.lines.length) {
-      finish();
-      return;
-    }
-    const line = cutscene.lines[lineIdx];
-    lineIdx++;
-    lineDone = false;
-    speakerEl.textContent = line.speaker || '';
+  function typeLine(text, done) {
     lineEl.textContent = '';
-    nextBtn.textContent = '⏭ 跳過此句';
-    nextBtn.classList.remove('cutscene-start');
-    let chIdx = 0;
-    typewriterTimer = setInterval(() => {
-      lineEl.textContent += line.text[chIdx];
-      chIdx++;
-      if (chIdx >= line.text.length) {
-        clearInterval(typewriterTimer); typewriterTimer = null;
-        lineDone = true;
-        if (lineIdx >= cutscene.lines.length) {
-          nextBtn.textContent = '⚔ 開始攻略';
-          nextBtn.classList.add('cutscene-start');
-        } else {
-          nextBtn.textContent = '繼續 ▼';
-        }
+    let i = 0;
+    const ti = setInterval(() => {
+      if (i < text.length) {
+        lineEl.textContent += text[i++];
+      } else {
+        clearInterval(ti);
+        if (done) done();
       }
-    }, 55);
+    }, TYPE_SPEED);
   }
 
-  advance();
-  nextBtn.onclick = advance;
-  skipBtn.onclick = finish;
+  function runLine(idx) {
+    if (idx >= cutscene.lines.length) {
+      // 對話跑完 → BOSS 滑向戰鬥位置（同時 textbox 淡出）
+      textboxEl.classList.add('fade-out');
+      portraitEl.classList.add('move-to-battle');
+      setTimeout(finish, BOSS_SETTLE);
+      return;
+    }
+    const line = cutscene.lines[idx];
+    speakerEl.textContent = line.speaker || '';
+    // 最後一句開始時觸發 BOSS 浮現
+    if (idx === cutscene.lines.length - 1) {
+      portraitEl.classList.remove('hidden');
+      portraitEl.classList.add('emerge');
+    }
+    typeLine(line.text, () => {
+      setTimeout(() => runLine(idx + 1), POST_LINE_PAUSE);
+    });
+  }
+
+  // 啟動：先讓 overlay 顯示（黑底）→ 過 50ms 開始淡入白霧 → 雲霧成形後跑對話
+  setTimeout(() => overlay.classList.add('show'), 50);
+  setTimeout(() => runLine(0), MIST_FADE_IN);
 }
 window.showRaidCutscene = showRaidCutscene;
 
