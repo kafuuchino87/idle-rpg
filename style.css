@@ -817,6 +817,70 @@ button.primary:hover { filter: brightness(1.1); }
    幻夢之主 7 招技能動畫
    ============================================================================ */
 
+/* === BOSS 招式對白氣泡（precast 1.5s 期間顯示在 BOSS 卡左側）=== */
+.boss-speak-bubble {
+  position: absolute;
+  top: 25%;
+  right: 105%;
+  width: max-content;
+  max-width: 220px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, rgba(40, 20, 30, 0.95), rgba(20, 10, 18, 0.98));
+  border: 1px solid rgba(255, 120, 150, 0.7);
+  border-radius: 10px;
+  color: #ffe6f0;
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 1px;
+  font-weight: 600;
+  text-shadow: 0 0 4px rgba(255, 80, 120, 0.6);
+  box-shadow:
+    0 0 20px rgba(255, 80, 120, 0.45),
+    inset 0 0 12px rgba(255, 60, 100, 0.2);
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(20px) scale(0.85);
+  animation: bossSpeakIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.boss-speak-bubble.fade-out {
+  animation: bossSpeakOut 0.4s ease forwards;
+}
+@keyframes bossSpeakIn {
+  0%   { opacity: 0; transform: translateX(20px) scale(0.85); }
+  60%  { opacity: 1; transform: translateX(-2px) scale(1.04); }
+  100% { opacity: 1; transform: translateX(0)   scale(1); }
+}
+@keyframes bossSpeakOut {
+  0%   { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-15px) scale(0.9); }
+}
+/* 對話氣泡尖角（指向 BOSS）*/
+.boss-speak-bubble::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 0; height: 0;
+  border-left: 10px solid rgba(255, 120, 150, 0.7);
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  transform: translateY(-50%);
+}
+.boss-speak-bubble::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 0; height: 0;
+  margin-left: -1px;
+  border-left: 9px solid rgba(40, 20, 30, 0.95);
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
 /* 整螢幕色閃（通用 helper）*/
 .fullscreen-flash {
   position: fixed; inset: 0;

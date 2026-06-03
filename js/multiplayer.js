@@ -410,6 +410,12 @@ function handleMessage(fromPeerId, data) {
       b._dead = true;
     }
   }
+  // 鏡夢縛魂：BOSS 招式前的對白氣泡（guest 同步顯示）
+  if (data.type === 'boss-speak' && MP.role === 'guest') {
+    if (typeof window.bossSpeak === 'function') {
+      window.bossSpeak(data.payload.text || '', data.payload.duration || 1.5);
+    }
+  }
   // 鏡夢縛魂：BOSS 招式動畫廣播（guest 同步播放，純視覺）
   if (data.type === 'boss-skill' && MP.role === 'guest') {
     const id = data.payload.id;

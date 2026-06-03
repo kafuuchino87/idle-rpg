@@ -652,6 +652,18 @@ function tickBossShield(dt) {
 const MIRROR_SKILLS_P1 = ['cloneSummon', 'flowerMoon', 'ribbonBind', 'shadowDance'];
 const MIRROR_SKILLS_P2 = ['ribbonRain', 'mirrorCage', 'shadowDance', 'flowerMoon'];
 
+// 每招施放前 BOSS 角色側邊吐一句話（precast 1.5 秒）
+const MIRROR_CALLOUTS = {
+  cloneSummon: '映於萬鏡——出來吧，分身。',
+  flowerMoon:  '花綻水中月，傷痕盡撫平。',
+  ribbonBind:  '紅絲為縛，魂歸吾鏡。',
+  shadowDance: '一影、千影、萬影連舞——',
+  ribbonRain:  '紅絲如雨，無處可逃。',
+  mirrorCage:  '入鏡牢中，無人能救你。',
+  awakening:   '夠了——讓我撕碎這些幻夢！',
+};
+const MIRROR_PRECAST_TIME = 1.5;  // 對白持續秒數
+
 function initMirrorBoss() {
   // 第一次發現幻夢之主時呼叫（spawnNextWave 後）
   const e = BATTLE.enemy;
@@ -709,6 +721,20 @@ function tickMirrorBoss(dt) {
 }
 
 function castMirrorSkill(id) {
+  // 先進 precast 狀態 — BOSS 側邊吐對白、視覺蓄力 1.5 秒，之後才實際施放
+  const callout = MIRROR_CALLOUTS[id];
+  if (callout) {
+    BATTLE.mirrorBoss.active = {
+      id: 'preCast', nextId: id, timer: MIRROR_PRECAST_TIME, name: '對白',
+    };
+    fireBossSpeak(callout, MIRROR_PRECAST_TIME);
+    return;
+  }
+  // 沒對白（理論上不會走到）→ 直接施法
+  doMirrorCast(id);
+}
+
+function doMirrorCast(id) {
   switch (id) {
     case 'cloneSummon':  castCloneSummon();  break;
     case 'flowerMoon':   castFlowerMoon();   break;
@@ -716,6 +742,14 @@ function castMirrorSkill(id) {
     case 'shadowDance':  castShadowDance();  break;
     case 'ribbonRain':   castRibbonRain();   break;
     case 'mirrorCage':   castMirrorCage();   break;
+  }
+}
+
+function fireBossSpeak(text, duration) {
+  // host：本地播 + 廣播給 guest 同步
+  if (typeof window.bossSpeak === 'function') window.bossSpeak(text, duration);
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('boss-speak', { text, duration, dungeonId: BATTLE.dungeonId });
   }
 }
 
@@ -799,6 +833,8 @@ function castMirrorAwakening() {
   // 永久強化
   e.atk = Math.floor(e.atk * 1.5);
   e._awakened = true;
+  // 覺醒對白（同樣 1.5s 飄字 + 螢幕震屏）
+  fireBossSpeak(MIRROR_CALLOUTS.awakening, 2.0);
   logLine(`<span class="lg-fail">★★【真我覺醒】幻夢之主撕裂紅絲，真身覺醒！攻擊力 +50%、技能 CD -30%！</span>`, '');
   fireBossSkillAnim('awakening', { duration: 1.2 });
   if (BATTLE._mpMode === 'host' && window.MP_API) {
@@ -816,6 +852,15 @@ function tickMirrorActive(dt) {
   a.timer -= dt;
 
   switch (a.id) {
+    // BOSS 吐對白蓄力中：時間到才實際施放下一個技能
+    case 'preCast': {
+      if (a.timer <= 0) {
+        const nextId = a.nextId;
+        mb.active = null;
+        doMirrorCast(nextId);
+      }
+      break;
+    }
     case 'cloneSummon': {
       if (a.timer <= 0) {
         // 時間到：依殘餘分身數每個扣 30%

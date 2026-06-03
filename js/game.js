@@ -2198,6 +2198,21 @@ function mirrorAnim_awakening(data) {
   }
 }
 
+// ── 對話氣泡：BOSS 放招前在卡片旁邊吐一句 ──
+window.bossSpeak = function(text, durationSec) {
+  const card = _getBossCard();
+  if (!card) return;
+  // 清舊氣泡
+  card.querySelectorAll('.boss-speak-bubble').forEach(el => el.remove());
+  const bubble = document.createElement('div');
+  bubble.className = 'boss-speak-bubble';
+  bubble.textContent = text;
+  card.appendChild(bubble);
+  const ms = Math.max(800, (durationSec || 1.5) * 1000);
+  setTimeout(() => bubble.classList.add('fade-out'), ms - 400);
+  setTimeout(() => { try { bubble.remove(); } catch (e) {} }, ms);
+};
+
 // helper：整螢幕色閃
 function flashFullscreen(color, ms) {
   let flash = document.createElement('div');
