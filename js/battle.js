@@ -1408,7 +1408,8 @@ function doEnemyAttack(srcEnemy) {
   }
   if (window.floatDamage) floatDamage('-' + dmg, 'enemy');
   // 永凍守魂觸發：HP < 30% 且還沒觸發過 → 觸發無敵 + 回血
-  if (BATTLE.player.hp / BATTLE.player.maxHp < 0.30 && !BATTLE.setTriggers.frost) {
+  // 已陣亡不再觸發（避免被回血+無敵起死回生）
+  if (!BATTLE._dead && BATTLE.player.hp / BATTLE.player.maxHp < 0.30 && !BATTLE.setTriggers.frost) {
     triggerCoreSet('on-low-hp');
   }
 }

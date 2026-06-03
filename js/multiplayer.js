@@ -555,9 +555,10 @@ function handleMessage(fromPeerId, data) {
     }
   }
   // 收到 B 路線聖光治癒 → 按自己 maxHp 補血
+  // ★ 陣亡的玩家不能被補滿（不然造成「死了但 HP 滿」的鬼狀態，team-wipe 永遠不觸發）
   if (data.type === 'heal-ally' && (MP.role === 'host' || MP.role === 'guest')) {
     const b = window.BATTLE;
-    if (b && b.running && b.player && b.player.maxHp > 0) {
+    if (b && b.running && !b._dead && b.player && b.player.maxHp > 0) {
       const pct = Math.max(0, Math.min(1, data.payload.pct || 0));
       const amount = Math.floor(b.player.maxHp * pct);
       if (amount > 0) {
