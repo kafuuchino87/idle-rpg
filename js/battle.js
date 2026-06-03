@@ -1441,6 +1441,7 @@ function applyDamage(dmg, isCrit) {
   let actualDmg = dmg;
   // 鏡夢縛魂技能攔截：分身吸傷 / 鏡牢吸傷 / 治療打斷計數 / 紅絲掙脫計數
   // ★ 多人：只有 host / solo 套用 hook（權威端）；guest 送 raw 給 host 重算
+  const isMirrorGuest = BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode === 'guest';
   if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
       && typeof mirrorBossDamageHook === 'function') {
     actualDmg = mirrorBossDamageHook(rawDmg);
@@ -1450,6 +1451,8 @@ function applyDamage(dmg, isCrit) {
     BATTLE._endlessTotalDmg += actualDmg;
     BATTLE._endlessTeamDmg += actualDmg;
     updateEndlessTier();
+  } else if (isMirrorGuest) {
+    // 鏡夢縛魂 guest 端不本地扣 hp — 完全等 host enemy-sync 同步
   } else if (actualDmg > 0 && BATTLE.enemy.shield > 0) {
     // 護盾優先扣（雙影獵討機制）；溢出傷害扣 HP
     const absorbed = Math.min(BATTLE.enemy.shield, actualDmg);
@@ -1508,6 +1511,7 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
     }
     // 鏡夢縛魂技能攔截（同 applyDamage：只在 host / solo 套用 hook）
     const aoeRawDmg = dmg;
+    const aoeIsMirrorGuest = e.bossSkillTag === 'mirror' && BATTLE._mpMode === 'guest';
     if (e.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
         && typeof mirrorBossDamageHook === 'function') {
       dmg = mirrorBossDamageHook(dmg);
@@ -1517,6 +1521,8 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
       BATTLE._endlessTotalDmg += dmg;
       BATTLE._endlessTeamDmg += dmg;
       updateEndlessTier();
+    } else if (aoeIsMirrorGuest) {
+      // 鏡夢縛魂 guest 端不本地扣 hp — 完全等 host enemy-sync
     } else if (e.shield > 0) {
       // 護盾優先扣 + 溢出傷害給 HP
       const absorbed = Math.min(e.shield, dmg);

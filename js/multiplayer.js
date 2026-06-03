@@ -245,6 +245,17 @@ function broadcastBattleState() {
 function isHost() { return MP.role === 'host'; }
 function isGuest() { return MP.role === 'guest'; }
 
+// guest 被 BOSS 招式打死時：設 _dead + 廣播 player-dead，讓其他人能 team-wipe 判定
+function markGuestDeadAndBroadcast(b) {
+  if (!b || b._dead) return;
+  b._dead = true;
+  // 廣播給所有人（包含 host），讓他們知道我死了
+  broadcast('player-dead', { dungeonId: b.dungeonId });
+  if (typeof window.logLine === 'function') {
+    window.logLine(`<span class="lg-fail">${(GAME_STATE.getPlayerNickname && GAME_STATE.getPlayerNickname()) || '你'} 陣亡，等待隊友通關...</span>`, '');
+  }
+}
+
 // ===== 處理收到的訊息 =====
 function handleMessage(fromPeerId, data) {
   if (!data || typeof data !== 'object') return;
@@ -388,11 +399,18 @@ function handleMessage(fromPeerId, data) {
         b.freezes = 0;
         if (b.onUpdate) b.onUpdate();
       } else {
-        // 結構一致 → 覆寫 HP（只能降）+ 護盾資料 + 鏡夢縛魂 BOSS 狀態
+        // 結構一致 → 覆寫 HP + 護盾資料 + 鏡夢縛魂 BOSS 狀態
         for (let i = 0; i < Math.min(b.currentWave.length, hostEnemies.length); i++) {
           if (b.currentWave[i] && hostEnemies[i]) {
             const newHp = hostEnemies[i].hp;
-            if (newHp < b.currentWave[i].hp) b.currentWave[i].hp = newHp;
+            const isMirrorBoss = b.currentWave[i].bossSkillTag === 'mirror' || hostEnemies[i].bossSkillTag === 'mirror';
+            if (isMirrorBoss) {
+              // 鏡夢縛魂 BOSS：host 完全權威（分身吸傷讓 guest 本地 HP 跟 host 差距大，必須整個覆寫）
+              b.currentWave[i].hp = newHp;
+            } else {
+              // 其他 BOSS：只能降（避免網路抖動讓 HP 反彈）
+              if (newHp < b.currentWave[i].hp) b.currentWave[i].hp = newHp;
+            }
             // 護盾即時同步
             b.currentWave[i].shield = hostEnemies[i].shield || 0;
             b.currentWave[i].shieldMax = hostEnemies[i].shieldMax || 0;
@@ -401,6 +419,7 @@ function handleMessage(fromPeerId, data) {
             // 開場拔刀斬同步
             b.currentWave[i].openingState = hostEnemies[i].openingState || null;
             // 鏡夢縛魂 BOSS 技能即時同步（分身/鏡牢狀態給 guest 顯示）
+            b.currentWave[i].bossSkillTag = hostEnemies[i].bossSkillTag || b.currentWave[i].bossSkillTag;
             b.currentWave[i].cloneDR = hostEnemies[i].cloneDR || 0;
             b.currentWave[i].cloneCount = hostEnemies[i].cloneCount || 0;
             b.currentWave[i].cloneCurrentHp = hostEnemies[i].cloneCurrentHp || 0;
@@ -471,7 +490,7 @@ function handleMessage(fromPeerId, data) {
       if (typeof window.logLine === 'function') {
         window.logLine(`<span class="lg-fail">✘ 分身自爆！${dmg.toLocaleString()} 傷害！</span>`, '');
       }
-      if (b.player.hp <= 0) b._dead = true;
+      if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     } else if (id === 'mirrorCage' && b.player) {
       const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0.6));
       b.player.hp = Math.max(0, b.player.hp - dmg);
@@ -479,7 +498,7 @@ function handleMessage(fromPeerId, data) {
       if (typeof window.logLine === 'function') {
         window.logLine(`<span class="lg-fail">✘ 鏡牢爆裂！${dmg.toLocaleString()} 傷害！</span>`, '');
       }
-      if (b.player.hp <= 0) b._dead = true;
+      if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     }
   }
   // 鏡夢縛魂：技能每段傷害（shadowDance / ribbonRain）
@@ -497,7 +516,7 @@ function handleMessage(fromPeerId, data) {
         if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('ribbonDrop', { hit: true });
         if (typeof window.floatDamage === 'function') window.floatDamage('🎀 ' + dmg, 'enemy');
       }
-      if (b.player.hp <= 0) b._dead = true;
+      if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     }
   }
   // 鏡夢縛魂：開場拔刀斬 — guest 收到後同步扣血 + 播動畫
@@ -512,7 +531,7 @@ function handleMessage(fromPeerId, data) {
         window.logLine(`<span class="lg-fail">✘ 【${name}】造成 ${dmg.toLocaleString()} 傷害！（${Math.round(dmgPct * 100)}% 最大生命）</span>`, '');
       }
       if (typeof window.bossSlash === 'function') window.bossSlash(name, dmg);
-      if (b.player.hp <= 0) b._dead = true;
+      if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     }
   }
   // 收到 host 廣播的「無盡塔結束」→ guest 強制同步結算
