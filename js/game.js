@@ -3456,6 +3456,7 @@ const STAT_DISPLAY_NAMES = {
   atk: '攻擊', def: '防禦', hp: '生命',
   crit: '暴擊', critDmg: '暴傷', spd: '速度',
   dmgReduce: '減傷', cdReduce: 'CD減', vsBoss: '對 BOSS', skillDmg: '技能傷害',
+  defPierce: '無視防禦', maxMp: '最大MP', atkPct: '%攻擊力',
 };
 function formatAffix(a) {
   const isPct = typeof a.value === 'number' && a.value < 1;

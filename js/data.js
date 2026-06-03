@@ -1153,6 +1153,11 @@ const AFFIX_POOL = [
   { stat: 'spd',       label: '迅捷',  min: 0.03, max: 0.10, integer: false },
   { stat: 'dmgReduce', label: '堅韌',  min: 0.01, max: 0.04, integer: false },
   { stat: 'skillDmg',  label: '兇猛',  min: 0.02, max: 0.08, integer: false },
+  { stat: 'cdReduce',  label: '急進',  min: 0.01, max: 0.03, integer: false },
+  { stat: 'vsBoss',    label: '獵首',  min: 0.02, max: 0.06, integer: false },
+  { stat: 'defPierce', label: '破甲',  min: 0.01, max: 0.03, integer: false },
+  { stat: 'maxMp',     label: '精魄',  min: 20,   max: 80,   integer: true },
+  { stat: 'atkPct',    label: '神威',  min: 0.01, max: 0.03, integer: false },
 ];
 
 function rollAffixes(rarity) {
