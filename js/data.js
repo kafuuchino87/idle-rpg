@@ -944,19 +944,19 @@ const ITEMS = {
       },
     },
 
-    // ===== 星淵之獵 UR 武器（雙影獵討專屬掉落，比 ur1 更強）=====
+    // ===== 星淵之獵 UR 武器（雙影獵討專屬掉落 2%，畢業終極神器）=====
     { id: 'eq-weap-ur2', slot: 'weapon', owner: 'tsukirin', name: '星淵·噬月矛', rarity: 'UR', tier: 5,
-      stats: { atk: 1100, crit: 0.30, critDmg: 1.00 },
+      stats: { atk: 1500, crit: 0.35, critDmg: 1.20 },
       fixed: {
-        label: '星淵噬月：攻擊 +(220+強化×22)、暴擊 +12%、暴傷 +50%、對王 +(25%+強化×1.5%)、技能傷害 +(25%+強化×1.5%)、減傷 +5%',
-        effect: { atk: 'forge:220+22', crit: 0.12, critDmg: 0.50, vsBoss: 'forge:0.25+0.015', skillDmg: 'forge:0.25+0.015', dmgReduce: 0.05 },
+        label: '星淵噬月：攻擊 +(400+強化×40)、暴擊 +20%、暴傷 +90%、對王 +(40%+強化×2.5%)、技能傷害 +(40%+強化×2.5%)、減傷 +10%、無視防禦 +20%',
+        effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
       },
     },
     { id: 'eq-mirror-ur2', slot: 'weapon', owner: 'eve', name: '星龍·夢淵鏡', rarity: 'UR', tier: 5,
-      stats: { atk: 1100, crit: 0.30, critDmg: 1.00 },
+      stats: { atk: 1500, crit: 0.35, critDmg: 1.20 },
       fixed: {
-        label: '夢淵星龍：攻擊 +(220+強化×22)、暴擊 +12%、暴傷 +50%、對王 +(25%+強化×1.5%)、技能傷害 +(25%+強化×1.5%)、減傷 +5%',
-        effect: { atk: 'forge:220+22', crit: 0.12, critDmg: 0.50, vsBoss: 'forge:0.25+0.015', skillDmg: 'forge:0.25+0.015', dmgReduce: 0.05 },
+        label: '夢淵星龍：攻擊 +(400+強化×40)、暴擊 +20%、暴傷 +90%、對王 +(40%+強化×2.5%)、技能傷害 +(40%+強化×2.5%)、減傷 +10%、無視防禦 +20%',
+        effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
       },
     },
   ],
