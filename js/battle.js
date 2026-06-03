@@ -512,10 +512,17 @@ function tickBattle(dt) {
 //   hpPct: 按 BOSS maxHp 比例（fallback）
 // 多人：host 為權威，guest 只接收 enemy-sync 同步護盾資料、即死靠 host 廣播 raid-instant-kill
 function tickBossShield(dt) {
-  // guest 端不執行護盾邏輯 — 跟著 host enemy-sync 同步
-  if (BATTLE._mpMode === 'guest') return;
   const e = BATTLE.enemy;
-  if (!e || !e.shieldConfig || e.hp <= 0) return;
+  if (!e || e.hp <= 0) return;
+  // guest 端：本地 tick shieldBreakTimer 順暢倒數（60fps），不執行啟動/即死邏輯
+  // enemy-sync（200ms 一次）會週期性修正誤差，看起來就是即時順暢的倒數
+  if (BATTLE._mpMode === 'guest') {
+    if (e.shield > 0 && e.shieldBreakTimer > 0) {
+      e.shieldBreakTimer = Math.max(0, e.shieldBreakTimer - dt);
+    }
+    return;
+  }
+  if (!e.shieldConfig) return;
   const cfg = e.shieldConfig;
   // 護盾未啟動：倒數至 shieldTimer 達 0 → 啟動護盾
   if (e.shield <= 0) {
