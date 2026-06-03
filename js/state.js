@@ -912,6 +912,7 @@ function effectiveStats(charId) {
   if (s.vsBoss == null)    s.vsBoss = 0;
   if (s.skillDmg == null)  s.skillDmg = 0;
   if (s.defPierce == null) s.defPierce = 0;
+  if (s.basicAtkMul == null) s.basicAtkMul = 0;
   // ===== MP 屬性 =====
   if (s.maxMp == null) s.maxMp = 400;
   else s.maxMp += 400;
@@ -964,6 +965,7 @@ function effectiveStats(charId) {
     vsBoss: s.vsBoss,
     skillDmg: s.skillDmg || 0,
     defPierce: s.defPierce || 0,
+    basicAtkMul: s.basicAtkMul || 0,
     maxMp: Math.floor(s.maxMp),
     mpRegen: Math.round(s.mpRegen * 10) / 10,
     mpPerHit: Math.floor(s.mpPerHit),

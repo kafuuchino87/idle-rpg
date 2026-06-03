@@ -319,7 +319,7 @@ const PASSIVES = {
   // ===== 雪羽 被動 =====
   'third-eye':   { name: '心眼',       desc: '暴擊率 +6%、暴擊傷害 +15%。',                apply: s => { s.crit += 0.06; s.critDmg = (s.critDmg || 1.8) + 0.15; } },
   'dark-blood':  { name: '暗血盟',     desc: '每損失 1% 當前 HP，攻擊力 +1%（戰鬥中動態，戰前無效）。', apply: s => { s.darkBlood = true; } },
-  'holy-grace':  { name: '聖恩潤澤',   desc: '戰鬥中 HP 每秒回復 1.5%、所有治癒效果 +25%。',           apply: s => { s.hpRegenPct = (s.hpRegenPct || 0) + 0.015; s.healMul = (s.healMul || 1) * 1.25; } },
+  'holy-grace':  { name: '聖恩潤澤',   desc: '★普攻傷害 +100%（聖光普攻流派）。',  apply: s => { s.basicAtkMul = (s.basicAtkMul || 0) + 1.0; } },
   'last-stand':  { name: '背水之姫',   desc: 'HP < 40% 時，攻擊力 +50%、暴擊傷害 +30%（戰鬥中動態）。', apply: s => { s.lastStand = true; } },
   'angel-favor': { name: '神光庇護',   desc: 'HP 上限 +20%、減傷 +15%、暴擊傷害 +25%。',               apply: s => { s.hp *= 1.2; s.dmgReduce = (s.dmgReduce || 0) + 0.15; s.critDmg = (s.critDmg || 1.8) + 0.25; } },
   'mirror-soul': { name: '鏡之魂',     desc: '全屬性 +50%、技能傷害 +30%。',                            apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.skillDmg = (s.skillDmg || 0) + 0.3; } },
