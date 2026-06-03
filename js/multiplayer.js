@@ -460,13 +460,17 @@ function handleMessage(fromPeerId, data) {
       window.bossSpeak(data.payload.text || '', data.payload.duration || 1.5);
     }
   }
-  // 鏡夢縛魂：BOSS 招式動畫廣播（guest 同步播放，純視覺）
+  // 鏡夢縛魂：BOSS 招式動畫廣播（guest 同步播放 + 部分招式同步 debuff）
   if (data.type === 'boss-skill' && MP.role === 'guest') {
     const b = window.BATTLE;
     if (!b || !b.running) return;  // 戰鬥已結束 → 忽略殘留廣播
     const id = data.payload.id;
     if (typeof window.bossSkillAnim === 'function') {
       window.bossSkillAnim(id, data.payload.data || {});
+    }
+    // ★ 紅絲縛魂：同步「紅絲纏縛」debuff 給 guest（攻速 -50%、6 秒）
+    if (id === 'ribbonBind' && Array.isArray(b.buffs)) {
+      b.buffs.push({ spdMul: -0.5, dur: 6, _maxDur: 6, _name: '紅絲纏縛', _ribbonBind: true });
     }
     if (typeof window.logLine === 'function' && id) {
       const labels = {
@@ -510,7 +514,7 @@ function handleMessage(fromPeerId, data) {
       if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     }
   }
-  // 鏡夢縛魂：技能每段傷害（shadowDance / ribbonRain）
+  // 鏡夢縛魂：技能每段傷害（shadowDance / ribbonRain / ribbonBind DoT）
   if (data.type === 'boss-skill-tick' && MP.role === 'guest') {
     const b = window.BATTLE;
     if (!b || !b.running || b._dead || !b.player) return;  // 戰鬥已結束 / 自己已死 → 忽略
@@ -521,9 +525,14 @@ function handleMessage(fromPeerId, data) {
       if (id === 'shadowDance') {
         if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('shadowDanceHit', {});
         if (typeof window.floatDamage === 'function') window.floatDamage('⚔ ' + dmg, 'enemy');
+        // 同步「影舞反擊」buff（暴擊 +5%、5 秒）
+        if (Array.isArray(b.buffs)) b.buffs.push({ crit: 0.05, dur: 5, _maxDur: 5, _name: '影舞反擊' });
       } else if (id === 'ribbonRain') {
         if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('ribbonDrop', { hit: true });
         if (typeof window.floatDamage === 'function') window.floatDamage('🎀 ' + dmg, 'enemy');
+      } else if (id === 'ribbonBind') {
+        // 紅絲縛魂每秒 DoT
+        if (typeof window.floatDamage === 'function') window.floatDamage('🩸 ' + dmg, 'enemy');
       }
       if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     }

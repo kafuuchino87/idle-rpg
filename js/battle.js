@@ -918,6 +918,10 @@ function tickMirrorActive(dt) {
         const dmg = Math.floor(BATTLE.player.maxHp * a.dotPct);
         BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
         if (typeof floatDamage === 'function') floatDamage('🩸 ' + dmg, 'enemy');
+        // ★ 廣播 DoT tick 給 guest 同步扣血
+        if (BATTLE._mpMode === 'host' && window.MP_API) {
+          MP_API.broadcast('boss-skill-tick', { id: 'ribbonBind', dmgPct: a.dotPct });
+        }
         if (BATTLE.player.hp <= 0) { handleMirrorPlayerDead(); mb.active = null; return; }
       }
       // 提早掙脫：對 BOSS 造成 5 億傷害
