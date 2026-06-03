@@ -180,14 +180,14 @@ const SKILLS = {
   },
   'moonwheel-waltz': {
     name: '月華輪舞', tag: '持續', kind: 'physical', path: 'A', requireTier: 2,
-    desc: '八段舞踏狀態：總 850% 攻擊力（末段 250% 暴擊強擊）。CD 10s。',
-    mult: [0.7, 0.7, 0.8, 0.8, 1.0, 1.2, 1.3, 2.5], cd: 10.0, mpCost: 270, costTier: 'heavy',
+    desc: '八段舞踏狀態：總 650% 攻擊力（末段 180% 暴擊強擊）。CD 10s。',
+    mult: [0.5, 0.5, 0.6, 0.6, 0.7, 0.9, 1.0, 1.8], cd: 10.0, mpCost: 270, costTier: 'heavy',
   },
   'endless-night': {
     name: '永夜千華舞', tag: '★大招★', kind: 'physical', path: 'A', requireTier: 3,
-    desc: '【終極奧義】十二段月華舞踏 AOE，全段必爆，總 1500% 攻擊力（末段 300% 強擊）。施放後自身攻擊 +50% 持續 8 秒。CD 25s。',
-    mult: [0.7, 0.7, 0.8, 0.9, 1.0, 1.0, 1.1, 1.2, 1.3, 1.5, 2.0, 3.0],
-    aoe: true, alwaysCrit: true, buff: { atk: 0.5, dur: 8 },
+    desc: '【終極奧義】十二段月華舞踏 AOE，全段必爆，總 1100% 攻擊力（末段 220% 強擊）。施放後自身攻擊 +30% 持續 6 秒。CD 25s。',
+    mult: [0.5, 0.5, 0.6, 0.7, 0.7, 0.8, 0.8, 0.9, 1.0, 1.1, 1.4, 2.2],
+    aoe: true, alwaysCrit: true, buff: { atk: 0.3, dur: 6 },
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
