@@ -1260,6 +1260,7 @@ button.primary:hover { filter: brightness(1.1); }
   flex-direction: column;
   gap: 6px;
   z-index: 1;
+  position: relative;  /* 讓 boss-speak-bubble 等 absolute 子元素以卡片為定位基準 */
 }
 .player-card { align-items: flex-start; }
 .enemy-card { align-items: flex-end; }
