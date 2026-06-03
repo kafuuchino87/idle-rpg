@@ -1785,6 +1785,8 @@ function onDungeonClear() {
   // 這樣玩家在戰鬥中切到別角色看背包時，戰利品仍會記到正確角色
   const _battleCharId = BATTLE.charId;
   const _battleCs = GAME_STATE.state.characters[_battleCharId];
+  // 首通判定：標記前先記下還沒清過（給 bonusEquipment guaranteedFirstClear 用）
+  const _isFirstClear = !!(_battleCs && (!_battleCs.clearedDungeons || !_battleCs.clearedDungeons[d.id]));
   if (_battleCs) {
     if (!_battleCs.clearedDungeons) _battleCs.clearedDungeons = {};
     _battleCs.clearedDungeons[d.id] = true;
@@ -1844,10 +1846,12 @@ function onDungeonClear() {
     }
   }
   // 副本層級機率掉特殊裝備（UR 戒指等）— 額外掉落，不佔通用裝備掉落配額
+  // guaranteedFirstClear: 首通必掉（無視機率）
   let bonusEquipMsg = '';
   if (Array.isArray(d.bonusEquipment)) {
     for (const b of d.bonusEquipment) {
-      if (Math.random() < (b.chance || 0)) {
+      const guaranteed = _isFirstClear && b.guaranteedFirstClear;
+      if (guaranteed || Math.random() < (b.chance || 0)) {
         const items = b.items || (b.itemId ? [b.itemId] : []);
         if (!items.length) continue;
         const pickedId = items[Math.floor(Math.random() * items.length)];
@@ -1858,9 +1862,10 @@ function onDungeonClear() {
         const affixDesc = (inst && inst.affixes && inst.affixes.length)
           ? '【' + inst.affixes.map(a => `${a.label}+${a.value}`).join('/') + '】'
           : '';
-        bonusEquipMsg = `<span class="lg-drop">★★ 獲得 [${pickedDef.rarity}] ${pickedDef.name}${affixDesc}</span>`;
+        const firstTag = guaranteed ? '【首通必掉】' : '';
+        bonusEquipMsg = `<span class="lg-drop">★★${firstTag} 獲得 [${pickedDef.rarity}] ${pickedDef.name}${affixDesc}</span>`;
         logLine(bonusEquipMsg, '');
-        matMsgs.push(`★★ ${pickedDef.name}`);
+        matMsgs.push(`★★${firstTag}${pickedDef.name}`);
       }
     }
   }

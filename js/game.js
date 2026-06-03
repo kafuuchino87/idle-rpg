@@ -1703,9 +1703,12 @@ window.showRaidPreview = function(dungeonId) {
   const myCP = cs ? GAME_STATE.combatPower(cs.id) : 0;
   const lvOk = !d.requiredLv || (cs && cs.level >= d.requiredLv);
   const cpRatio = myCP / d.cp;
-  // 戰力評估
+  // 戰力評估（cpHidden BOSS 不對外公開 CP，評估只看「能否進場」）
   let assessment, assessClass;
-  if (cpRatio >= 1.5) { assessment = '戰力遠超 BOSS，勝券在握'; assessClass = 'safe'; }
+  if (d.cpHidden) {
+    assessment = '深不可測——戰力參考意義有限';
+    assessClass = 'warn';
+  } else if (cpRatio >= 1.5) { assessment = '戰力遠超 BOSS，勝券在握'; assessClass = 'safe'; }
   else if (cpRatio >= 1.0) { assessment = '戰力足以挑戰'; assessClass = 'ok'; }
   else if (cpRatio >= 0.6) { assessment = '戰力略遜，需精打細算'; assessClass = 'warn'; }
   else { assessment = '戰力嚴重不足，凶多吉少'; assessClass = 'danger'; }
@@ -1751,15 +1754,15 @@ window.showRaidPreview = function(dungeonId) {
       </div>
       <div class="raid-info">
         <div class="raid-title">${d.name}</div>
-        <div class="raid-subtitle">CP ${d.cp.toLocaleString()} · 難度 ×${d.difficultyMul || 1} · 需畢業 Lv ${d.requiredLv}</div>
+        <div class="raid-subtitle">CP ${d.cpHidden ? '???' : d.cp.toLocaleString()} · 難度 ×${d.difficultyMul || 1} · 需畢業 Lv ${d.requiredLv}</div>
         <div class="raid-lore">${lore}</div>
         ${d.warning ? `<div class="raid-warning">⚠ ${d.warning}</div>` : ''}
         <div class="raid-section-title">通關獎勵</div>
         <div class="raid-rewards">${rewards}</div>
         <div class="raid-section-title">戰力評估</div>
         <div class="raid-assessment ${assessClass}">
-          <div>你的戰力：<b>${myCP.toLocaleString()}</b> vs BOSS <b>${d.cp.toLocaleString()}</b> (${(cpRatio * 100).toFixed(0)}%)</div>
-          <div style="margin-top:4px">${assessment}</div>
+          <div>你的戰力：<b>${myCP.toLocaleString()}</b> vs BOSS <b>${d.cpHidden ? '???' : d.cp.toLocaleString()}</b> ${d.cpHidden ? '' : `(${(cpRatio * 100).toFixed(0)}%)`}</div>
+          <div style="margin-top:4px">${d.cpHidden ? '深不可測——戰力參考意義有限' : assessment}</div>
         </div>
         ${mpHtml}
         <div class="raid-actions">
@@ -2858,8 +2861,11 @@ function renderDungeonList() {
       if (!unlocked || !lvOk) klass += ' locked';
       if (BATTLE.dungeonId === d.id) klass += ' active';
       let cpClass = 'dungeon-cp';
-      if (cp < d.cp * 0.7) cpClass += ' high';
-      else if (cp > d.cp * 2) cpClass += ' easy';
+      // cpHidden BOSS 不對外公開戰力比較，列表顯示中性
+      if (!d.cpHidden) {
+        if (cp < d.cp * 0.7) cpClass += ' high';
+        else if (cp > d.cp * 2) cpClass += ' easy';
+      }
       row.className = klass;
       // 特殊類型標籤
       let typeTag = '';
@@ -2877,7 +2883,7 @@ function renderDungeonList() {
         : '';
       row.innerHTML = `
         <div class="dungeon-name">${d.name}${typeTag}${lvTag}${_activeClearedDungeons()[d.id] ? ' <span style="color:var(--hp-self);font-size:10px">已通</span>' : ''}</div>
-        <div class="${cpClass}">CP ${d.cp}</div>
+        <div class="${cpClass}">CP ${d.cpHidden ? '???' : d.cp}</div>
       `;
       if (unlocked) {
         row.onclick = () => {

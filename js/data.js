@@ -564,7 +564,8 @@ const REGIONS = [
       // 機制：每 30 秒凝聚「分身結界」護盾，5 秒內不破則全隊即死
       // 掉落：低機率 UR 戒指（幻夢 / 蝕念 隨機一枚）
       { id: 'raid-mirror', name: '鏡夢 · 縛魂', cp: 700000, unlock: 'raid-stardragon', requiredLv: 99,
-        minCpOverride: 100000,
+        minCpOverride: 400000,  // 實際入場門檻 40 萬 CP
+        cpHidden: true,         // 預覽窗 CP 顯示「???」
         isRaid: true, baseTime: 60, expBase: 60000, goldBase: 100000,
         difficultyMul: 60,
         atkCoefOverride: 0.005,    // BOSS 平 A 倍率
@@ -597,13 +598,12 @@ const REGIONS = [
           },
         ],
         bonusMats: [
-          { name: '永恆星辰', chance: 0.05, qty: [1, 1] },
           { name: '神鋼', chance: 0.50, qty: [10, 20] },
           { name: '永晶', chance: 0.30, qty: [3, 6] },
         ],
         bonusEquipment: [
-          // 3% 機率掉一枚 UR 戒指（從清單隨機）
-          { items: ['eq-ring-ur-dream', 'eq-ring-ur-erosion'], chance: 0.03, label: 'UR 戒指' },
+          // 首通必掉 1 枚（從 2 枚隨機）、之後 5% 機率
+          { items: ['eq-ring-ur-dream', 'eq-ring-ur-erosion'], chance: 0.05, guaranteedFirstClear: true, label: 'UR 戒指' },
         ],
         lore: [
           '鏡湖之畔，住著一位「幻夢之主」。',
@@ -617,8 +617,7 @@ const REGIONS = [
           { label: '金幣',   value: '100,000', color: 'var(--gold)' },
           { label: '神鋼',   value: '50% 機率 ×10~20', color: 'var(--shard)' },
           { label: '永晶',   value: '30% 機率 ×3~6', color: 'var(--shard)' },
-          { label: '★ 永恆星辰', value: '5% 機率（極限強化材料）', color: 'var(--hp-enemy)' },
-          { label: '★★ UR 戒指', value: '3% 機率：幻夢戒指 / 蝕念戒指（隨機一枚）', color: 'var(--hp-enemy)' },
+          { label: '★★ UR 戒指', value: '首通必掉 1 枚、之後 5% 機率（幻夢戒指 / 蝕念戒指 隨機）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-mirror.png',
         enemies: [],
