@@ -1968,11 +1968,249 @@ window.bossSlash = function(skillName, dmg) {
 // 開場蓄力開始 / 結束的 hook（log 之外的視覺）
 window.bossChargingStart = function(chargeTime) {
   // class toggle 已由 renderEnemyCards 每幀處理（看 openingState === 'active'）
-  // 這裡可加額外提示，暫無
 };
 window.bossChargingEnd = function(broken) {
   // 同上，靠 class toggle 自動移除
 };
+
+// ============================================================================
+// 幻夢之主 7 招技能動畫分發
+// ============================================================================
+window.bossSkillAnim = function(name, data) {
+  data = data || {};
+  switch (name) {
+    case 'cloneSummon':    mirrorAnim_cloneSummon(data); break;
+    case 'cloneExplode':   mirrorAnim_cloneExplode(data); break;
+    case 'flowerMoon':     mirrorAnim_flowerMoon(data); break;
+    case 'flowerMoonEnd':  mirrorAnim_flowerMoonEnd(data); break;
+    case 'ribbonBind':     mirrorAnim_ribbonBind(data); break;
+    case 'ribbonBindEnd':  mirrorAnim_ribbonBindEnd(data); break;
+    case 'shadowDance':    mirrorAnim_shadowDance(data); break;
+    case 'shadowDanceHit': mirrorAnim_shadowDanceHit(data); break;
+    case 'ribbonRain':     mirrorAnim_ribbonRain(data); break;
+    case 'ribbonDrop':     mirrorAnim_ribbonDrop(data); break;
+    case 'mirrorCage':     mirrorAnim_mirrorCage(data); break;
+    case 'mirrorCageEnd':  mirrorAnim_mirrorCageEnd(data); break;
+    case 'awakening':      mirrorAnim_awakening(data); break;
+  }
+};
+
+function _getBossCard() { return document.querySelector('.enemy-card'); }
+function _getPlayerCard() {
+  return document.querySelector('.player-side .fighter-card, .player-card');
+}
+function _getBattleStage() { return document.getElementById('battleStage'); }
+
+// ── 分身映鏡：4 個半透明分身於 BOSS 卡四角 fade-in ──
+function mirrorAnim_cloneSummon(data) {
+  const card = _getBossCard();
+  if (!card) return;
+  // 清舊的
+  card.querySelectorAll('.mirror-clone').forEach(el => el.remove());
+  const positions = [
+    { top: '8%',  left: '-22%' }, { top: '8%',  right: '-22%' },
+    { bottom: '8%', left: '-22%' }, { bottom: '8%', right: '-22%' },
+  ];
+  positions.forEach((pos, i) => {
+    const clone = document.createElement('div');
+    clone.className = 'mirror-clone';
+    Object.assign(clone.style, pos);
+    clone.style.animationDelay = (i * 0.12) + 's';
+    clone.innerHTML = `<img src="assets/portraits/raid-mirror.png" alt="clone">`;
+    card.appendChild(clone);
+  });
+  card.classList.add('mirror-clones-active');
+  const duration = (data.duration || 15) * 1000;
+  setTimeout(() => {
+    card.classList.remove('mirror-clones-active');
+    card.querySelectorAll('.mirror-clone').forEach(el => el.remove());
+  }, duration);
+}
+function mirrorAnim_cloneExplode(data) {
+  // 4 個分身爆裂閃光
+  const card = _getBossCard();
+  if (!card) return;
+  card.querySelectorAll('.mirror-clone').forEach(el => {
+    el.classList.add('mirror-clone-explode');
+  });
+  setTimeout(() => {
+    card.classList.remove('mirror-clones-active');
+    card.querySelectorAll('.mirror-clone').forEach(el => el.remove());
+  }, 600);
+}
+
+// ── 鏡花水月：BOSS 周圍粉藍光暈 + 漂浮花瓣粒子 ──
+function mirrorAnim_flowerMoon(data) {
+  const card = _getBossCard();
+  if (!card) return;
+  card.classList.add('boss-flowermoon');
+  // 花瓣粒子
+  const petalLayer = document.createElement('div');
+  petalLayer.className = 'flowermoon-petals';
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement('span');
+    p.className = 'fm-petal';
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.animationDelay = (Math.random() * 2) + 's';
+    p.style.animationDuration = (3 + Math.random() * 2) + 's';
+    petalLayer.appendChild(p);
+  }
+  card.appendChild(petalLayer);
+  // 水波漣漪
+  const ripple = document.createElement('div');
+  ripple.className = 'flowermoon-ripple';
+  card.appendChild(ripple);
+}
+function mirrorAnim_flowerMoonEnd(data) {
+  const card = _getBossCard();
+  if (!card) return;
+  card.classList.remove('boss-flowermoon');
+  card.querySelectorAll('.flowermoon-petals, .flowermoon-ripple').forEach(el => el.remove());
+  if (data.broken) {
+    // 打斷：藍色破裂閃光
+    flashFullscreen('rgba(120, 200, 255, 0.4)', 500);
+  } else {
+    // 治療完成：BOSS 卡綠光治癒 flash
+    card.classList.add('boss-healed');
+    setTimeout(() => card.classList.remove('boss-healed'), 800);
+  }
+}
+
+// ── 紅絲縛魂：紅絲帶從 BOSS 飛向玩家卡 + 玩家卡纏繞紅光 ──
+function mirrorAnim_ribbonBind(data) {
+  const bossCard = _getBossCard();
+  const playerCard = _getPlayerCard();
+  if (!bossCard || !playerCard) return;
+  playerCard.classList.add('player-ribbon-bound');
+  // 飛行絲帶
+  const stage = _getBattleStage() || document.body;
+  const ribbon = document.createElement('div');
+  ribbon.className = 'ribbon-projectile';
+  stage.appendChild(ribbon);
+  setTimeout(() => ribbon.remove(), 800);
+}
+function mirrorAnim_ribbonBindEnd(data) {
+  const playerCard = _getPlayerCard();
+  if (playerCard) playerCard.classList.remove('player-ribbon-bound');
+  if (data.broken) flashFullscreen('rgba(255, 220, 100, 0.3)', 400);
+}
+
+// ── 萬影連舞：BOSS 透明 + 殘影斜劃 ──
+function mirrorAnim_shadowDance(data) {
+  const card = _getBossCard();
+  if (!card) return;
+  card.classList.add('boss-shadowdance');
+  setTimeout(() => card.classList.remove('boss-shadowdance'), (data.duration || 2) * 1000);
+}
+function mirrorAnim_shadowDanceHit(data) {
+  // 一段殘影掃過畫面
+  const stage = _getBattleStage() || document.body;
+  const slash = document.createElement('div');
+  slash.className = 'shadowdance-slash';
+  // 隨機方向
+  slash.style.transform = `rotate(${Math.floor(Math.random() * 360)}deg)`;
+  slash.style.top = (10 + Math.random() * 70) + '%';
+  stage.appendChild(slash);
+  setTimeout(() => slash.remove(), 350);
+  // 玩家卡受擊
+  const playerCard = _getPlayerCard();
+  if (playerCard) {
+    playerCard.classList.remove('player-hit-flash');
+    void playerCard.offsetWidth;
+    playerCard.classList.add('player-hit-flash');
+    setTimeout(() => playerCard.classList.remove('player-hit-flash'), 250);
+  }
+}
+
+// ── 絲帶天降：螢幕落下垂直紅絲 ──
+function mirrorAnim_ribbonRain(data) {
+  // 在開始時建立一個 layer，逐條 ribbon 由 ribbonDrop 加進去
+  let layer = document.getElementById('ribbonRainLayer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'ribbonRainLayer';
+    layer.className = 'ribbon-rain-layer';
+    document.body.appendChild(layer);
+  }
+  const duration = (data.duration || 4) * 1000;
+  setTimeout(() => { if (layer) layer.remove(); }, duration + 1500);
+}
+function mirrorAnim_ribbonDrop(data) {
+  const layer = document.getElementById('ribbonRainLayer');
+  if (!layer) return;
+  const ribbon = document.createElement('div');
+  ribbon.className = 'ribbon-falling' + (data.hit ? ' ribbon-hit' : '');
+  ribbon.style.left = (Math.random() * 95) + '%';
+  ribbon.style.animationDuration = (0.8 + Math.random() * 0.4) + 's';
+  layer.appendChild(ribbon);
+  setTimeout(() => ribbon.remove(), 1500);
+}
+
+// ── 鏡牢禁錮：玩家卡周圍 6 片菱形鏡面圍住 ──
+function mirrorAnim_mirrorCage(data) {
+  const playerCard = _getPlayerCard();
+  if (!playerCard) return;
+  playerCard.classList.add('player-caged');
+  // 6 片鏡面
+  const cage = document.createElement('div');
+  cage.className = 'mirror-cage-frame';
+  for (let i = 0; i < 6; i++) {
+    const panel = document.createElement('div');
+    panel.className = 'cage-panel';
+    panel.style.transform = `rotate(${i * 60}deg) translateY(-95px)`;
+    panel.style.animationDelay = (i * 0.08) + 's';
+    cage.appendChild(panel);
+  }
+  playerCard.appendChild(cage);
+}
+function mirrorAnim_mirrorCageEnd(data) {
+  const playerCard = _getPlayerCard();
+  if (!playerCard) return;
+  const cage = playerCard.querySelector('.mirror-cage-frame');
+  if (cage) {
+    cage.classList.add(data.broken ? 'cage-shatter' : 'cage-explode');
+    setTimeout(() => cage.remove(), 800);
+  }
+  playerCard.classList.remove('player-caged');
+  if (!data.broken) flashFullscreen('rgba(255, 80, 120, 0.45)', 600);
+}
+
+// ── 真我覺醒：螢幕震屏 + BOSS 卡紅化 + 黑紅煙霧 ──
+function mirrorAnim_awakening(data) {
+  const card = _getBossCard();
+  if (card) {
+    card.classList.add('boss-awakened');
+    // 強烈震動
+    card.classList.remove('boss-awakening-burst');
+    void card.offsetWidth;
+    card.classList.add('boss-awakening-burst');
+    setTimeout(() => card.classList.remove('boss-awakening-burst'), 1300);
+  }
+  // 全螢幕黑紅閃爆
+  flashFullscreen('rgba(120, 0, 30, 0.7)', 1200);
+  // 螢幕震屏
+  const app = document.getElementById('app');
+  if (app) {
+    app.classList.remove('screen-shake-hard');
+    void app.offsetWidth;
+    app.classList.add('screen-shake-hard');
+    setTimeout(() => app.classList.remove('screen-shake-hard'), 800);
+  }
+}
+
+// helper：整螢幕色閃
+function flashFullscreen(color, ms) {
+  let flash = document.createElement('div');
+  flash.className = 'fullscreen-flash';
+  flash.style.background = color;
+  document.body.appendChild(flash);
+  void flash.offsetWidth;
+  flash.classList.add('show');
+  setTimeout(() => {
+    flash.classList.remove('show');
+    setTimeout(() => flash.remove(), 400);
+  }, ms || 600);
+}
 
 // ============================================================================
 // 製作藍圖預覽

@@ -812,6 +812,299 @@ button.primary:hover { filter: brightness(1.1); }
   60%  { transform: translateX(2px); }
   100% { transform: translateX(0); filter: none; }
 }
+
+/* ============================================================================
+   幻夢之主 7 招技能動畫
+   ============================================================================ */
+
+/* 整螢幕色閃（通用 helper）*/
+.fullscreen-flash {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 9998;
+  opacity: 0; transition: opacity 0.15s ease;
+}
+.fullscreen-flash.show {
+  opacity: 1; transition: opacity 0.6s ease;
+}
+
+/* === 1. 分身映鏡：4 個半透明分身浮現於 BOSS 卡四角 === */
+.mirror-clone {
+  position: absolute;
+  width: 60%; height: 60%;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  animation: cloneEmerge 0.6s ease forwards, cloneFloat 4s ease-in-out infinite 0.6s;
+  filter: drop-shadow(0 0 12px rgba(140, 200, 255, 0.6)) sepia(0.2) hue-rotate(-20deg);
+}
+.mirror-clone img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center 18%;
+  opacity: 0.55;
+  border-radius: 8px;
+  border: 1px dashed rgba(200, 220, 255, 0.6);
+}
+@keyframes cloneEmerge {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 0.85; transform: scale(1); }
+}
+@keyframes cloneFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.mirror-clone-explode {
+  animation: cloneExplode 0.6s ease forwards !important;
+}
+@keyframes cloneExplode {
+  0%   { opacity: 0.85; transform: scale(1); filter: brightness(1); }
+  40%  { opacity: 1; transform: scale(1.3); filter: brightness(2.5) drop-shadow(0 0 20px #ff3050); }
+  100% { opacity: 0; transform: scale(2); filter: brightness(1); }
+}
+.mirror-clones-active .card-frame {
+  box-shadow: 0 0 30px rgba(180, 220, 255, 0.6), inset 0 0 30px rgba(180, 220, 255, 0.2);
+}
+
+/* === 2. 鏡花水月：粉藍光暈 + 漂浮花瓣 + 水波 === */
+.boss-flowermoon .card-frame {
+  box-shadow:
+    0 0 60px rgba(255, 180, 220, 0.7),
+    0 0 100px rgba(120, 200, 255, 0.5),
+    inset 0 0 40px rgba(255, 220, 230, 0.4) !important;
+  border-color: #ffb8d8 !important;
+  animation: flowermoonPulse 2s ease-in-out infinite;
+}
+@keyframes flowermoonPulse {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.15) saturate(1.2); }
+}
+.flowermoon-petals {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 6;
+  overflow: hidden;
+}
+.fm-petal {
+  position: absolute;
+  top: -8px;
+  width: 8px; height: 10px;
+  background: radial-gradient(ellipse at center, #ffd6e5 0%, #ff8ab8 70%, transparent 100%);
+  border-radius: 50% 0 50% 0;
+  animation: petalFall linear infinite;
+}
+@keyframes petalFall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(140%) rotate(720deg); opacity: 0; }
+}
+.flowermoon-ripple {
+  position: absolute; inset: 30% 30%; z-index: 5;
+  border: 2px solid rgba(180, 220, 255, 0.7);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: rippleExpand 3s ease-out infinite;
+}
+@keyframes rippleExpand {
+  0%   { transform: scale(0); opacity: 1; border-width: 3px; }
+  100% { transform: scale(3); opacity: 0; border-width: 1px; }
+}
+.boss-healed {
+  animation: bossHealedFlash 0.8s ease;
+}
+@keyframes bossHealedFlash {
+  0%   { filter: none; }
+  20%  { filter: brightness(1.4) drop-shadow(0 0 30px #90ff90); }
+  100% { filter: none; }
+}
+
+/* === 3. 紅絲縛魂：玩家卡纏繞紅光 + 飛行絲帶 === */
+.player-ribbon-bound {
+  animation: ribbonBoundPulse 0.6s ease-in-out infinite alternate;
+  position: relative;
+}
+.player-ribbon-bound::after {
+  content: '';
+  position: absolute; inset: -4px;
+  border: 2px solid #ff5078;
+  border-radius: 6px;
+  box-shadow: 0 0 16px rgba(255, 80, 120, 0.7), inset 0 0 16px rgba(255, 80, 120, 0.4);
+  animation: ribbonRingSpin 2s linear infinite;
+  pointer-events: none;
+  z-index: 50;
+}
+@keyframes ribbonBoundPulse {
+  0%   { filter: brightness(1); }
+  100% { filter: brightness(1.2) drop-shadow(0 0 8px #ff5078); }
+}
+@keyframes ribbonRingSpin {
+  0%   { border-style: solid; opacity: 0.6; }
+  50%  { border-style: dashed; opacity: 1; }
+  100% { border-style: solid; opacity: 0.6; }
+}
+.ribbon-projectile {
+  position: fixed;
+  top: 40%; right: 30%;
+  width: 0; height: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #ff8aa5, #ff3050, #ff8aa5);
+  box-shadow: 0 0 12px #ff5078, 0 0 24px rgba(255, 80, 120, 0.8);
+  z-index: 9000;
+  animation: ribbonFly 0.8s ease-in forwards;
+  transform-origin: 0 50%;
+}
+@keyframes ribbonFly {
+  0%   { width: 0;     opacity: 1; transform: rotate(-15deg) scaleX(0); }
+  30%  { width: 30vw;  opacity: 1; transform: rotate(-10deg) scaleX(1); }
+  100% { width: 50vw;  opacity: 0; transform: rotate(-5deg)  scaleX(1) translateX(40vw); }
+}
+
+/* === 4. 萬影連舞：BOSS 透明 + 殘影刀痕 === */
+.boss-shadowdance .portrait img {
+  animation: shadowDanceTeleport 0.3s ease-in-out infinite;
+}
+@keyframes shadowDanceTeleport {
+  0%   { opacity: 0.9; transform: translateX(0); filter: blur(0); }
+  50%  { opacity: 0.3; transform: translateX(15px); filter: blur(3px); }
+  100% { opacity: 0.9; transform: translateX(-10px); filter: blur(0); }
+}
+.shadowdance-slash {
+  position: fixed; left: 20%;
+  width: 60vw; height: 4px;
+  background: linear-gradient(90deg, transparent, #ff3050 30%, #fff 50%, #ff3050 70%, transparent);
+  box-shadow: 0 0 16px #ff3050, 0 0 32px rgba(255, 80, 120, 0.8);
+  z-index: 9000;
+  pointer-events: none;
+  opacity: 0;
+  animation: slashFlash 0.35s ease-out forwards;
+  transform-origin: center;
+}
+@keyframes slashFlash {
+  0%   { opacity: 0; transform: scaleX(0); }
+  30%  { opacity: 1; transform: scaleX(1); }
+  100% { opacity: 0; transform: scaleX(1.4); }
+}
+.player-hit-flash {
+  animation: playerHitFlash 0.25s ease-out;
+}
+@keyframes playerHitFlash {
+  0%   { filter: none; transform: translate(0,0); }
+  30%  { filter: brightness(2) drop-shadow(0 0 8px #ff3050); transform: translate(-4px, 2px); }
+  60%  { transform: translate(3px, -1px); }
+  100% { filter: none; transform: translate(0,0); }
+}
+
+/* === 5. 絲帶天降：螢幕落下紅絲 === */
+.ribbon-rain-layer {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 9500;
+  overflow: hidden;
+}
+.ribbon-falling {
+  position: absolute;
+  top: -30vh;
+  width: 4px; height: 30vh;
+  background: linear-gradient(180deg, transparent, #ff3050 40%, #ff8aa5 60%, transparent);
+  box-shadow: 0 0 10px #ff5078;
+  animation: ribbonFall 1.2s ease-in forwards;
+}
+.ribbon-falling.ribbon-hit {
+  background: linear-gradient(180deg, transparent, #ffeb55 40%, #fff 60%, transparent);
+  box-shadow: 0 0 16px #ffeb55, 0 0 32px rgba(255, 80, 120, 0.7);
+  width: 6px;
+}
+@keyframes ribbonFall {
+  0%   { transform: translateY(0); opacity: 0.9; }
+  100% { transform: translateY(160vh); opacity: 0.4; }
+}
+
+/* === 6. 鏡牢禁錮：玩家卡周圍菱形鏡面 === */
+.player-caged {
+  position: relative;
+}
+.player-caged::before {
+  content: '';
+  position: absolute; inset: -10px;
+  border: 2px solid rgba(140, 200, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(140, 200, 255, 0.6), inset 0 0 30px rgba(180, 220, 255, 0.3);
+  pointer-events: none;
+  z-index: 40;
+}
+.mirror-cage-frame {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  pointer-events: none;
+  z-index: 45;
+}
+.cage-panel {
+  position: absolute;
+  top: -40px; left: -25px;
+  width: 50px; height: 80px;
+  background: linear-gradient(135deg, rgba(200, 230, 255, 0.5), rgba(140, 180, 255, 0.7));
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  border: 1px solid rgba(220, 240, 255, 0.9);
+  box-shadow: 0 0 12px rgba(180, 220, 255, 0.7);
+  opacity: 0;
+  animation: cagePanelIn 0.5s ease forwards, cagePanelShimmer 2s ease-in-out infinite 0.5s;
+}
+@keyframes cagePanelIn {
+  from { opacity: 0; transform: rotate(0) translateY(0) scale(2); }
+  to   { opacity: 0.85; transform: scale(1); }
+}
+@keyframes cagePanelShimmer {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.4); }
+}
+.cage-shatter .cage-panel {
+  animation: cageShatter 0.6s ease forwards !important;
+}
+@keyframes cageShatter {
+  0%   { opacity: 0.85; }
+  50%  { opacity: 1; filter: brightness(2); transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(0.5) translateY(20px); }
+}
+.cage-explode .cage-panel {
+  animation: cageExplode 0.6s ease forwards !important;
+}
+@keyframes cageExplode {
+  0%   { opacity: 0.85; }
+  100% { opacity: 0; transform: scale(2); filter: brightness(0.3) hue-rotate(20deg); }
+}
+
+/* === 7. 真我覺醒：BOSS 紅化 + 螢幕震屏 === */
+.boss-awakened .portrait img {
+  filter: hue-rotate(-30deg) saturate(1.5) brightness(0.8) drop-shadow(0 0 24px #ff3050);
+}
+.boss-awakened .card-frame {
+  border-color: #ff3050 !important;
+  box-shadow:
+    0 0 40px rgba(255, 50, 80, 0.9),
+    inset 0 0 60px rgba(255, 0, 30, 0.4) !important;
+}
+.boss-awakening-burst {
+  animation: awakeningBurst 1.3s ease forwards;
+}
+@keyframes awakeningBurst {
+  0%   { transform: scale(1); }
+  15%  { transform: scale(1.15) translateX(-3px); filter: brightness(2) drop-shadow(0 0 40px #ff0030); }
+  25%  { transform: scale(1.18) translateX(3px); }
+  35%  { transform: scale(1.15) translateX(-2px); }
+  45%  { transform: scale(1.18) translateX(2px); }
+  100% { transform: scale(1); }
+}
+.screen-shake-hard {
+  animation: screenShakeHard 0.8s ease;
+}
+@keyframes screenShakeHard {
+  0%, 100% { transform: translate(0, 0); }
+  10%  { transform: translate(-5px, 3px); }
+  20%  { transform: translate(4px, -2px); }
+  30%  { transform: translate(-4px, -3px); }
+  40%  { transform: translate(3px, 4px); }
+  50%  { transform: translate(-3px, 2px); }
+  60%  { transform: translate(4px, -3px); }
+  70%  { transform: translate(-3px, 3px); }
+  80%  { transform: translate(2px, -2px); }
+  90%  { transform: translate(-2px, 1px); }
+}
 .endless-boss-card .portrait {
   position: relative;
   overflow: hidden;

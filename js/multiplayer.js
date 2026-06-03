@@ -410,6 +410,72 @@ function handleMessage(fromPeerId, data) {
       b._dead = true;
     }
   }
+  // 鏡夢縛魂：BOSS 招式動畫廣播（guest 同步播放，純視覺）
+  if (data.type === 'boss-skill' && MP.role === 'guest') {
+    const id = data.payload.id;
+    if (typeof window.bossSkillAnim === 'function') {
+      window.bossSkillAnim(id, data.payload.data || {});
+    }
+    if (typeof window.logLine === 'function' && id) {
+      const labels = {
+        cloneSummon: '【分身映鏡】幻夢之主分裂分身，本體獲得 80% 減傷',
+        flowerMoon:  '【鏡花水月】幻夢之主開始治癒蓄力，4 秒內打斷',
+        ribbonBind:  '【紅絲縛魂】玩家被紅絲帶纏縛！',
+        shadowDance: '【萬影連舞】BOSS 化作殘影連擊！',
+        ribbonRain:  '【絲帶天降】螢幕落下紅絲！',
+        mirrorCage:  '【鏡牢禁錮】玩家被鎖入鏡牢！',
+        awakening:   '★★【真我覺醒】幻夢之主真身覺醒！',
+      };
+      if (labels[id]) window.logLine(`<span class="lg-fail">✦ ${labels[id]}</span>`, '');
+    }
+  }
+  // 鏡夢縛魂：技能結算失敗（治療成功 / 鏡牢爆裂 / 分身自爆等）→ guest 同步扣血或扣 BOSS
+  if (data.type === 'boss-skill-fail' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (!b || !b.running) return;
+    const id = data.payload.id;
+    if (id === 'flowerMoon' && b.enemy) {
+      // BOSS 回血 — guest 端 enemy.hp 由 host enemy-sync 同步，這裡只播動畫 + log
+      if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('flowerMoonEnd', { broken: false });
+      if (typeof window.logLine === 'function') {
+        window.logLine(`<span class="lg-fail">✘ 治癒完成！BOSS 回 ${Math.round((data.payload.healPct || 0.2) * 100)}% HP！</span>`, '');
+      }
+    } else if (id === 'cloneSummon' && b.player) {
+      const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0.3));
+      b.player.hp = Math.max(0, b.player.hp - dmg);
+      if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('cloneExplode', {});
+      if (typeof window.logLine === 'function') {
+        window.logLine(`<span class="lg-fail">✘ 分身自爆！${dmg.toLocaleString()} 傷害！</span>`, '');
+      }
+      if (b.player.hp <= 0) b._dead = true;
+    } else if (id === 'mirrorCage' && b.player) {
+      const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0.6));
+      b.player.hp = Math.max(0, b.player.hp - dmg);
+      if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('mirrorCageEnd', { broken: false });
+      if (typeof window.logLine === 'function') {
+        window.logLine(`<span class="lg-fail">✘ 鏡牢爆裂！${dmg.toLocaleString()} 傷害！</span>`, '');
+      }
+      if (b.player.hp <= 0) b._dead = true;
+    }
+  }
+  // 鏡夢縛魂：技能每段傷害（shadowDance / ribbonRain）
+  if (data.type === 'boss-skill-tick' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (!b || !b.running || !b.player) return;
+    const id = data.payload.id;
+    const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0));
+    if (dmg > 0) {
+      b.player.hp = Math.max(0, b.player.hp - dmg);
+      if (id === 'shadowDance') {
+        if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('shadowDanceHit', {});
+        if (typeof window.floatDamage === 'function') window.floatDamage('⚔ ' + dmg, 'enemy');
+      } else if (id === 'ribbonRain') {
+        if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim('ribbonDrop', { hit: true });
+        if (typeof window.floatDamage === 'function') window.floatDamage('🎀 ' + dmg, 'enemy');
+      }
+      if (b.player.hp <= 0) b._dead = true;
+    }
+  }
   // 鏡夢縛魂：開場拔刀斬 — guest 收到後同步扣血 + 播動畫
   if (data.type === 'boss-slash' && MP.role === 'guest') {
     const b = window.BATTLE;

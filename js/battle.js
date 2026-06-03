@@ -147,6 +147,7 @@ function startBattle(dungeonId, charId) {
   BATTLE._wavePending = false;  // 重置 wave 切換 pending 旗標
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
   BATTLE.ringErosionStacks = 0;  // 蝕念戒指疊層（每戰鬥重置）
+  BATTLE.mirrorBoss = null;     // 幻夢之主技能排程狀態（spawnNextWave 觸發時 init）
   // 快取已裝戒指的觸發效果（procId / proc 來自戒指 def）
   BATTLE.ringProcs = (() => {
     const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0 };
@@ -360,6 +361,8 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
     e.openingAttack = bossConfig.openingAttack;
     e.openingState = 'pending';  // pending → active → done
   }
+  // 自訂 BOSS 技能組標籤（'mirror' 啟用幻夢之主的 7 招技能排程）
+  if (bossConfig?.bossSkillTag) e.bossSkillTag = bossConfig.bossSkillTag;
   return e;
 }
 
@@ -437,6 +440,8 @@ function tickBattle(dt) {
 
   // BOSS 護盾即死機制（雙影獵討的 shieldConfig）
   tickBossShield(dtSec);
+  // 幻夢之主技能排程（鏡夢縛魂 7 招）
+  tickMirrorBoss(dtSec);
 
   // buff/dot/summon
   tickBuffs(dtSec);
@@ -634,6 +639,376 @@ function tickBossShield(dt) {
     } else if (BATTLE._mpMode === 'solo') {
       if (typeof onBattleFail === 'function') onBattleFail();
     }
+  }
+}
+
+// ============================================================================
+// 幻夢之主（鏡夢縛魂 RAID）— BOSS 技能排程系統
+// ----------------------------------------------------------------------------
+// 拔刀斬結束後啟動，依序施放 7 招技能 + 半血階段轉換
+// Phase 1（覺醒前）：分身映鏡 → 鏡花水月 → 紅絲縛魂 → 萬影連舞 (循環)
+// Phase 2（覺醒後）：絲帶天降 → 鏡牢禁錮 → 萬影連舞 → 鏡花水月 (循環、間隔短)
+// ============================================================================
+const MIRROR_SKILLS_P1 = ['cloneSummon', 'flowerMoon', 'ribbonBind', 'shadowDance'];
+const MIRROR_SKILLS_P2 = ['ribbonRain', 'mirrorCage', 'shadowDance', 'flowerMoon'];
+
+function initMirrorBoss() {
+  // 第一次發現幻夢之主時呼叫（spawnNextWave 後）
+  const e = BATTLE.enemy;
+  if (!e || e.bossSkillTag !== 'mirror') return;
+  if (BATTLE.mirrorBoss) return;  // 已初始化
+  BATTLE.mirrorBoss = {
+    skillIdx: 0,
+    cdTimer: 0,
+    skillCD: 20,  // 拔刀斬結束後 20 秒進入第一個排程技能
+    awakened: false,
+    active: null,
+  };
+}
+
+function tickMirrorBoss(dt) {
+  const e = BATTLE.enemy;
+  if (!e || e.hp <= 0) return;
+  if (e.bossSkillTag !== 'mirror') return;
+  // 等開場拔刀斬結束才啟動技能系統
+  if (e.openingAttack && e.openingState !== 'done') return;
+  if (!BATTLE.mirrorBoss) initMirrorBoss();
+  if (BATTLE._mpMode === 'guest') {
+    // guest 端：技能邏輯由 host 廣播觸發，這裡只 tick 視覺倒數
+    if (BATTLE.mirrorBoss && BATTLE.mirrorBoss.active) {
+      BATTLE.mirrorBoss.active.timer = Math.max(0, (BATTLE.mirrorBoss.active.timer || 0) - dt);
+    }
+    return;
+  }
+  const mb = BATTLE.mirrorBoss;
+
+  // === 半血階段轉換：真我覺醒（一次性）===
+  if (!mb.awakened && e.hp / e.maxHp < 0.5) {
+    castMirrorAwakening();
+    return;
+  }
+
+  // === 啟動中技能 tick ===
+  if (mb.active) {
+    tickMirrorActive(dt);
+    return;
+  }
+
+  // === 下一招冷卻倒數 ===
+  mb.cdTimer += dt;
+  if (mb.cdTimer >= mb.skillCD) {
+    const schedule = mb.awakened ? MIRROR_SKILLS_P2 : MIRROR_SKILLS_P1;
+    const skillId = schedule[mb.skillIdx % schedule.length];
+    castMirrorSkill(skillId);
+    mb.skillIdx++;
+    mb.cdTimer = 0;
+    // 覺醒後 CD 縮短 30%
+    const base = mb.awakened ? 15 : 22;
+    mb.skillCD = base + Math.random() * 4;
+  }
+}
+
+function castMirrorSkill(id) {
+  switch (id) {
+    case 'cloneSummon':  castCloneSummon();  break;
+    case 'flowerMoon':   castFlowerMoon();   break;
+    case 'ribbonBind':   castRibbonBind();   break;
+    case 'shadowDance':  castShadowDance();  break;
+    case 'ribbonRain':   castRibbonRain();   break;
+    case 'mirrorCage':   castMirrorCage();   break;
+  }
+}
+
+// ── 技能 2：分身映鏡（4 分身、本體 80% 減傷、15s 未清光各 30% maxHp）──
+function castCloneSummon() {
+  const e = BATTLE.enemy;
+  e.cloneDR = 0.80;
+  e.cloneCount = 4;
+  e.cloneHpEach = Math.floor(e.maxHp * 0.05);  // 每個分身 5% maxHp 累積傷害
+  e.cloneCurrentHp = e.cloneHpEach;
+  BATTLE.mirrorBoss.active = { id: 'cloneSummon', timer: 15, name: '分身映鏡' };
+  logLine(`<span class="lg-fail">✦【分身映鏡】幻夢之主分裂 4 個分身！本體 80% 減傷 — 15 秒內清光分身，否則每存活一個扣 30% 生命！</span>`, '');
+  fireBossSkillAnim('cloneSummon', { duration: 15, count: 4 });
+}
+
+// ── 技能 3：鏡花水月（4 秒蓄力治療 20% maxHp、10 億傷害可打斷）──
+function castFlowerMoon() {
+  BATTLE.mirrorBoss.active = {
+    id: 'flowerMoon', timer: 4, name: '鏡花水月',
+    healPct: 0.20, dmgThreshold: 1_000_000_000, dmgDealt: 0,
+  };
+  logLine(`<span class="lg-fail">✦【鏡花水月】幻夢之主蓄力治癒！4 秒內對她造成 10 億傷害可打斷，否則回 20% 生命！</span>`, '');
+  fireBossSkillAnim('flowerMoon', { duration: 4 });
+}
+
+// ── 技能 4：紅絲縛魂（6 秒玩家纏縛、每秒 8% maxHp、5 億傷害提早掙脫）──
+function castRibbonBind() {
+  BATTLE.mirrorBoss.active = {
+    id: 'ribbonBind', timer: 6, name: '紅絲縛魂',
+    dotPct: 0.08, dotTick: 1, dmgThreshold: 500_000_000, dmgDealt: 0,
+  };
+  // 玩家攻速 -50% buff
+  BATTLE.buffs.push({ spdMul: -0.5, dur: 6, _maxDur: 6, _name: '紅絲纏縛', _ribbonBind: true });
+  logLine(`<span class="lg-fail">✦【紅絲縛魂】紅絲帶纏住玩家！每秒扣 8% 生命 + 攻速 -50%，6 秒對 BOSS 造成 5 億傷害可掙脫！</span>`, '');
+  fireBossSkillAnim('ribbonBind', { duration: 6 });
+}
+
+// ── 技能 5：萬影連舞（6 段攻擊、每段 8% maxHp、每段給玩家 +5% 暴擊）──
+function castShadowDance() {
+  BATTLE.mirrorBoss.active = {
+    id: 'shadowDance', timer: 2.0, name: '萬影連舞',
+    hitsLeft: 6, hitTimer: 0.3, hitInterval: 0.3, dmgPerHit: 0.08,
+  };
+  logLine(`<span class="lg-fail">✦【萬影連舞】BOSS 化作殘影連擊！6 段 × 8% 最大生命，每段給玩家暴擊 +5%！</span>`, '');
+  fireBossSkillAnim('shadowDance', { duration: 2.0 });
+}
+
+// ── 技能 6（覺醒招）：絲帶天降（4 秒落下 12 條紅絲、每條 30% 命中 × 8% maxHp）──
+function castRibbonRain() {
+  BATTLE.mirrorBoss.active = {
+    id: 'ribbonRain', timer: 4.0, name: '絲帶天降',
+    ribbonsCast: 0, ribbonsTotal: 12, hitChance: 0.30, dmgPerHit: 0.08,
+    interval: 4.0 / 12, accumulator: 0,
+  };
+  logLine(`<span class="lg-fail">✦【絲帶天降】螢幕落下 12 條紅絲！4 秒內隨機命中玩家！</span>`, '');
+  fireBossSkillAnim('ribbonRain', { duration: 4, count: 12 });
+}
+
+// ── 技能 7（覺醒招）：鏡牢禁錮（8 秒鎖玩家、傷害打鏡牢 5 億 HP、未破 60% maxHp）──
+function castMirrorCage() {
+  BATTLE.mirrorBoss.active = {
+    id: 'mirrorCage', timer: 8, name: '鏡牢禁錮',
+    cageHp: 500_000_000, cageMaxHp: 500_000_000, failDmgPct: 0.60,
+  };
+  BATTLE.player.caged = true;
+  logLine(`<span class="lg-fail">✦【鏡牢禁錮】玩家被鎖入鏡牢！對 BOSS 的傷害會打到鏡牢上 — 8 秒擊破 5 億 HP 鏡牢，否則扣 60% 生命！</span>`, '');
+  fireBossSkillAnim('mirrorCage', { duration: 8 });
+}
+
+// ── 技能 8：真我覺醒（半血一次性、+50% atk、之後技能 CD -30%）──
+function castMirrorAwakening() {
+  const e = BATTLE.enemy;
+  BATTLE.mirrorBoss.awakened = true;
+  BATTLE.mirrorBoss.skillIdx = 0;
+  BATTLE.mirrorBoss.cdTimer = 0;
+  BATTLE.mirrorBoss.skillCD = 5;  // 覺醒後 5 秒就開始攻擊
+  // 清掉舊招式狀態
+  BATTLE.mirrorBoss.active = null;
+  e.cloneDR = 0; e.cloneCount = 0; BATTLE.player.caged = false;
+  BATTLE.buffs = BATTLE.buffs.filter(b => !b._ribbonBind);
+  // 永久強化
+  e.atk = Math.floor(e.atk * 1.5);
+  e._awakened = true;
+  logLine(`<span class="lg-fail">★★【真我覺醒】幻夢之主撕裂紅絲，真身覺醒！攻擊力 +50%、技能 CD -30%！</span>`, '');
+  fireBossSkillAnim('awakening', { duration: 1.2 });
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('boss-skill', { id: 'awakening', dungeonId: BATTLE.dungeonId });
+  }
+}
+
+// ============================================================================
+// tick 啟動中的 BOSS 技能（state machine）
+// ============================================================================
+function tickMirrorActive(dt) {
+  const mb = BATTLE.mirrorBoss;
+  if (!mb || !mb.active) return;
+  const a = mb.active;
+  a.timer -= dt;
+
+  switch (a.id) {
+    case 'cloneSummon': {
+      if (a.timer <= 0) {
+        // 時間到：依殘餘分身數每個扣 30%
+        const remaining = Math.max(0, BATTLE.enemy.cloneCount || 0);
+        if (remaining > 0) {
+          const dmg = Math.floor(BATTLE.player.maxHp * 0.30 * remaining);
+          BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+          logLine(`<span class="lg-fail">✘ 分身自爆！${remaining} 個分身共 ${dmg.toLocaleString()} 傷害！</span>`, '');
+          fireBossSkillAnim('cloneExplode', { count: remaining });
+          if (BATTLE._mpMode === 'host' && window.MP_API) {
+            MP_API.broadcast('boss-skill-fail', { id: 'cloneSummon', dmgPct: 0.30 * remaining });
+          }
+          if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+        }
+        BATTLE.enemy.cloneDR = 0; BATTLE.enemy.cloneCount = 0;
+        mb.active = null;
+      }
+      break;
+    }
+    case 'flowerMoon': {
+      if (a.dmgDealt >= a.dmgThreshold) {
+        logLine(`<span class="lg-clear">✓ 打斷了【鏡花水月】！</span>`, '');
+        fireBossSkillAnim('flowerMoonEnd', { broken: true });
+        mb.active = null;
+        return;
+      }
+      if (a.timer <= 0) {
+        // 蓄力完成 → 回血 20% maxHp
+        const heal = Math.floor(BATTLE.enemy.maxHp * a.healPct);
+        BATTLE.enemy.hp = Math.min(BATTLE.enemy.maxHp, BATTLE.enemy.hp + heal);
+        logLine(`<span class="lg-fail">✘ 治癒完成！幻夢之主回 ${heal.toLocaleString()} HP！</span>`, '');
+        fireBossSkillAnim('flowerMoonEnd', { broken: false });
+        if (BATTLE._mpMode === 'host' && window.MP_API) {
+          MP_API.broadcast('boss-skill-fail', { id: 'flowerMoon', healPct: a.healPct });
+        }
+        mb.active = null;
+      }
+      break;
+    }
+    case 'ribbonBind': {
+      // DoT 每秒
+      a.dotTick -= dt;
+      if (a.dotTick <= 0) {
+        a.dotTick = 1;
+        const dmg = Math.floor(BATTLE.player.maxHp * a.dotPct);
+        BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+        if (typeof floatDamage === 'function') floatDamage('🩸 ' + dmg, 'enemy');
+        if (BATTLE.player.hp <= 0) { handleMirrorPlayerDead(); mb.active = null; return; }
+      }
+      // 提早掙脫：對 BOSS 造成 5 億傷害
+      if (a.dmgDealt >= a.dmgThreshold) {
+        logLine(`<span class="lg-clear">✓ 掙脫紅絲縛魂！</span>`, '');
+        BATTLE.buffs = BATTLE.buffs.filter(b => !b._ribbonBind);
+        fireBossSkillAnim('ribbonBindEnd', { broken: true });
+        mb.active = null;
+        return;
+      }
+      if (a.timer <= 0) {
+        BATTLE.buffs = BATTLE.buffs.filter(b => !b._ribbonBind);
+        fireBossSkillAnim('ribbonBindEnd', { broken: false });
+        mb.active = null;
+      }
+      break;
+    }
+    case 'shadowDance': {
+      a.hitTimer -= dt;
+      if (a.hitTimer <= 0 && a.hitsLeft > 0) {
+        a.hitTimer = a.hitInterval;
+        a.hitsLeft--;
+        const dmg = Math.floor(BATTLE.player.maxHp * a.dmgPerHit);
+        BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+        // 每段給玩家 +5% 暴擊（5 秒）
+        BATTLE.buffs.push({ crit: 0.05, dur: 5, _maxDur: 5, _name: '影舞反擊' });
+        if (typeof floatDamage === 'function') floatDamage('⚔ ' + dmg, 'enemy');
+        fireBossSkillAnim('shadowDanceHit', { hitIdx: 6 - a.hitsLeft });
+        if (BATTLE._mpMode === 'host' && window.MP_API) {
+          MP_API.broadcast('boss-skill-tick', { id: 'shadowDance', hit: 6 - a.hitsLeft, dmgPct: a.dmgPerHit });
+        }
+        if (BATTLE.player.hp <= 0) { handleMirrorPlayerDead(); mb.active = null; return; }
+      }
+      if (a.hitsLeft <= 0 && a.timer <= 0.1) {
+        mb.active = null;
+      }
+      break;
+    }
+    case 'ribbonRain': {
+      a.accumulator += dt;
+      while (a.accumulator >= a.interval && a.ribbonsCast < a.ribbonsTotal) {
+        a.accumulator -= a.interval;
+        a.ribbonsCast++;
+        const hit = Math.random() < a.hitChance;
+        fireBossSkillAnim('ribbonDrop', { hit });
+        if (hit) {
+          const dmg = Math.floor(BATTLE.player.maxHp * a.dmgPerHit);
+          BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+          if (typeof floatDamage === 'function') floatDamage('🎀 ' + dmg, 'enemy');
+          if (BATTLE._mpMode === 'host' && window.MP_API) {
+            MP_API.broadcast('boss-skill-tick', { id: 'ribbonRain', dmgPct: a.dmgPerHit });
+          }
+          if (BATTLE.player.hp <= 0) { handleMirrorPlayerDead(); mb.active = null; return; }
+        }
+      }
+      if (a.timer <= 0) mb.active = null;
+      break;
+    }
+    case 'mirrorCage': {
+      if (a.cageHp <= 0) {
+        // 鏡牢擊破
+        BATTLE.player.caged = false;
+        logLine(`<span class="lg-clear">✓ 鏡牢被擊破！</span>`, '');
+        fireBossSkillAnim('mirrorCageEnd', { broken: true });
+        mb.active = null;
+        return;
+      }
+      if (a.timer <= 0) {
+        // 時間到：扣 60% maxHp
+        BATTLE.player.caged = false;
+        const dmg = Math.floor(BATTLE.player.maxHp * a.failDmgPct);
+        BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+        logLine(`<span class="lg-fail">✘ 鏡牢爆裂！${dmg.toLocaleString()} 傷害！</span>`, '');
+        fireBossSkillAnim('mirrorCageEnd', { broken: false });
+        if (BATTLE._mpMode === 'host' && window.MP_API) {
+          MP_API.broadcast('boss-skill-fail', { id: 'mirrorCage', dmgPct: a.failDmgPct });
+        }
+        if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+      }
+      break;
+    }
+  }
+}
+
+// 玩家攻擊 BOSS 時的傷害攔截（呼叫自 applyDamage / applyAoeDamage）
+// 返回 true 表示已處理（不要扣 BOSS hp / shield）
+function mirrorBossDamageHook(rawDmg) {
+  const mb = BATTLE.mirrorBoss;
+  if (!mb || !mb.active) {
+    // 沒在施法但有分身減傷
+    if (BATTLE.enemy && BATTLE.enemy.cloneDR > 0) {
+      return Math.floor(rawDmg * (1 - BATTLE.enemy.cloneDR));  // 80% 減傷後的傷害仍打 BOSS
+    }
+    return rawDmg;
+  }
+  const a = mb.active;
+  // 分身映鏡：傷害先打分身，分身全部死才打本體 + 解除 DR
+  if (a.id === 'cloneSummon' && BATTLE.enemy.cloneCount > 0) {
+    let remainingDmg = rawDmg;
+    while (remainingDmg > 0 && BATTLE.enemy.cloneCount > 0) {
+      if (remainingDmg >= BATTLE.enemy.cloneCurrentHp) {
+        remainingDmg -= BATTLE.enemy.cloneCurrentHp;
+        BATTLE.enemy.cloneCount--;
+        BATTLE.enemy.cloneCurrentHp = BATTLE.enemy.cloneHpEach;
+        if (typeof floatDamage === 'function') floatDamage('💔 分身擊破！', 'crit');
+        if (BATTLE.enemy.cloneCount <= 0) {
+          BATTLE.enemy.cloneDR = 0;
+          logLine(`<span class="lg-clear">✓ 所有分身被清光！</span>`, '');
+          mb.active = null;
+          break;
+        }
+      } else {
+        BATTLE.enemy.cloneCurrentHp -= remainingDmg;
+        remainingDmg = 0;
+      }
+    }
+    return remainingDmg;  // 溢出的繼續打 BOSS
+  }
+  // 鏡花水月 / 紅絲縛魂：累積傷害到 dmgDealt，BOSS 仍正常受傷
+  if ((a.id === 'flowerMoon' || a.id === 'ribbonBind') && a.dmgDealt != null) {
+    a.dmgDealt += rawDmg;
+  }
+  // 鏡牢禁錮：對 BOSS 的傷害先打鏡牢
+  if (a.id === 'mirrorCage' && a.cageHp > 0) {
+    const absorbed = Math.min(a.cageHp, rawDmg);
+    a.cageHp -= absorbed;
+    if (typeof floatDamage === 'function') floatDamage('🔒 ' + absorbed, 'enemy');
+    return rawDmg - absorbed;  // 溢出打 BOSS
+  }
+  return rawDmg;
+}
+
+function handleMirrorPlayerDead() {
+  BATTLE._dead = true;
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('player-dead', { dungeonId: BATTLE.dungeonId });
+  } else if (BATTLE._mpMode === 'solo' && typeof onBattleFail === 'function') {
+    onBattleFail();
+  }
+}
+
+function fireBossSkillAnim(name, data) {
+  if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim(name, data || {});
+  // host：廣播給 guest 播動畫
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('boss-skill', { id: name, data: data || {}, dungeonId: BATTLE.dungeonId });
   }
 }
 
@@ -1017,6 +1392,16 @@ function computeDamage(rawAtk, isCrit) {
 
 function applyDamage(dmg, isCrit) {
   if (!BATTLE.enemy) return;
+  // 鏡夢縛魂技能攔截：分身吸傷 / 鏡牢吸傷 / 治療打斷計數 / 紅絲掙脫計數
+  if (BATTLE.enemy.bossSkillTag === 'mirror' && typeof mirrorBossDamageHook === 'function') {
+    dmg = mirrorBossDamageHook(dmg);
+    if (dmg <= 0) {
+      // 全被分身/鏡牢吸收，仍要記傷害（給統計用）
+      trackDamage(dmg, BATTLE._activeSkillId, isCrit);
+      BATTLE._activeSkillName = null;
+      return;
+    }
+  }
   // 無盡塔：HP 不扣（保持 MAX_SAFE_INTEGER），改累積到 totalDmg
   if (BATTLE._endlessMode) {
     BATTLE._endlessTotalDmg += dmg;
@@ -1076,6 +1461,14 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
     if (e.isBoss) {
       if (sk.vsBossBonus) dmg = Math.floor(dmg * (1 + sk.vsBossBonus));
       if (BATTLE.player.vsBoss) dmg = Math.floor(dmg * (1 + BATTLE.player.vsBoss));
+    }
+    // 鏡夢縛魂技能攔截
+    if (e.bossSkillTag === 'mirror' && typeof mirrorBossDamageHook === 'function') {
+      dmg = mirrorBossDamageHook(dmg);
+      if (dmg <= 0) {
+        trackDamage(0, BATTLE._activeSkillId, isCrit);
+        continue;
+      }
     }
     // 無盡塔：HP 不扣，改累積到 totalDmg
     if (BATTLE._endlessMode) {

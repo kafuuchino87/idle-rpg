@@ -584,6 +584,7 @@ const REGIONS = [
           { name: '幻夢之主', portrait: 'assets/portraits/raid-mirror.png',
             portraitTall: true,        // ← 立繪是直幅，戰鬥卡片改 3:4 比例顯示完整
             hpOverride: 10_000_000_000, // ← 精確 100 億 HP
+            bossSkillTag: 'mirror',     // ← 啟用幻夢之主專屬技能組（battle.js 內排程）
             // ── 技能 1：開場拔刀斬 ──
             // 戰鬥一開始 BOSS 進入 3 秒蓄力姿態，凝聚 20 億盾
             // 3 秒內不破盾 → 衝刺一刀，造成玩家最大生命 90% 傷害（不一定即死）
