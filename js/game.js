@@ -2213,6 +2213,40 @@ window.bossSpeak = function(text, durationSec) {
   setTimeout(() => { try { bubble.remove(); } catch (e) {} }, ms);
 };
 
+// ── 戰鬥結束清除所有 BOSS 招式殘留視覺（class / 浮層 / 元素）──
+// 在 stopBattle / onBattleFail / onDungeonClear 後呼叫
+window.cleanupMirrorAnims = function() {
+  // BOSS 卡 class
+  document.querySelectorAll('.enemy-card').forEach(card => {
+    card.classList.remove(
+      'boss-charging', 'boss-slashing', 'boss-flowermoon',
+      'boss-shadowdance', 'boss-awakened', 'boss-awakening-burst',
+      'boss-healed', 'mirror-clones-active', 'shield-active'
+    );
+    // 倒數覆蓋層 + 護盾條 hide
+    const cd = card.querySelector('.shield-countdown-overlay');
+    if (cd) cd.style.display = 'none';
+    const sh = card.querySelector('.enemy-shield');
+    if (sh) sh.style.display = 'none';
+    // 子元素移除
+    card.querySelectorAll('.mirror-clone, .flowermoon-petals, .flowermoon-ripple, .boss-speak-bubble').forEach(el => el.remove());
+  });
+  // 玩家卡 class
+  document.querySelectorAll('.player-side .fighter-card, .player-card').forEach(card => {
+    card.classList.remove('player-ribbon-bound', 'player-caged', 'player-hit-flash', 'boss-slash-hit');
+    card.querySelectorAll('.mirror-cage-frame').forEach(el => el.remove());
+  });
+  // 全螢幕浮層
+  ['ribbonRainLayer', 'bossSlashFlash'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+  document.querySelectorAll('.fullscreen-flash, .ribbon-projectile, .shadowdance-slash, .ribbon-falling').forEach(el => el.remove());
+  // 螢幕震屏 class
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('screen-shake-hard');
+};
+
 // helper：整螢幕色閃
 function flashFullscreen(color, ms) {
   let flash = document.createElement('div');

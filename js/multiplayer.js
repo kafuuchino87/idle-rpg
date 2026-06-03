@@ -454,12 +454,16 @@ function handleMessage(fromPeerId, data) {
   }
   // 鏡夢縛魂：BOSS 招式前的對白氣泡（guest 同步顯示）
   if (data.type === 'boss-speak' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (!b || !b.running) return;  // 戰鬥已結束 → 忽略殘留廣播
     if (typeof window.bossSpeak === 'function') {
       window.bossSpeak(data.payload.text || '', data.payload.duration || 1.5);
     }
   }
   // 鏡夢縛魂：BOSS 招式動畫廣播（guest 同步播放，純視覺）
   if (data.type === 'boss-skill' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (!b || !b.running) return;  // 戰鬥已結束 → 忽略殘留廣播
     const id = data.payload.id;
     if (typeof window.bossSkillAnim === 'function') {
       window.bossSkillAnim(id, data.payload.data || {});
@@ -480,7 +484,7 @@ function handleMessage(fromPeerId, data) {
   // 鏡夢縛魂：技能結算失敗（治療成功 / 鏡牢爆裂 / 分身自爆等）→ guest 同步扣血或扣 BOSS
   if (data.type === 'boss-skill-fail' && MP.role === 'guest') {
     const b = window.BATTLE;
-    if (!b || !b.running) return;
+    if (!b || !b.running || b._dead) return;  // 戰鬥已結束 / 自己已死 → 忽略
     const id = data.payload.id;
     if (id === 'flowerMoon' && b.enemy) {
       // BOSS 回血 — guest 端 enemy.hp 由 host enemy-sync 同步，這裡只播動畫 + log
@@ -509,7 +513,7 @@ function handleMessage(fromPeerId, data) {
   // 鏡夢縛魂：技能每段傷害（shadowDance / ribbonRain）
   if (data.type === 'boss-skill-tick' && MP.role === 'guest') {
     const b = window.BATTLE;
-    if (!b || !b.running || !b.player) return;
+    if (!b || !b.running || b._dead || !b.player) return;  // 戰鬥已結束 / 自己已死 → 忽略
     const id = data.payload.id;
     const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0));
     if (dmg > 0) {
@@ -527,7 +531,7 @@ function handleMessage(fromPeerId, data) {
   // 鏡夢縛魂：開場拔刀斬 — guest 收到後同步扣血 + 播動畫
   if (data.type === 'boss-slash' && MP.role === 'guest') {
     const b = window.BATTLE;
-    if (b && b.running && b.player && b.player.maxHp > 0) {
+    if (b && b.running && !b._dead && b.player && b.player.maxHp > 0) {
       const dmgPct = data.payload.dmgPct || 0.9;
       const name = data.payload.name || '拔刀斬';
       const dmg = Math.floor(b.player.maxHp * dmgPct);

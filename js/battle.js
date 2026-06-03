@@ -394,6 +394,8 @@ function stopBattle(reason) {
   BATTLE.enemy = null;
   PIXEL.setScene({ enemyName: null });
   if (reason) logLine(reason, 'lg-fail');
+  // 清掉鏡夢縛魂招式殘留視覺（boss-charging / 分身 / 鏡牢 / 對白氣泡 / 倒數覆蓋等）
+  if (typeof window.cleanupMirrorAnims === 'function') window.cleanupMirrorAnims();
   if (BATTLE.onUpdate) BATTLE.onUpdate();
 }
 
