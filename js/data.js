@@ -1051,7 +1051,7 @@ const SMITH_EFFECTS = [
   { stage: 21, label: '速度 +3%',      effect: { spd: 0.03 } },
   { stage: 24, label: 'CD 縮減 +3%',   effect: { cdReduce: 0.03 } },
   { stage: 27, label: '無視防禦 +5%',  effect: { defPierce: 0.05 } },
-  { stage: 30, label: '★攻擊力 +60',   effect: { atk: 60 } },
+  { stage: 30, label: '★攻擊力 +3%',   effect: { atkPct: 0.03 } },
 ];
 const SMITH_MAX_STAGE = 30;
 const SMITH_GOLD_COST = 50000;        // 每次鍛造金幣成本

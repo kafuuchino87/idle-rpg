@@ -935,6 +935,12 @@ function effectiveStats(charId) {
   if (s.cdReduce > 0.50) s.cdReduce = 0.50;  // CD 縮減硬上限 50%（防止技能秒放）
   if (s.defPierce > 0.95) s.defPierce = 0.95;  // 無視防禦上限 95%（保留 5% 給敵方）
 
+  // ===== %攻 套用（在所有加成後最後計算 — 鍛造、被動、寶石等貢獻 s.atkPct）=====
+  // 不顯示在面板上，直接乘到 atk；CP 也跟著上升
+  if (s.atkPct && s.atkPct > 0) {
+    s.atk = s.atk * (1 + s.atkPct);
+  }
+
   return {
     atk: Math.floor(s.atk),
     def: Math.floor(s.def),
