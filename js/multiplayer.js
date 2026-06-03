@@ -237,6 +237,7 @@ function broadcastBattleState() {
     dungeonId: b.dungeonId,
     inBattle: true,
     paused: !!b.paused,
+    dead: !!b._dead,  // ★ 死亡旗標跟著 player-state 一起送，避免被藥水補滿後覆寫掉
     ...base,
   });
 }
@@ -283,7 +284,11 @@ function handleMessage(fromPeerId, data) {
   }
   if (data.type === 'player-state') {
     if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
+    // 死亡黏著：一旦該玩家被標記過 dead，後續 player-state 不能把它洗回 false
+    // （避免藥水把 HP 補滿後 dead 旗標消失，team-wipe 永遠不觸發）
+    const wasDead = MP.players[fromPeerId].battleState && MP.players[fromPeerId].battleState.dead;
     MP.players[fromPeerId].battleState = data.payload;
+    if (wasDead) MP.players[fromPeerId].battleState.dead = true;
   }
   if (data.type === 'player-dead') {
     if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};

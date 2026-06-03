@@ -1086,6 +1086,8 @@ function tickDots(dt) {
 // 自動喝藥邏輯：CD 用固定秒數（不被 cdReduce 屬性影響）
 function tickPotions(dt) {
   if (!BATTLE.charId) return;
+  // 已陣亡：不再自動喝藥（不然 HP 會被補滿但 _dead=true，team-wipe 判定失效）
+  if (BATTLE._dead) return;
   const cs = GAME_STATE.state.characters[BATTLE.charId];
   if (!cs || !cs.potionSlots) return;
   // 初始化 CD 容器
