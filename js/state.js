@@ -863,6 +863,15 @@ function effectiveStats(charId) {
         }
       }
     }
+    // UR 武器成長（ur2 系列：依 urStage 累加已解鎖效果）
+    if (GAME_DATA.isUrGrowable && GAME_DATA.isUrGrowable(def) && inst.urStage > 0) {
+      const unlocked = GAME_DATA.getUrGrowthUnlocked(inst.urStage);
+      for (const eff of unlocked) {
+        for (const [k, v] of Object.entries(eff.effect)) {
+          s[k] = (s[k] || 0) + v;
+        }
+      }
+    }
   }
 
   // ===== 套裝效果（依穿戴件數累加，allMul 屬於乘法後階段） =====
@@ -1303,6 +1312,35 @@ function smithEquip(instId) {
   };
 }
 
+// ===== UR 武器成長系統 =====
+// 雙影獵討 ur2 系列獨享，跟鍛造完全分開的 10 階強化
+function growUrWeapon(instId) {
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[instId];
+  if (!inst) return { ok: false, reason: '找不到裝備' };
+  const def = GAME_DATA.findEquipment(inst.itemId);
+  if (!GAME_DATA.isUrGrowable(def)) return { ok: false, reason: '此武器無法成長（限星淵·噬月矛 / 星龍·夢淵鏡）' };
+  const cur = inst.urStage || 0;
+  if (cur >= GAME_DATA.UR_GROWTH_MAX_STAGE) return { ok: false, reason: '已達最高成長階段 (10/10)' };
+  const nextStage = cur + 1;
+  const cost = GAME_DATA.getUrGrowthCost(nextStage);
+  if (!cost) return { ok: false, reason: '成本資料缺失' };
+  // 檢查資源
+  if (STATE.gold < cost.gold) return { ok: false, reason: `金幣不足（需 ${cost.gold.toLocaleString()}）` };
+  for (const [name, qty] of Object.entries(cost.mats)) {
+    if ((bag.materials[name] || 0) < qty) return { ok: false, reason: `${name} 不足（需 ${qty}）` };
+  }
+  // 扣資源
+  gainGold(-cost.gold);
+  for (const [name, qty] of Object.entries(cost.mats)) consumeMaterial(name, qty);
+  // 升階
+  inst.urStage = nextStage;
+  const newEffect = GAME_DATA.UR_GROWTH.find(e => e.stage === nextStage);
+  scheduleSave();
+  return { ok: true, name: def.name, stage: nextStage, effectLabel: newEffect?.label };
+}
+
 function restoreSmithHits(instId) {
   const bag = activeBag();
   if (!bag) return { ok: false, reason: '無 active 角色' };
@@ -1625,7 +1663,7 @@ window.GAME_STATE = {
   gainChest, consumeChest, openChest, openChestBatch,
   gainPass, consumePass,
   disassembleEquipment, batchDisassemble, toggleEquipLock,
-  smithEquip, restoreSmithHits,
+  smithEquip, restoreSmithHits, growUrWeapon,
   findItem, getCharacterBlueprint, createEquipInstance,
   dequeueUnlock,
   resonanceExpFor, getResonanceUnspent, allocateResonance, resetResonance, getResonanceCap,

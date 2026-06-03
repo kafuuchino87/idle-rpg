@@ -1060,6 +1060,44 @@ const SMITH_EFFECTS = [
   { stage: 30, label: '★攻擊力 +3%',   effect: { atkPct: 0.03 } },
 ];
 const SMITH_MAX_STAGE = 30;
+
+// ===== UR 武器成長系統（雙影獵討 ur2 系列專屬，獨立於鍛造）=====
+// 10 階成長，每階一個攻擊向屬性，越來越強
+const UR_GROWTH = [
+  { stage: 1,  label: '攻擊力 +3%',     effect: { atkPct: 0.03 } },
+  { stage: 2,  label: '暴擊傷害 +10%',  effect: { critDmg: 0.10 } },
+  { stage: 3,  label: '對 BOSS +10%',   effect: { vsBoss: 0.10 } },
+  { stage: 4,  label: '攻擊力 +6%',     effect: { atkPct: 0.06 } },
+  { stage: 5,  label: '技能傷害 +20%',  effect: { skillDmg: 0.20 } },
+  { stage: 6,  label: '攻擊速度 +30%',  effect: { spd: 0.30 } },
+  { stage: 7,  label: '無視防禦 +10%',  effect: { defPierce: 0.10 } },
+  { stage: 8,  label: '暴擊傷害 +20%',  effect: { critDmg: 0.20 } },
+  { stage: 9,  label: '對 BOSS +20%',   effect: { vsBoss: 0.20 } },
+  { stage: 10, label: '★神器：攻擊力 +10%', effect: { atkPct: 0.10 } },
+];
+const UR_GROWTH_COSTS = [
+  { stage: 1,  gold: 100_000,    mats: { '星淵碎片': 10,  '星龍鱗片': 5 } },
+  { stage: 2,  gold: 200_000,    mats: { '星淵碎片': 15,  '星龍鱗片': 8 } },
+  { stage: 3,  gold: 400_000,    mats: { '星淵碎片': 20,  '星龍鱗片': 12, '永恆星辰': 1 } },
+  { stage: 4,  gold: 800_000,    mats: { '星淵碎片': 25,  '星龍鱗片': 15, '永恆星辰': 1 } },
+  { stage: 5,  gold: 1_500_000,  mats: { '星淵碎片': 30,  '星龍鱗片': 20, '永恆星辰': 2 } },
+  { stage: 6,  gold: 3_000_000,  mats: { '星淵碎片': 35,  '星龍鱗片': 25, '永恆星辰': 2 } },
+  { stage: 7,  gold: 5_000_000,  mats: { '星淵碎片': 45,  '星龍鱗片': 30, '永恆星辰': 3 } },
+  { stage: 8,  gold: 8_000_000,  mats: { '星淵碎片': 55,  '星龍鱗片': 40, '永恆星辰': 4 } },
+  { stage: 9,  gold: 12_000_000, mats: { '星淵碎片': 70,  '星龍鱗片': 50, '永恆星辰': 5 } },
+  { stage: 10, gold: 20_000_000, mats: { '星淵碎片': 100, '星龍鱗片': 75, '永恆星辰': 8 } },
+];
+const UR_GROWTH_MAX_STAGE = 10;
+// 判斷裝備是否可用 UR 武器成長
+function isUrGrowable(def) {
+  return def && (def.id === 'eq-weap-ur2' || def.id === 'eq-mirror-ur2');
+}
+function getUrGrowthCost(stage) {
+  return UR_GROWTH_COSTS.find(c => c.stage === stage);
+}
+function getUrGrowthUnlocked(stage) {
+  return UR_GROWTH.filter(e => e.stage <= stage);
+}
 const SMITH_GOLD_COST = 50000;        // 每次鍛造金幣成本
 const SMITH_INITIAL_HITS = 100;       // 新裝備初始鍛造次數
 const SMITH_HITS_PER_HAMMER = 20;     // 1 把異界之鎚恢復多少次
@@ -1270,6 +1308,7 @@ window.GAME_DATA = {
   findRecipe, findMaterialRecipe, findGem, socketsForRarity,
   findSet, countSetPieces,
   SMITH_EFFECTS, SMITH_MAX_STAGE, SMITH_GOLD_COST, SMITH_INITIAL_HITS, SMITH_HITS_PER_HAMMER, SMITH_JUMP_CHANCE,
+  UR_GROWTH, UR_GROWTH_COSTS, UR_GROWTH_MAX_STAGE, isUrGrowable, getUrGrowthCost, getUrGrowthUnlocked,
   smithHitsToCap, isSmithEligible, getSmithUnlockedEffects,
   findPotion, findChest, rollChestRewards, findShardExchange,
   PASSES, findPass,

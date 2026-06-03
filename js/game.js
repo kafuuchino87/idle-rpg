@@ -1520,17 +1520,77 @@ function renderEquipDetail(instId) {
   const rerollBtn = canReroll
     ? `<button class="ghost small" data-reroll="${instId}" ${tokens > 0 ? '' : 'disabled'}>重抽詞綴（券 ×${tokens}）</button>`
     : '';
+
+  // UR 武器成長 section（只 ur2 系列顯示）
+  let urGrowthHtml = '';
+  if (GAME_DATA.isUrGrowable(def)) {
+    const urStage = inst.urStage || 0;
+    const maxStage = GAME_DATA.UR_GROWTH_MAX_STAGE;
+    const unlocked = GAME_DATA.UR_GROWTH.map(eff => {
+      const got = urStage >= eff.stage;
+      return `<div style="font-size:11px;margin:2px 0;color:${got ? 'var(--hp-self)' : 'var(--muted)'}">${got ? '✓' : '–'} 階 ${eff.stage}：${eff.label}</div>`;
+    }).join('');
+    let actionHtml = '';
+    if (urStage >= maxStage) {
+      actionHtml = `<div style="color:var(--gold);font-size:12px;text-align:center;padding:8px">★ 已達神器階（10 / 10）</div>`;
+    } else {
+      const cost = GAME_DATA.getUrGrowthCost(urStage + 1);
+      const bag = _activeBag();
+      const goldOk = GAME_STATE.state.gold >= cost.gold;
+      const matsHtml = Object.entries(cost.mats).map(([n, q]) => {
+        const have = (bag.materials[n] || 0);
+        const ok = have >= q;
+        return `<span style="color:${ok ? 'var(--hp-self)' : 'var(--hp-enemy)'};margin-right:8px">${n} ${have}/${q}</span>`;
+      }).join('');
+      const allMatsOk = Object.entries(cost.mats).every(([n, q]) => (bag.materials[n] || 0) >= q);
+      const canDo = goldOk && allMatsOk;
+      const nextEff = GAME_DATA.UR_GROWTH.find(e => e.stage === urStage + 1);
+      actionHtml = `
+        <div style="font-size:11px;margin-bottom:4px">
+          <span style="color:var(--accent)">下階解鎖：</span><span style="color:var(--gold)">${nextEff?.label || '?'}</span>
+        </div>
+        <div style="font-size:11px;margin-bottom:4px">
+          <span style="color:${goldOk ? 'var(--hp-self)' : 'var(--hp-enemy)'};margin-right:8px">金 ${cost.gold.toLocaleString()}</span>
+          ${matsHtml}
+        </div>
+        <button class="primary" data-urgrow="${instId}" ${canDo ? '' : 'disabled'}>★ 成長 → 階 ${urStage + 1}</button>
+      `;
+    }
+    urGrowthHtml = `
+      <div class="eq-section" style="border:1px solid var(--accent);padding:8px;border-radius:4px;background:rgba(255,138,60,0.05)">
+        <div class="eq-section-title" style="color:var(--accent)">★ 武器成長 ${urStage} / ${maxStage}</div>
+        <div style="margin-bottom:6px">${unlocked}</div>
+        ${actionHtml}
+      </div>
+    `;
+  }
+
   root.innerHTML = `
     <div class="eq-header">
       <div class="eq-name bag-item ${def.rarity}" style="display:inline-block;padding:2px 8px">${def.name}</div>
-      <span style="margin-left:6px;color:var(--muted);font-size:11px">${GAME_DATA.SLOT_LABELS[def.slot]} · ${def.rarity}${forge ? ' +' + forge : ''}</span>
+      <span style="margin-left:6px;color:var(--muted);font-size:11px">${GAME_DATA.SLOT_LABELS[def.slot]} · ${def.rarity}${forge ? ' +' + forge : ''}${inst.urStage ? ' · 成長 ' + inst.urStage : ''}</span>
     </div>
     <div class="eq-section"><div class="eq-section-title">基礎屬性（白值，依強化提升）</div>${baseRows}</div>
     <div class="eq-section"><div class="eq-section-title">固定效果</div>${fixedHtml}</div>
     <div class="eq-section"><div class="eq-section-title">隨機詞綴 ${rerollBtn}</div>${affixHtml}</div>
     <div class="eq-section"><div class="eq-section-title">鑲嵌 (${socketCount} 孔)</div>${socketHtml}</div>
     ${setHtml}
+    ${urGrowthHtml}
   `;
+  // UR 武器成長按鈕
+  const urBtn = root.querySelector('button[data-urgrow]');
+  if (urBtn) {
+    urBtn.onclick = (e) => {
+      e.stopPropagation();
+      const r = GAME_STATE.growUrWeapon(instId);
+      if (r.ok) {
+        toast(`★ ${r.name} 成長至階 ${r.stage}（${r.effectLabel}）`, 'gold');
+        renderEquipDetail(instId); renderBag(); renderHud(); renderCharDetail();
+      } else {
+        toast(r.reason, 'error');
+      }
+    };
+  }
   // 重抽詞綴按鈕
   const rerollBtnEl = root.querySelector('button[data-reroll]');
   if (rerollBtnEl) {
