@@ -1809,20 +1809,22 @@ window.showRaidPreview = function(dungeonId) {
     } else {
       toast(`進入襲擊戰：${d.name}`, 'gold');
     }
-    // 真正開戰邏輯（切場景 + startBattle），cutscene 結束時呼叫
-    const launch = () => {
-      const resultOverlay = document.getElementById('resultOverlay');
-      if (resultOverlay) resultOverlay.classList.add('hidden');
-      win.style.display = '';
-      win.classList.add('hidden');
-      PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
-      startBattle(d.id, GAME_STATE.state.activeCharId);
-    };
-    // 若有開場動畫先放，跑完才 launch；沒有就直接 launch
-    if (d.cutscene && typeof showRaidCutscene === 'function') {
-      showRaidCutscene(d.cutscene, launch);
-    } else {
-      launch();
+    // 立刻 startBattle 並暫停 → 播 cutscene 期間 BOSS 不會動 → cutscene 結束才解暫停
+    // 這樣 guest 收 enemy-sync 不會觸發 Wave 29.2 fallback 重複 startBattle 把統計洗掉
+    const resultOverlay = document.getElementById('resultOverlay');
+    if (resultOverlay) resultOverlay.classList.add('hidden');
+    win.style.display = '';
+    win.classList.add('hidden');
+    PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
+    startBattle(d.id, GAME_STATE.state.activeCharId);
+    if (d.cutscene && typeof showRaidCutscene === 'function' && window.BATTLE) {
+      window.BATTLE.paused = true;
+      showRaidCutscene(d.cutscene, () => {
+        if (window.BATTLE) {
+          window.BATTLE.paused = false;
+          window.BATTLE.startTime = performance.now();  // 重設計時，cutscene 不算進「堅持秒數」
+        }
+      });
     }
   });
   body.querySelector('button[data-raid-close]')?.addEventListener('click', () => {
@@ -4615,12 +4617,17 @@ function hookMpCallbacks() {
         if (w) { w.style.display = ''; w.classList.add('hidden'); }
       });
       PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
-      // 跟 host 同步播 cutscene → 雙方同一時刻 startBattle（host 發 broadcast 時也才開始播）
-      const guestLaunch = () => startBattle(d.id, GAME_STATE.state.activeCharId);
-      if (d.cutscene && typeof showRaidCutscene === 'function') {
-        showRaidCutscene(d.cutscene, guestLaunch);
-      } else {
-        guestLaunch();
+      // 立刻 startBattle 並暫停 → cutscene 期間 BOSS 不動 → 結束才解暫停
+      // 確保 Wave 29.2 fallback 不會在 cutscene 期間因為 b.dungeonId 沒設而觸發
+      startBattle(d.id, GAME_STATE.state.activeCharId);
+      if (d.cutscene && typeof showRaidCutscene === 'function' && window.BATTLE) {
+        window.BATTLE.paused = true;
+        showRaidCutscene(d.cutscene, () => {
+          if (window.BATTLE) {
+            window.BATTLE.paused = false;
+            window.BATTLE.startTime = performance.now();
+          }
+        });
       }
     }
   };
