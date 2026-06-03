@@ -1232,6 +1232,7 @@ button.primary:hover { filter: brightness(1.1); }
   gap: 10px;
   margin-top: 10px;
   flex-shrink: 0;
+  align-items: start;   /* 避免 clearSummary 內容多時拉伸「停止/自動/分頁」整排高度 */
 }
 #dungeonControls {
   display: flex;
@@ -1243,6 +1244,7 @@ button.primary:hover { filter: brightness(1.1); }
   background: var(--bg3);
   border: 1px solid var(--line);
   border-radius: 4px;
+  height: fit-content;  /* 自我內容高度，不被 grid stretch */
 }
 #panelButtons {
   display: flex;
@@ -1252,6 +1254,12 @@ button.primary:hover { filter: brightness(1.1); }
   border: 1px solid var(--line);
   border-radius: 4px;
   align-items: center;
+  height: fit-content;  /* 自我內容高度，不被 grid stretch */
+}
+/* clearSummary 限制多行高度：太多材料時可滾動而非撐開整列 */
+#clearSummary {
+  max-height: 60px;
+  overflow-y: auto;
 }
 #panelButtons .dock-toggle {
   padding: 5px 12px;
