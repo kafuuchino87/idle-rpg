@@ -1794,25 +1794,23 @@ window.showRaidPreview = function(dungeonId) {
         return;
       }
     }
-    // 真正開戰邏輯（廣播 + 切場景 + startBattle），cutscene 結束時呼叫
-    const launch = () => {
+    // ★ 多人同步關鍵：raid-launch 廣播改成放 click 立刻發出，
+    //   讓 guest 跟 host 同一時刻播 cutscene → 雙方同時 startBattle
+    if (window.MP_API && MP_API.isHost() && MP_API.isConnected()) {
+      MP_API.broadcastRaidLaunch(d.id);
+      const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
       if (d.isEndless) {
-        if (window.MP_API && MP_API.isHost() && MP_API.isConnected()) {
-          MP_API.broadcastRaidLaunch(d.id);
-          const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
-          toast(`房主開無盡塔 — ${teamSize} 人團進入：${d.name}（扣 1 張通行證）`, 'gold');
-        } else {
-          toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
-        }
+        toast(`房主開無盡塔 — ${teamSize} 人團進入：${d.name}（扣 1 張通行證）`, 'gold');
       } else {
-        if (window.MP_API && MP_API.isHost()) {
-          MP_API.broadcastRaidLaunch(d.id);
-          const teamSize = Object.keys(MP_API.getPlayers()).length + 1;
-          toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
-        } else {
-          toast(`進入襲擊戰：${d.name}`, 'error');
-        }
+        toast(`房主開戰 — ${teamSize} 人團進入：${d.name}`, 'gold');
       }
+    } else if (d.isEndless) {
+      toast(`進入無盡塔：${d.name}（扣 1 張通行證）`, 'gold');
+    } else {
+      toast(`進入襲擊戰：${d.name}`, 'gold');
+    }
+    // 真正開戰邏輯（切場景 + startBattle），cutscene 結束時呼叫
+    const launch = () => {
       const resultOverlay = document.getElementById('resultOverlay');
       if (resultOverlay) resultOverlay.classList.add('hidden');
       win.style.display = '';
@@ -4617,7 +4615,13 @@ function hookMpCallbacks() {
         if (w) { w.style.display = ''; w.classList.add('hidden'); }
       });
       PIXEL.setScene({ regionId: GAME_DATA.getRegionByDungeon(d.id).id });
-      startBattle(d.id, GAME_STATE.state.activeCharId);
+      // 跟 host 同步播 cutscene → 雙方同一時刻 startBattle（host 發 broadcast 時也才開始播）
+      const guestLaunch = () => startBattle(d.id, GAME_STATE.state.activeCharId);
+      if (d.cutscene && typeof showRaidCutscene === 'function') {
+        showRaidCutscene(d.cutscene, guestLaunch);
+      } else {
+        guestLaunch();
+      }
     }
   };
   MP.onPlayerJoined = (peerId) => {

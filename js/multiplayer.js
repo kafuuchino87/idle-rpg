@@ -167,6 +167,12 @@ function broadcastEnemySync() {
       portraitTall: !!e.portraitTall, // 直幅立繪標記（鏡夢縛魂用）
       openingState: e.openingState || null,  // 開場拔刀斬狀態（pending / active / done）
       openingName: e.openingAttack ? e.openingAttack.name : null,
+      // 鏡夢縛魂 BOSS 技能狀態同步（給 guest 顯示分身/鏡牢/減傷）
+      bossSkillTag: e.bossSkillTag || null,
+      cloneDR: e.cloneDR || 0,
+      cloneCount: e.cloneCount || 0,
+      cloneCurrentHp: e.cloneCurrentHp || 0,
+      cloneHpEach: e.cloneHpEach || 0,
       // 護盾資料（雙影獵討 Phase 2 護盾即死機制）— guest 只顯示，邏輯由 host 跑
       shield: e.shield || 0,
       shieldMax: e.shieldMax || 0,
@@ -366,6 +372,11 @@ function handleMessage(fromPeerId, data) {
           portraitTall: !!e.portraitTall,
           openingState: e.openingState || null,
           openingName: e.openingName || null,
+          bossSkillTag: e.bossSkillTag || null,
+          cloneDR: e.cloneDR || 0,
+          cloneCount: e.cloneCount || 0,
+          cloneCurrentHp: e.cloneCurrentHp || 0,
+          cloneHpEach: e.cloneHpEach || 0,
           nextAtk: 1.4 + Math.random() * 0.4,
           // 護盾資料（guest 同步顯示，邏輯由 host 跑）
           shield: e.shield || 0,
@@ -377,7 +388,7 @@ function handleMessage(fromPeerId, data) {
         b.freezes = 0;
         if (b.onUpdate) b.onUpdate();
       } else {
-        // 結構一致 → 覆寫 HP（只能降）+ 護盾資料
+        // 結構一致 → 覆寫 HP（只能降）+ 護盾資料 + 鏡夢縛魂 BOSS 狀態
         for (let i = 0; i < Math.min(b.currentWave.length, hostEnemies.length); i++) {
           if (b.currentWave[i] && hostEnemies[i]) {
             const newHp = hostEnemies[i].hp;
@@ -387,6 +398,13 @@ function handleMessage(fromPeerId, data) {
             b.currentWave[i].shieldMax = hostEnemies[i].shieldMax || 0;
             b.currentWave[i].shieldBreakTimer = hostEnemies[i].shieldBreakTimer || 0;
             b.currentWave[i].shieldTimer = hostEnemies[i].shieldTimer || 0;
+            // 開場拔刀斬同步
+            b.currentWave[i].openingState = hostEnemies[i].openingState || null;
+            // 鏡夢縛魂 BOSS 技能即時同步（分身/鏡牢狀態給 guest 顯示）
+            b.currentWave[i].cloneDR = hostEnemies[i].cloneDR || 0;
+            b.currentWave[i].cloneCount = hostEnemies[i].cloneCount || 0;
+            b.currentWave[i].cloneCurrentHp = hostEnemies[i].cloneCurrentHp || 0;
+            b.currentWave[i].cloneHpEach = hostEnemies[i].cloneHpEach || 0;
           }
         }
       }
@@ -544,9 +562,15 @@ function handleMessage(fromPeerId, data) {
       if (!b._endlessMode && MP.role === 'host' && b.currentWave && b.currentWaveIdx === data.payload.waveIdx) {
         const e = b.currentWave[data.payload.enemyIdx];
         if (e && e.hp > 0) {
-          const dmg = data.payload.dmg;
-          // 護盾優先（雙影獵討）：傷害先扣 shield，溢出才扣 HP
-          if (e.shield > 0) {
+          let dmg = data.payload.dmg;
+          // ★ 鏡夢縛魂：guest 送的傷害也走 mirror hook（分身吸傷、鏡牢吸傷、打斷計數）
+          if (e.bossSkillTag === 'mirror' && typeof window.mirrorBossDamageHook === 'function') {
+            dmg = window.mirrorBossDamageHook(dmg);
+          }
+          if (dmg <= 0) {
+            // 全被分身/鏡牢吸收，不扣 BOSS hp
+          } else if (e.shield > 0) {
+            // 護盾優先（雙影獵討）：傷害先扣 shield，溢出才扣 HP
             const absorbed = Math.min(e.shield, dmg);
             e.shield -= absorbed;
             const overflow = dmg - absorbed;

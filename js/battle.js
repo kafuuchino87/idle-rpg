@@ -1437,42 +1437,41 @@ function computeDamage(rawAtk, isCrit) {
 
 function applyDamage(dmg, isCrit) {
   if (!BATTLE.enemy) return;
+  const rawDmg = dmg;
+  let actualDmg = dmg;
   // 鏡夢縛魂技能攔截：分身吸傷 / 鏡牢吸傷 / 治療打斷計數 / 紅絲掙脫計數
-  if (BATTLE.enemy.bossSkillTag === 'mirror' && typeof mirrorBossDamageHook === 'function') {
-    dmg = mirrorBossDamageHook(dmg);
-    if (dmg <= 0) {
-      // 全被分身/鏡牢吸收，仍要記傷害（給統計用）
-      trackDamage(dmg, BATTLE._activeSkillId, isCrit);
-      BATTLE._activeSkillName = null;
-      return;
-    }
+  // ★ 多人：只有 host / solo 套用 hook（權威端）；guest 送 raw 給 host 重算
+  if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
+      && typeof mirrorBossDamageHook === 'function') {
+    actualDmg = mirrorBossDamageHook(rawDmg);
   }
   // 無盡塔：HP 不扣（保持 MAX_SAFE_INTEGER），改累積到 totalDmg
   if (BATTLE._endlessMode) {
-    BATTLE._endlessTotalDmg += dmg;
-    BATTLE._endlessTeamDmg += dmg;
+    BATTLE._endlessTotalDmg += actualDmg;
+    BATTLE._endlessTeamDmg += actualDmg;
     updateEndlessTier();
-  } else if (BATTLE.enemy.shield > 0) {
+  } else if (actualDmg > 0 && BATTLE.enemy.shield > 0) {
     // 護盾優先扣（雙影獵討機制）；溢出傷害扣 HP
-    const absorbed = Math.min(BATTLE.enemy.shield, dmg);
+    const absorbed = Math.min(BATTLE.enemy.shield, actualDmg);
     BATTLE.enemy.shield -= absorbed;
-    const overflow = dmg - absorbed;
+    const overflow = actualDmg - absorbed;
     if (overflow > 0) BATTLE.enemy.hp -= overflow;
     if (BATTLE.enemy.shield <= 0) {
       // 護盾打破 → 重置計時，等下次出現
       BATTLE.enemy.shield = 0; BATTLE.enemy.shieldMax = 0;
       BATTLE.enemy.shieldBreakTimer = 0;
-      BATTLE.enemy.shieldTimer = BATTLE.enemy.shieldConfig.interval;
+      if (BATTLE.enemy.shieldConfig) BATTLE.enemy.shieldTimer = BATTLE.enemy.shieldConfig.interval;
       if (typeof logLine === 'function') logLine(`<span class="lg-clear">✓ 護盾粉碎！</span>`, '');
     }
-  } else {
-    BATTLE.enemy.hp -= dmg;
+  } else if (actualDmg > 0) {
+    BATTLE.enemy.hp -= actualDmg;
   }
-  trackDamage(dmg, BATTLE._activeSkillId, isCrit);
-  // 多人：把自己造成的傷害廣播給所有隊友（host & guest 都廣播）
+  // 統計用原始傷害（玩家輸出表）
+  trackDamage(rawDmg, BATTLE._activeSkillId, isCrit);
+  // 多人：廣播原始 dmg 給 host（host 端會再走一次 mirror hook 處理）
   if ((BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') && window.MP_API) {
     const idx = BATTLE.currentWave ? BATTLE.currentWave.indexOf(BATTLE.enemy) : 0;
-    if (idx >= 0) MP_API.reportDamageDealt(idx, dmg, isCrit);
+    if (idx >= 0) MP_API.reportDamageDealt(idx, rawDmg, isCrit);
   }
   if (window.battleAnim) {
     if (isCrit) battleAnim('enemy', 'crit-flash');
@@ -1482,7 +1481,7 @@ function applyDamage(dmg, isCrit) {
     // 技能名 + 傷害合併顯示（普攻不前綴技能名）
     const skillTag = BATTLE._activeSkillName ? `${BATTLE._activeSkillName} ` : '';
     const critTag = isCrit ? 'CRIT! ' : '';
-    floatDamage(skillTag + critTag + dmg, isCrit ? 'crit' : (skillTag ? 'skill' : ''));
+    floatDamage(skillTag + critTag + rawDmg, isCrit ? 'crit' : (skillTag ? 'skill' : ''));
   }
   BATTLE._activeSkillName = null;  // 每次傷害用完就清，避免下次普攻又前綴技能名
   if (BATTLE.enemy.hp <= 0) onEnemyDown();
@@ -1507,13 +1506,11 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
       if (sk.vsBossBonus) dmg = Math.floor(dmg * (1 + sk.vsBossBonus));
       if (BATTLE.player.vsBoss) dmg = Math.floor(dmg * (1 + BATTLE.player.vsBoss));
     }
-    // 鏡夢縛魂技能攔截
-    if (e.bossSkillTag === 'mirror' && typeof mirrorBossDamageHook === 'function') {
+    // 鏡夢縛魂技能攔截（同 applyDamage：只在 host / solo 套用 hook）
+    const aoeRawDmg = dmg;
+    if (e.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
+        && typeof mirrorBossDamageHook === 'function') {
       dmg = mirrorBossDamageHook(dmg);
-      if (dmg <= 0) {
-        trackDamage(0, BATTLE._activeSkillId, isCrit);
-        continue;
-      }
     }
     // 無盡塔：HP 不扣，改累積到 totalDmg
     if (BATTLE._endlessMode) {
@@ -1535,13 +1532,13 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
     } else {
       e.hp -= dmg;
     }
-    trackDamage(dmg, BATTLE._activeSkillId, isCrit);
-    // 多人：把 AOE 傷害也廣播給所有隊友（host & guest 都廣播）
+    trackDamage(aoeRawDmg, BATTLE._activeSkillId, isCrit);
+    // 多人：廣播原始 dmg 給 host（host 會再走 mirror hook 處理）
     if ((BATTLE._mpMode === 'host' || BATTLE._mpMode === 'guest') && window.MP_API) {
       const idx = BATTLE.currentWave.indexOf(e);
-      if (idx >= 0) MP_API.reportDamageDealt(idx, dmg, isCrit);
+      if (idx >= 0) MP_API.reportDamageDealt(idx, aoeRawDmg, isCrit);
     }
-    totalDmg += dmg;
+    totalDmg += aoeRawDmg;  // 顯示用原始值
     hitCount += 1;
   }
 
@@ -1978,6 +1975,7 @@ window.onEnemyDown = onEnemyDown;
 window.updateEndlessTier = updateEndlessTier;
 window.trackDamage = trackDamage;
 window.spawnNextWave = spawnNextWave;
+window.mirrorBossDamageHook = mirrorBossDamageHook;  // 鏡夢縛魂 host 端 MP 傷害攔截用
 window.onDungeonClear = onDungeonClear;
 window.onBattleFail = onBattleFail;
 window.onEndlessTimeUp = onEndlessTimeUp;
