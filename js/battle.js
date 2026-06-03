@@ -1483,14 +1483,18 @@ function computeDamage(rawAtk, isCrit) {
   let mod = 1;
   for (const b of BATTLE.buffs) { if (b.atk) mod += b.atk; }
   // ── 雪羽 A 路線動態被動 ──
+  // 偵測「強制低血」狀態（虛無一閃 buff）— 計算被動時當作 HP < 40% 處理
+  // 實際 HP 不變、只影響傷害計算
+  const forceLowHp = BATTLE.buffs.some(b => b.forceLowHp);
   // dark-blood：每損失 1% 當前 HP → 攻擊 +1%（最大 +60%）
   if (BATTLE.player.darkBlood && BATTLE.player.maxHp > 0) {
-    const lossPct = 1 - (BATTLE.player.hp / BATTLE.player.maxHp);
+    const lossPct = forceLowHp ? 0.6 : (1 - BATTLE.player.hp / BATTLE.player.maxHp);
     mod += Math.min(0.6, lossPct);
   }
   // last-stand：HP < 40% 時，atk +50%、critDmg +30%
   let critBonus = 0;
-  if (BATTLE.player.lastStand && BATTLE.player.hp / BATTLE.player.maxHp < 0.4) {
+  const realLowHp = BATTLE.player.maxHp > 0 && BATTLE.player.hp / BATTLE.player.maxHp < 0.4;
+  if (BATTLE.player.lastStand && (forceLowHp || realLowHp)) {
     mod += 0.5;
     critBonus = 0.3;
   }
