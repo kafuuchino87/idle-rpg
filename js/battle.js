@@ -155,6 +155,8 @@ function startBattle(dungeonId, charId) {
   BATTLE.setTriggers = { sun: 0, frost: false, oracle: 0 };  // 核心套裝觸發狀態
   BATTLE.ringErosionStacks = 0;  // 蝕念戒指疊層（每戰鬥重置）
   BATTLE.mirrorBoss = null;     // 幻夢之主技能排程狀態（spawnNextWave 觸發時 init）
+  BATTLE.bossDying = false;     // BOSS 死亡動畫狀態（鎖血 1、暫停一切）
+  BATTLE.bossDyingTimer = 0;
   // 快取已裝戒指的觸發效果（procId / proc 來自戒指 def）
   BATTLE.ringProcs = (() => {
     const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0 };
@@ -447,6 +449,19 @@ function tickBattle(dt) {
   // 凍結倒數
   if (BATTLE.freezes > 0) BATTLE.freezes -= dtSec;
 
+  // 鏡夢縛魂 BOSS 死亡動畫倒數
+  if (BATTLE.bossDying) {
+    BATTLE.bossDyingTimer -= dtSec;
+    if (BATTLE.bossDyingTimer <= 0) {
+      BATTLE.bossDying = false;
+      if (BATTLE._mpMode !== 'guest') {
+        if (BATTLE.enemy) BATTLE.enemy.hp = 0;
+        if (typeof onEnemyDown === 'function') onEnemyDown();
+      }
+      // guest：等 host enemy-sync 帶 cleared=true 觸發 onDungeonClear
+    }
+    return;  // 死亡動畫期間暫停一切 — 不跑技能 / 攻擊 / 護盾 / regen
+  }
   // BOSS 護盾即死機制（雙影獵討的 shieldConfig）
   tickBossShield(dtSec);
   // 幻夢之主技能排程（鏡夢縛魂 7 招）
@@ -1054,6 +1069,26 @@ function mirrorBossDamageHook(rawDmg) {
   return rawDmg;
 }
 
+// 鏡夢縛魂：BOSS 死亡動畫進場
+// HP 鎖在 1，暫停所有技能、玩家攻擊、BOSS 攻擊
+// 3 秒後 hp → 0、onEnemyDown → onDungeonClear
+function enterMirrorBossDying() {
+  if (!BATTLE.enemy || BATTLE.bossDying) return;
+  BATTLE.enemy.hp = 1;
+  BATTLE.bossDying = true;
+  BATTLE.bossDyingTimer = 3.0;
+  // 清掉啟動中的招式（停止 DoT、停止連舞等）
+  if (BATTLE.mirrorBoss) BATTLE.mirrorBoss.active = null;
+  BATTLE.buffs = (BATTLE.buffs || []).filter(b => !b._ribbonBind);
+  BATTLE.player.caged = false;
+  BATTLE.enemy.cloneDR = 0; BATTLE.enemy.cloneCount = 0;
+  logLine(`<span class="lg-clear">★ 幻夢之主搖搖欲墜——「鏡夢...破碎了...」</span>`, '');
+  if (typeof window.bossDeathStart === 'function') window.bossDeathStart();
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('boss-dying', { dungeonId: BATTLE.dungeonId });
+  }
+}
+
 function handleMirrorPlayerDead() {
   BATTLE._dead = true;
   if (BATTLE._mpMode === 'host' && window.MP_API) {
@@ -1504,7 +1539,13 @@ function applyDamage(dmg, isCrit) {
     floatDamage(skillTag + critTag + rawDmg, isCrit ? 'crit' : (skillTag ? 'skill' : ''));
   }
   BATTLE._activeSkillName = null;  // 每次傷害用完就清，避免下次普攻又前綴技能名
-  if (BATTLE.enemy.hp <= 0) onEnemyDown();
+  // 鏡夢縛魂：HP 跌破 0 時鎖在 1 進入 3 秒死亡動畫，不立刻 onEnemyDown
+  if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
+      && !BATTLE.bossDying && BATTLE.enemy.hp <= 0) {
+    enterMirrorBossDying();
+    return;
+  }
+  if (BATTLE.enemy.hp <= 0 && !BATTLE.bossDying) onEnemyDown();
 }
 
 // AOE 傷害：對 currentWave 所有存活目標各自計算傷害（依各自防禦）
@@ -1578,9 +1619,17 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
   }
   BATTLE._activeSkillName = null;
 
+  // 鏡夢縛魂：AOE 把 BOSS 打到 0 也鎖在 1 進入死亡動畫
+  for (const e of BATTLE.currentWave) {
+    if (e.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
+        && !BATTLE.bossDying && e.hp <= 0) {
+      enterMirrorBossDying();
+      return totalDmg;
+    }
+  }
   // 處理擊殺
   const anyDead = BATTLE.currentWave.some(e => e.hp <= 0);
-  if (anyDead) onEnemyDown();
+  if (anyDead && !BATTLE.bossDying) onEnemyDown();
 
   return totalDmg;
 }

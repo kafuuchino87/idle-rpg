@@ -2213,6 +2213,22 @@ window.bossSpeak = function(text, durationSec) {
   setTimeout(() => { try { bubble.remove(); } catch (e) {} }, ms);
 };
 
+// ── BOSS 死亡動畫進場（鎖血 1、暫停一切）──
+// 清掉所有招式殘留 → BOSS 卡進入消散動畫（3 秒）
+window.bossDeathStart = function() {
+  // 先清掉所有招式視覺（紅紗、分身、鏡牢、對白...）
+  if (typeof window.cleanupMirrorAnims === 'function') window.cleanupMirrorAnims();
+  // BOSS 卡加 boss-dying class（CSS 控制 3 秒淡出動畫）
+  const card = document.querySelector('.enemy-card');
+  if (card) {
+    card.classList.add('boss-dying');
+  }
+  // 全螢幕白光閃一下（夢碎瞬間）
+  flashFullscreen('rgba(255, 240, 240, 0.4)', 600);
+  // 1.5 秒後再閃一次（瓦解）
+  setTimeout(() => flashFullscreen('rgba(255, 220, 230, 0.5)', 800), 1400);
+};
+
 // ── 戰鬥結束清除所有 BOSS 招式殘留視覺（class / 浮層 / 元素）──
 // 在 stopBattle / onBattleFail / onDungeonClear 後呼叫
 window.cleanupMirrorAnims = function() {

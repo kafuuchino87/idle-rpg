@@ -537,6 +537,23 @@ function handleMessage(fromPeerId, data) {
       if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
     }
   }
+  // 鏡夢縛魂：BOSS 死亡動畫進場 — guest 同步鎖血暫停一切
+  if (data.type === 'boss-dying' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (b && b.running) {
+      if (b.enemy) b.enemy.hp = 1;
+      b.bossDying = true;
+      b.bossDyingTimer = 3.0;
+      if (b.mirrorBoss) b.mirrorBoss.active = null;
+      b.buffs = (b.buffs || []).filter(buf => !buf._ribbonBind);
+      if (b.player) b.player.caged = false;
+      if (b.enemy) { b.enemy.cloneDR = 0; b.enemy.cloneCount = 0; }
+      if (typeof window.logLine === 'function') {
+        window.logLine(`<span class="lg-clear">★ 幻夢之主搖搖欲墜——「鏡夢...破碎了...」</span>`, '');
+      }
+      if (typeof window.bossDeathStart === 'function') window.bossDeathStart();
+    }
+  }
   // 鏡夢縛魂：開場拔刀斬 — guest 收到後同步扣血 + 播動畫
   if (data.type === 'boss-slash' && MP.role === 'guest') {
     const b = window.BATTLE;
