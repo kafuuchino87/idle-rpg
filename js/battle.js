@@ -1679,9 +1679,14 @@ function onEnemyDown() {
     BATTLE._wavePending = true;
     BATTLE.enemy = null;
     if (BATTLE.onUpdate) BATTLE.onUpdate();
+    // ★ 記下排程當下的副本 id — 觸發時若已換副本就直接廢棄這個 timer
+    // 之前沒記造成「上一副本最後波 600ms timer」+「新副本進入」剛好對上，
+    // 結果新副本的 waveIdx 被++ → 跨界誤觸發 onDungeonClear → 0.2 秒通關 bug
+    const dungeonAtSchedule = BATTLE.dungeonId;
     setTimeout(() => {
       BATTLE._wavePending = false;
       if (!BATTLE.running) return;
+      if (BATTLE.dungeonId !== dungeonAtSchedule) return;  // 副本已切換 → 廢棄
       BATTLE.currentWaveIdx++;
       BATTLE.freezes = 0;
       if (BATTLE.currentWaveIdx >= BATTLE.waves.length) onDungeonClear();
