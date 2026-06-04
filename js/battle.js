@@ -144,6 +144,7 @@ function startBattle(dungeonId, charId) {
   BATTLE._cleared = false;  // 重置通關旗標
   BATTLE._dead = false;     // 重置陣亡旗標（組隊用）
   BATTLE._teamWipeFired = false;  // 重置全隊滅旗標
+  BATTLE.lastClear = null;  // ★ 清舊場結算資料（避免舊資料殘留讓 onClear 誤 fire 結算彈窗）
   // 多人：清掉所有 peer 的 sticky dead 旗標（不然上一場死的記憶帶到新場）
   if (window.MP_API && typeof MP_API.getPlayers === 'function') {
     const peers = MP_API.getPlayers();

@@ -156,6 +156,23 @@ function loadState() {
       }
     }
     if (!parsed.globalBuffs) parsed.globalBuffs = [];
+    // ★ 一次性遷移：清掉已過期 buff、合併同 potionId 重複（修舊 activateGlobalBuff bug 堆積的）
+    if (Array.isArray(parsed.globalBuffs)) {
+      const now = Date.now();
+      const merged = new Map();
+      for (const b of parsed.globalBuffs) {
+        if (!b || !b.potionId || !b.expiresAt) continue;
+        if (b.expiresAt <= now) continue;  // 過期掉
+        const cur = merged.get(b.potionId);
+        if (cur) {
+          // 同 potionId 取剩餘時間最長的（合併成一條）
+          if (b.expiresAt > cur.expiresAt) cur.expiresAt = b.expiresAt;
+        } else {
+          merged.set(b.potionId, { ...b });
+        }
+      }
+      parsed.globalBuffs = Array.from(merged.values());
+    }
     if (parsed.characters) {
       for (const id in parsed.characters) {
         const cs = parsed.characters[id];
@@ -1525,9 +1542,11 @@ function activateGlobalBuff(potionId) {
   if (!p || p.type !== 'buff' || p.kind !== 'global') return false;
   if (!STATE.globalBuffs) STATE.globalBuffs = [];
   const now = Date.now();
-  // 同 stat 取現有者：延長到期
+  // ★ 先清掉所有過期 buff（避免堆積 / 同 potionId 的舊過期條目讓新 push 變成獨立第二筆）
+  STATE.globalBuffs = STATE.globalBuffs.filter(b => b.expiresAt > now);
+  // 同 potionId 已有 → 延長到期；沒有 → push 新的
   const existing = STATE.globalBuffs.find(b => b.potionId === potionId);
-  if (existing && existing.expiresAt > now) {
+  if (existing) {
     existing.expiresAt += p.duration * 1000;
   } else {
     STATE.globalBuffs.push({ potionId, stat: p.stat, value: p.value, expiresAt: now + p.duration * 1000 });
