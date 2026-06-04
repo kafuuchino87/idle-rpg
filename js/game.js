@@ -50,11 +50,45 @@ function enterGame() {
     if (BATTLE.lastClear) showResultModal(BATTLE.lastClear);
   };
 
+  // ── 背景持續運行：Web Audio 靜音保活 ──
+  // 瀏覽器看到分頁有「音訊輸出」就不會 throttle requestAnimationFrame
+  // 第一次玩家點任何元素後啟動（autoplay policy 要求 user gesture）
+  // 整個 lifecycle 只啟動一次，振盪器 0 音量永不停
+  window._bgAudioCtx = null;
+  function enableBgKeepalive() {
+    if (window._bgAudioCtx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0;       // 完全靜音
+      osc.frequency.value = 440; // 440Hz（聽不到也沒差）
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      window._bgAudioCtx = ctx;
+      console.log('[background] Web Audio 保活已啟動');
+    } catch (e) {
+      console.warn('[background] Web Audio 啟動失敗：', e);
+    }
+  }
+  // 任何點擊都觸發（once 確保只跑一次）
+  document.addEventListener('click', enableBgKeepalive, { once: true });
+  document.addEventListener('keydown', enableBgKeepalive, { once: true });
+  // 分頁切換時把 AudioContext resume 一下（部分瀏覽器會 suspend）
+  document.addEventListener('visibilitychange', () => {
+    if (window._bgAudioCtx && window._bgAudioCtx.state === 'suspended') {
+      window._bgAudioCtx.resume().catch(() => {});
+    }
+  });
+
   let last = performance.now();
   let lastMpBroadcast = 0;
   let lastAllyRender = 0;
-  const OFFLINE_MAX_MS = 10 * 60 * 1000;   // 最多補 10 分鐘的離線時間
-  const OFFLINE_THRESHOLD = 3000;          // 超過 3 秒視為「背景中斷」
+  const OFFLINE_MAX_MS = 4 * 60 * 60 * 1000;  // 最多補 4 小時（背景保活若失敗、或真關機才會用到）
+  const OFFLINE_THRESHOLD = 3000;             // 超過 3 秒視為「背景中斷」
   function loop(now) {
     const elapsed = now - last;
     if (elapsed > OFFLINE_THRESHOLD) {
