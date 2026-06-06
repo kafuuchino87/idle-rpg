@@ -901,49 +901,56 @@ const GEMS = (() => {
 // ===== 魔力石（賦予系統用） =====
 // 跟既有 GEM（鑲嵌孔）完全分開：賦予是「武器內建槽位」、玩家可裝多顆同色
 // 每件武器槽位：紅 10、藍 10、黃 10、巨型 3 = 共 33 槽
-// 賦予時隨機 roll：主屬性 1%~5% + 隨機 1 條副屬性 → 不會每次都洗到要的數值
 //
-// 副屬性池：每顆石頭額外抽 1 條，從這個池子隨機選（排除主屬性 stat）
-const IMBUE_SIDE_POOL = [
-  { stat: 'atk',       range: [0.01, 0.03] },  // 攻擊 1-3%
-  { stat: 'skillDmg',  range: [0.01, 0.03] },  // 技能傷害 1-3%
-  { stat: 'critDmg',   range: [0.02, 0.05] },  // 暴傷 2-5%
-  { stat: 'vsBoss',    range: [0.01, 0.04] },  // 對 BOSS 1-4%
-  { stat: 'crit',      range: [0.01, 0.03] },  // 暴擊率 1-3%
-  { stat: 'dmgReduce', range: [0.01, 0.03] },  // 減傷 1-3%
+// 設計核心：每顆石頭只 roll 一條屬性，但**屬性本身是隨機的**
+// - 紅石「專精」攻擊力 → 攻擊力 roll 機率較高，但仍可能洗到其他屬性
+// - 同理藍石 = 技能傷害專精、黃石 = 暴擊傷害專精
+// - 池子裡有玩家想要的（atk/skillDmg/critDmg）也有不太想要的（defPct/hpPct）
+// - 想堆出完美武器要刷很多顆石頭
+//
+// 8 種屬性池、全部上限 5%：
+const IMBUE_STAT_POOL = [
+  { stat: 'atk',       label: '攻擊力',     range: [0.01, 0.05] },
+  { stat: 'skillDmg',  label: '技能傷害',   range: [0.01, 0.05] },
+  { stat: 'critDmg',   label: '暴擊傷害',   range: [0.01, 0.05] },
+  { stat: 'vsBoss',    label: '對 BOSS',    range: [0.01, 0.05] },
+  { stat: 'crit',      label: '暴擊率',     range: [0.01, 0.04] },
+  { stat: 'dmgReduce', label: '減傷',       range: [0.01, 0.04] },
+  { stat: 'def',       label: '防禦',       range: [0.01, 0.05] },  // 多數玩家不太想要的
+  { stat: 'hp',        label: '生命',       range: [0.01, 0.05] },  // 同上
 ];
+// 加權：專精屬性 4、其他 1 → 專精中獎率 4/(4+7) ≈ 36%
+const SPECIALTY_WEIGHT = 4;
+const OTHER_WEIGHT = 1;
+
 const MAGIC_STONES = {
   'mstone-red': {
     id: 'mstone-red', name: '紅魔力石', color: 'red', icon: '🔴',
-    label: '主：攻擊力 + 隨機副屬性',
-    desc: '蘊含烈火本能的赤紅結晶。主屬性：攻擊力 1% ~ 5%；附帶 1 條隨機副屬性。',
-    main: { atk: [0.01, 0.05] },
-    sideCount: 1,
+    label: '專精：攻擊力（約 36% 機率）',
+    desc: '蘊含烈火本能的赤紅結晶。攻擊力專精，但仍可能 roll 到其他屬性（含不需要的防禦 / 生命）。',
+    specialty: 'atk',
   },
   'mstone-blue': {
     id: 'mstone-blue', name: '藍魔力石', color: 'blue', icon: '🔵',
-    label: '主：技能傷害 + 隨機副屬性',
-    desc: '深海回響般的蔚藍核心。主屬性：技能傷害 1% ~ 5%；附帶 1 條隨機副屬性。',
-    main: { skillDmg: [0.01, 0.05] },
-    sideCount: 1,
+    label: '專精：技能傷害（約 36% 機率）',
+    desc: '深海回響般的蔚藍核心。技能傷害專精，但仍可能 roll 到其他屬性。',
+    specialty: 'skillDmg',
   },
   'mstone-yellow': {
     id: 'mstone-yellow', name: '黃魔力石', color: 'yellow', icon: '🟡',
-    label: '主：暴擊傷害 + 隨機副屬性',
-    desc: '雷光凝練的金黃晶體。主屬性：暴擊傷害 1% ~ 5%；附帶 1 條隨機副屬性。',
-    main: { critDmg: [0.01, 0.05] },
-    sideCount: 1,
+    label: '專精：暴擊傷害（約 36% 機率）',
+    desc: '雷光凝練的金黃晶體。暴擊傷害專精，但仍可能 roll 到其他屬性。',
+    specialty: 'critDmg',
   },
   'mstone-mega': {
     id: 'mstone-mega', name: '巨型魔力石', color: 'mega', icon: '💎',
     label: '綜合 · 三屬性同賦',
-    desc: '極稀有的奇蹟結晶。主屬性同時賦予攻擊、技能傷害、暴擊傷害。',
-    main: {
-      atk: [0.08, 0.18],       // 8%~18% atk
-      skillDmg: [0.06, 0.14],  // 6%~14% skillDmg
-      critDmg: [0.10, 0.25],   // 10%~25% critDmg
+    desc: '極稀有的奇蹟結晶。一次同賦攻擊、技能傷害、暴擊傷害三種屬性，數值高範圍。',
+    megaMain: {
+      atk: [0.08, 0.18],
+      skillDmg: [0.06, 0.14],
+      critDmg: [0.10, 0.25],
     },
-    sideCount: 0,
     notObtainable: true,  // 暫時無法取得（之後新副本會開放）
   },
 };
@@ -968,28 +975,38 @@ const IMBUE_COSTS = {
 // 取一顆魔力石 def
 function findMagicStone(id) { return MAGIC_STONES[id]; }
 
-// roll 出一顆石頭實際賦予的屬性（主 + 副隨機）
+// roll 出一顆石頭實際賦予的屬性
+// 紅藍黃：從 IMBUE_STAT_POOL 加權抽 1 條（專精屬性權重高、但不保證中）
+// 巨型：固定 3 條主屬性同賦
 function rollImbueEffect(stoneId) {
   const def = MAGIC_STONES[stoneId];
   if (!def) return null;
-  const result = {};
   const round = v => Math.round(v * 1000) / 1000;
-  // 主屬性
-  for (const [stat, [lo, hi]] of Object.entries(def.main || {})) {
-    result[stat] = round(lo + Math.random() * (hi - lo));
+  // 巨型：固定 3 條
+  if (def.megaMain) {
+    const result = {};
+    for (const [stat, [lo, hi]] of Object.entries(def.megaMain)) {
+      result[stat] = round(lo + Math.random() * (hi - lo));
+    }
+    return result;
   }
-  // 隨機副屬性（排除已是主屬性的 stat）
-  if (def.sideCount > 0) {
-    const mainStats = new Set(Object.keys(def.main || {}));
-    const available = IMBUE_SIDE_POOL.filter(p => !mainStats.has(p.stat));
-    for (let i = 0; i < def.sideCount && available.length > 0; i++) {
-      const idx = Math.floor(Math.random() * available.length);
-      const pick = available.splice(idx, 1)[0];
-      const [lo, hi] = pick.range;
-      result[pick.stat] = (result[pick.stat] || 0) + round(lo + Math.random() * (hi - lo));
+  // 紅藍黃：加權單抽
+  if (def.specialty) {
+    const weighted = IMBUE_STAT_POOL.map(p => ({
+      ...p,
+      weight: p.stat === def.specialty ? SPECIALTY_WEIGHT : OTHER_WEIGHT,
+    }));
+    const total = weighted.reduce((s, p) => s + p.weight, 0);
+    let roll = Math.random() * total;
+    for (const entry of weighted) {
+      roll -= entry.weight;
+      if (roll <= 0) {
+        const [lo, hi] = entry.range;
+        return { [entry.stat]: round(lo + Math.random() * (hi - lo)) };
+      }
     }
   }
-  return result;
+  return null;
 }
 
 // ===== 藥水 / 卷軸 =====

@@ -2995,7 +2995,11 @@ function renderImbue() {
 
   // 累計總賦予效果
   const totalEffect = GAME_STATE.getImbueTotal(inst);
-  const statName = { atk: '攻擊力 %', skillDmg: '技能傷害 %', critDmg: '暴擊傷害 %' };
+  const statName = {
+    atk: '攻擊力 %', skillDmg: '技能傷害 %', critDmg: '暴擊傷害 %',
+    vsBoss: '對 BOSS %', crit: '暴擊率 %', dmgReduce: '減傷 %',
+    def: '防禦 %', hp: '生命 %',
+  };
   const totalLines = Object.entries(totalEffect)
     .map(([k, v]) => `<span style="color:#ffd66e">${statName[k] || k}</span> <b>+${(v * 100).toFixed(1)}%</b>`)
     .join('　');
@@ -3004,9 +3008,11 @@ function renderImbue() {
     <div style="background:linear-gradient(180deg,rgba(160,108,213,0.12),var(--bg3));padding:10px 12px;border-radius:6px;border-left:3px solid var(--accent);margin-bottom:12px">
       <div style="color:var(--accent);font-weight:600;margin-bottom:4px">⚛ 魔力賦予系統</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
-        為武器鑲嵌魔力石、賦予 % 屬性加成。<br>
-        紅 / 藍 / 黃 各 10 槽：<b>主屬性最高 5% + 隨機 1 條副屬性</b>（每次 roll 不同 → 想要的數值要多刷）。<br>
-        巨型 3 槽：<span style="color:#888">目前無法獲得，之後新副本會開放。</span><br>
+        為武器鑲嵌魔力石、賦予 % 屬性加成。每件武器 紅 / 藍 / 黃 各 10 槽、巨型 3 槽。<br>
+        每顆石頭只 roll <b>1 條屬性</b>、上限 5%、但**屬性本身是隨機的** —<br>
+        紅石「專精」攻擊力（約 36% 機率），但仍可能洗到防禦、生命、減傷等不想要的；藍黃同理。<br>
+        要洗出滿配武器 → 必須**大量刷石頭**。<br>
+        巨型 3 槽：<span style="color:#888">🔒 目前無法獲得，之後新副本會開放。</span><br>
         魔力石從<b>魔力試煉境</b>掉落 — 副本入口在「副本 → 神窟區」。
       </div>
     </div>

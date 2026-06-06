@@ -903,14 +903,17 @@ function effectiveStats(charId) {
       }
     }
     // 魔力石賦予（只有 weapon 有 imbue 槽）
+    // % 屬性需要走專屬 multiplier：atk → atkPct, def → defPct, hp → hpPct
     if (inst.imbue && def.slot === 'weapon') {
       for (const color of ['red', 'blue', 'yellow', 'mega']) {
         const slots = inst.imbue[color] || [];
         for (const slot of slots) {
           if (!slot.effect) continue;
           for (const [stat, value] of Object.entries(slot.effect)) {
-            if (stat === 'atk') s.atkPct = (s.atkPct || 0) + value;  // 賦予的「攻擊力 %」走 atkPct（最後乘到 atk）
-            else s[stat] = (s[stat] || 0) + value;
+            if (stat === 'atk')      s.atkPct = (s.atkPct || 0) + value;
+            else if (stat === 'def') s.defPct = (s.defPct || 0) + value;
+            else if (stat === 'hp')  s.hpPct  = (s.hpPct  || 0) + value;
+            else s[stat] = (s[stat] || 0) + value;  // skillDmg / critDmg / vsBoss / crit / dmgReduce 直接加
           }
         }
       }
@@ -1005,11 +1008,12 @@ function effectiveStats(charId) {
   if (s.cdReduce > 0.50) s.cdReduce = 0.50;  // CD 縮減硬上限 50%（防止技能秒放）
   if (s.defPierce > 0.95) s.defPierce = 0.95;  // 無視防禦上限 95%（保留 5% 給敵方）
 
-  // ===== %攻 套用（在所有加成後最後計算 — 鍛造、被動、寶石等貢獻 s.atkPct）=====
-  // 不顯示在面板上，直接乘到 atk；CP 也跟著上升
-  if (s.atkPct && s.atkPct > 0) {
-    s.atk = s.atk * (1 + s.atkPct);
-  }
+  // ===== %攻 / %防 / %HP 套用（在所有加成後最後計算）=====
+  // 隱藏屬性：不顯示在面板上，直接乘到 atk / def / hp；CP 也跟著上升
+  // 來源：鍛造、被動、寶石、魔力石賦予
+  if (s.atkPct && s.atkPct > 0) s.atk = s.atk * (1 + s.atkPct);
+  if (s.defPct && s.defPct > 0) s.def = s.def * (1 + s.defPct);
+  if (s.hpPct  && s.hpPct  > 0) s.hp  = s.hp  * (1 + s.hpPct);
 
   return {
     atk: Math.floor(s.atk),
