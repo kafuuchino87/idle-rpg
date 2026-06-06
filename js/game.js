@@ -3005,8 +3005,9 @@ function renderImbue() {
       <div style="color:var(--accent);font-weight:600;margin-bottom:4px">⚛ 魔力賦予系統</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
         為武器鑲嵌魔力石、賦予 % 屬性加成。<br>
-        紅 / 藍 / 黃 各 10 槽，巨型 3 槽。每顆石頭賦予時隨機 roll 範圍內數值。<br>
-        魔力石只能從<b>魔力試煉境</b>掉落 — 副本入口在「副本 → 神窟區」。
+        紅 / 藍 / 黃 各 10 槽：<b>主屬性最高 5% + 隨機 1 條副屬性</b>（每次 roll 不同 → 想要的數值要多刷）。<br>
+        巨型 3 槽：<span style="color:#888">目前無法獲得，之後新副本會開放。</span><br>
+        魔力石從<b>魔力試煉境</b>掉落 — 副本入口在「副本 → 神窟區」。
       </div>
     </div>
     <div class="imbue-weapon" style="background:var(--bg2);padding:10px 12px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px">
@@ -3044,12 +3045,14 @@ function renderImbue() {
     }
     const gridCols = c.id === 'mega' ? 3 : 5;
 
+    const isLocked = stoneDef.notObtainable;
     html += `
-      <div class="imbue-section" style="margin-bottom:14px;padding:10px;background:var(--bg3);border-radius:6px;border-left:3px solid ${c.glow}">
+      <div class="imbue-section" style="margin-bottom:14px;padding:10px;background:var(--bg3);border-radius:6px;border-left:3px solid ${c.glow};${isLocked ? 'opacity:0.7' : ''}">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <div>
             <span style="font-size:14px">${stoneDef.icon} <b>${stoneDef.name}</b></span>
             <span style="font-size:11px;color:var(--muted);margin-left:8px">${stoneDef.label}</span>
+            ${isLocked ? '<span style="font-size:10px;color:#999;margin-left:8px;background:#333;padding:1px 6px;border-radius:3px">🔒 未開放</span>' : ''}
           </div>
           <div style="font-size:11px;color:var(--muted)">
             槽位 <b>${slots.length}/${cap}</b>　|　庫存 <b style="color:${c.glow}">${stoneQty}</b>
@@ -3057,7 +3060,7 @@ function renderImbue() {
         </div>
         <div style="display:grid;grid-template-columns:repeat(${gridCols},1fr);gap:4px;margin-bottom:8px">${slotHtml.join('')}</div>
         <button class="primary small" data-imbue-color="${c.id}" ${canImbue ? '' : 'disabled'}
-                title="${slots.length >= cap ? '槽位已滿' : stoneQty < 1 ? '石頭庫存不足' : gold < cost ? '金幣不足' : ''}">
+                title="${isLocked ? '巨型魔力石尚未開放取得管道' : slots.length >= cap ? '槽位已滿' : stoneQty < 1 ? '石頭庫存不足' : gold < cost ? '金幣不足' : ''}">
           ⚛ 賦予一顆（${cost.toLocaleString()} 金幣）
         </button>
       </div>
