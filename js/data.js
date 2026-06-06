@@ -611,6 +611,22 @@ const REGIONS = [
         bonusMengjingChance: 0.25,
         chestDropOverride: { divine: 0.03 },  // 3% 神格寶箱
         enemies: ['神工執行者', '虛位匠靈'], boss: '神工大師（神格・神）' },
+      // ===== 魔力試煉境（賦予系統專屬副本）=====
+      // 高難度綜合本：給比經驗副本更多 XP+金幣 + 只掉魔力石和寶箱
+      // 玩家用這裡的石頭去武器賦予介面強化武器
+      { id: 'sp-imbue-trial', name: '魔力試煉境', cp: 150000, unlock: 'sp-exp-elite', requiredLv: 99,
+        special: 'imbue', baseTime: 60, expBase: 150000, goldBase: 200000,  // XP / 金幣比神祠 (50K/1.5K) 多 3x / 130x
+        difficultyMul: 12, atkCoefOverride: 0.018,           // 難度比 神祠 (7.5) 多 60%
+        dropMats: [],  // 不掉一般材料
+        // 魔力石掉落表（每次戰鬥獨立 roll）
+        magicStones: {
+          red:    { chance: 1.0, qty: [2, 5] },   // 必掉、2~5 顆
+          blue:   { chance: 1.0, qty: [2, 5] },   // 必掉
+          yellow: { chance: 1.0, qty: [2, 5] },   // 必掉
+          mega:   { chance: 0.02, qty: [1, 1] },  // 2% 機率掉 1 顆
+        },
+        chestDropOverride: { divine: 0.08 },  // 8% 神格寶箱（補金幣的同時也給驚喜）
+        enemies: ['魔力侍從', '結晶守衛'], boss: '魔力試煉主（神格・極）' },
     ],
   },
   // ===== 無盡塔（30 秒限時，依累積傷害領獎）=====
@@ -880,6 +896,72 @@ const GEMS = (() => {
   }
   return arr;
 })();
+
+// ===== 魔力石（賦予系統用） =====
+// 跟既有 GEM（鑲嵌孔）完全分開：賦予是「武器內建槽位」、玩家可裝多顆同色
+// 每件武器槽位：紅 10、藍 10、黃 10、巨型 3 = 共 33 槽
+// 賦予時隨機 roll 該石頭範圍內的 % 數值
+const MAGIC_STONES = {
+  'mstone-red': {
+    id: 'mstone-red', name: '紅魔力石', color: 'red', icon: '🔴',
+    label: '專精：攻擊力 %',
+    desc: '蘊含烈火本能的赤紅結晶。賦予武器 +5% ~ +15% 攻擊力。',
+    roll: { atk: [0.05, 0.15] },  // 5%~15% atk
+  },
+  'mstone-blue': {
+    id: 'mstone-blue', name: '藍魔力石', color: 'blue', icon: '🔵',
+    label: '專精：技能傷害 %',
+    desc: '深海回響般的蔚藍核心。賦予武器 +4% ~ +12% 技能傷害。',
+    roll: { skillDmg: [0.04, 0.12] },
+  },
+  'mstone-yellow': {
+    id: 'mstone-yellow', name: '黃魔力石', color: 'yellow', icon: '🟡',
+    label: '專精：暴擊傷害 %',
+    desc: '雷光凝練的金黃晶體。賦予武器 +6% ~ +18% 暴擊傷害。',
+    roll: { critDmg: [0.06, 0.18] },
+  },
+  'mstone-mega': {
+    id: 'mstone-mega', name: '巨型魔力石', color: 'mega', icon: '💎',
+    label: '綜合 · 三屬性同賦',
+    desc: '極稀有的奇蹟結晶。一次同賦攻擊力、技能傷害、暴擊傷害三種屬性 — 各自高範圍隨機。',
+    roll: {
+      atk: [0.08, 0.18],       // 8%~18% atk
+      skillDmg: [0.06, 0.14],  // 6%~14% skillDmg
+      critDmg: [0.10, 0.25],   // 10%~25% critDmg
+    },
+  },
+};
+
+// 賦予槽位設定：每件武器
+const IMBUE_SLOT_CAPS = {
+  red:    10,
+  blue:   10,
+  yellow: 10,
+  mega:   3,
+};
+
+// 賦予花費（金幣）
+const IMBUE_COSTS = {
+  red:    50_000,
+  blue:   50_000,
+  yellow: 50_000,
+  mega:   500_000,
+  remove: 200_000,  // 拆除單槽（石頭返還、保留庫存）
+};
+
+// 取一顆魔力石 def
+function findMagicStone(id) { return MAGIC_STONES[id]; }
+
+// roll 出一顆石頭實際賦予的屬性（隨機在範圍內）
+function rollImbueEffect(stoneId) {
+  const def = MAGIC_STONES[stoneId];
+  if (!def) return null;
+  const result = {};
+  for (const [stat, [lo, hi]] of Object.entries(def.roll)) {
+    result[stat] = Math.round((lo + Math.random() * (hi - lo)) * 1000) / 1000;
+  }
+  return result;
+}
 
 // ===== 藥水 / 卷軸 =====
 // type:
@@ -1590,6 +1672,7 @@ window.GAME_DATA = {
   CHARACTERS, REGIONS, ITEMS, SKILLS, PASSIVES, RECIPES, MATERIAL_RECIPES, GEMS, SETS, POTIONS, CHESTS, SHARD_EXCHANGE,
   EQUIPMENT_SLOTS, SLOT_LABELS, AFFIX_POOL, RING_AFFIX_POOL,
   isRingSlot, slotAcceptsItem,
+  MAGIC_STONES, IMBUE_SLOT_CAPS, IMBUE_COSTS, findMagicStone, rollImbueEffect,
   MAX_LEVEL,
   forgeCost, forgeMultiplier, FORGE_MAX, FORGE_SAFE_LEVEL,
   expForLevel, resonanceMultiplier,

@@ -342,7 +342,7 @@ function showCreationOverlay(isAdditional) {
 // ============================================================================
 function bindGlobalEvents() {
   // 浮動視窗：按鈕開關
-  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom', smith: 'winSmith' };
+  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom', smith: 'winSmith', imbue: 'winImbue' };
   document.querySelectorAll('.dock-toggle, .cs-detail-btn').forEach(btn => {
     btn.onclick = () => {
       const key = btn.dataset.win;
@@ -364,6 +364,7 @@ function bindGlobalEvents() {
         if (key === 'potionConfig') renderPotionConfig();
         if (key === 'mpRoom') renderMpRoom();
         if (key === 'smith') renderSmith();
+        if (key === 'imbue') renderImbue();
       }
     };
   });
@@ -2962,6 +2963,135 @@ function renderDungeonList() {
 // ============================================================================
 // 強化
 // ============================================================================
+// ============================================================================
+// 魔力賦予系統 UI
+// ============================================================================
+function renderImbue() {
+  const root = document.getElementById('tabImbue');
+  if (!root) return;
+  const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];
+  if (!cs || !cs.equip) { root.innerHTML = '<div style="color:var(--muted)">無角色</div>'; return; }
+
+  // 找穿戴中的武器
+  const weaponInstId = cs.equip.weapon;
+  if (!weaponInstId) { root.innerHTML = '<div style="color:var(--muted);padding:12px">未裝備武器</div>'; return; }
+  const inst = _activeBag().equipment[weaponInstId];
+  if (!inst) { root.innerHTML = '<div style="color:var(--muted);padding:12px">武器資料異常</div>'; return; }
+  const def = GAME_DATA.findEquipment(inst.itemId);
+  if (!def) { root.innerHTML = '<div style="color:var(--muted);padding:12px">武器資料異常</div>'; return; }
+
+  // 初始化 imbue 結構
+  if (!inst.imbue) inst.imbue = { red: [], blue: [], yellow: [], mega: [] };
+
+  const stones = (_activeBag().magicStones || {});
+  const gold = GAME_STATE.state.gold || 0;
+
+  const COLORS = [
+    { id: 'red',    stoneId: 'mstone-red',    bg: '#3a1818', glow: '#ff5e5e' },
+    { id: 'blue',   stoneId: 'mstone-blue',   bg: '#181a3a', glow: '#5e9eff' },
+    { id: 'yellow', stoneId: 'mstone-yellow', bg: '#3a3018', glow: '#ffd05e' },
+    { id: 'mega',   stoneId: 'mstone-mega',   bg: '#2a1a3a', glow: '#c084ff' },
+  ];
+
+  // 累計總賦予效果
+  const totalEffect = GAME_STATE.getImbueTotal(inst);
+  const statName = { atk: '攻擊力 %', skillDmg: '技能傷害 %', critDmg: '暴擊傷害 %' };
+  const totalLines = Object.entries(totalEffect)
+    .map(([k, v]) => `<span style="color:#ffd66e">${statName[k] || k}</span> <b>+${(v * 100).toFixed(1)}%</b>`)
+    .join('　');
+
+  let html = `
+    <div style="background:linear-gradient(180deg,rgba(160,108,213,0.12),var(--bg3));padding:10px 12px;border-radius:6px;border-left:3px solid var(--accent);margin-bottom:12px">
+      <div style="color:var(--accent);font-weight:600;margin-bottom:4px">⚛ 魔力賦予系統</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        為武器鑲嵌魔力石、賦予 % 屬性加成。<br>
+        紅 / 藍 / 黃 各 10 槽，巨型 3 槽。每顆石頭賦予時隨機 roll 範圍內數值。<br>
+        魔力石只能從<b>魔力試煉境</b>掉落 — 副本入口在「副本 → 神窟區」。
+      </div>
+    </div>
+    <div class="imbue-weapon" style="background:var(--bg2);padding:10px 12px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px">
+      <div style="font-size:13px;color:var(--muted)">當前武器</div>
+      <div style="font-size:16px;font-weight:600">
+        <span class="bag-item ${def.rarity}" style="display:inline-block;padding:1px 8px;border-width:1px">${def.name}${(inst.forge||0) ? ' +' + inst.forge : ''}</span>
+      </div>
+      ${totalLines ? `<div style="margin-top:6px;font-size:12px">${totalLines}</div>` : ''}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">金幣：<b style="color:var(--gold)">${gold.toLocaleString()}</b></div>
+  `;
+
+  for (const c of COLORS) {
+    const stoneDef = GAME_DATA.findMagicStone(c.stoneId);
+    if (!stoneDef) continue;
+    const slots = inst.imbue[c.id] || [];
+    const cap = GAME_DATA.IMBUE_SLOT_CAPS[c.id];
+    const stoneQty = stones[c.stoneId] || 0;
+    const cost = GAME_DATA.IMBUE_COSTS[c.id];
+    const canImbue = stoneQty > 0 && gold >= cost && slots.length < cap;
+
+    // 渲染每個槽位
+    const slotHtml = [];
+    for (let i = 0; i < cap; i++) {
+      const slot = slots[i];
+      if (slot) {
+        const effStr = Object.entries(slot.effect).map(([k, v]) => `<span style="color:#7ee8a8">${statName[k] || k}+${(v * 100).toFixed(1)}%</span>`).join('<br>');
+        slotHtml.push(`<div class="imbue-slot filled" data-color="${c.id}" data-idx="${i}" style="background:${c.bg};border:1px solid ${c.glow};border-radius:5px;padding:6px;font-size:10px;min-height:48px;position:relative;cursor:pointer" title="點擊拆除（消耗 ${GAME_DATA.IMBUE_COSTS.remove.toLocaleString()} 金幣）">
+          <div style="position:absolute;top:1px;right:3px;font-size:8px;color:#888">#${i+1}</div>
+          ${effStr}
+        </div>`);
+      } else {
+        slotHtml.push(`<div class="imbue-slot empty" style="background:rgba(255,255,255,0.03);border:1px dashed var(--line);border-radius:5px;padding:6px;font-size:10px;min-height:48px;color:#444;display:flex;align-items:center;justify-content:center">空</div>`);
+      }
+    }
+    const gridCols = c.id === 'mega' ? 3 : 5;
+
+    html += `
+      <div class="imbue-section" style="margin-bottom:14px;padding:10px;background:var(--bg3);border-radius:6px;border-left:3px solid ${c.glow}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div>
+            <span style="font-size:14px">${stoneDef.icon} <b>${stoneDef.name}</b></span>
+            <span style="font-size:11px;color:var(--muted);margin-left:8px">${stoneDef.label}</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">
+            槽位 <b>${slots.length}/${cap}</b>　|　庫存 <b style="color:${c.glow}">${stoneQty}</b>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(${gridCols},1fr);gap:4px;margin-bottom:8px">${slotHtml.join('')}</div>
+        <button class="primary small" data-imbue-color="${c.id}" ${canImbue ? '' : 'disabled'}
+                title="${slots.length >= cap ? '槽位已滿' : stoneQty < 1 ? '石頭庫存不足' : gold < cost ? '金幣不足' : ''}">
+          ⚛ 賦予一顆（${cost.toLocaleString()} 金幣）
+        </button>
+      </div>
+    `;
+  }
+
+  root.innerHTML = html;
+
+  // 綁定賦予按鈕
+  root.querySelectorAll('button[data-imbue-color]').forEach(btn => {
+    btn.onclick = () => {
+      const color = btn.dataset.imbueColor;
+      const stoneId = 'mstone-' + color;
+      const r = GAME_STATE.imbueMagicStone(weaponInstId, stoneId);
+      if (!r.ok) { toast(r.reason, 'error'); return; }
+      const effStr = Object.entries(r.effect).map(([k, v]) => `${statName[k] || k} +${(v * 100).toFixed(1)}%`).join('、');
+      toast(`✦ ${color} 賦予成功：${effStr}`, 'gold');
+      renderImbue(); renderHud(); renderCharDetail();
+    };
+  });
+  // 綁定拆除（點擊已填的槽位）
+  root.querySelectorAll('.imbue-slot.filled').forEach(slot => {
+    slot.onclick = () => {
+      const color = slot.dataset.color;
+      const idx = parseInt(slot.dataset.idx, 10);
+      if (!confirm(`拆除這個賦予槽？\n石頭返還庫存、扣 ${GAME_DATA.IMBUE_COSTS.remove.toLocaleString()} 金幣（屬性會重抽）。`)) return;
+      const r = GAME_STATE.removeImbueSlot(weaponInstId, color, idx);
+      if (!r.ok) { toast(r.reason, 'error'); return; }
+      toast(`已拆除 — 石頭返還庫存`, 'gold');
+      renderImbue(); renderHud(); renderCharDetail();
+    };
+  });
+}
+
 function renderForge() {
   const root = document.getElementById('tabForge');
   const cs = GAME_STATE.state.characters[GAME_STATE.state.activeCharId];

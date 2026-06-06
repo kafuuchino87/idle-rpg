@@ -51,6 +51,7 @@ function makeEmptyBag() {
     chests: {},
     passes: {},        // 無盡塔等副本入場券
     rerollTokens: 0,
+    magicStones: {},   // 魔力石庫存：{ 'mstone-red': qty, ... }
   };
 }
 
@@ -901,6 +902,19 @@ function effectiveStats(charId) {
         s[gem.stat] = (s[gem.stat] || 0) + gem.value;
       }
     }
+    // 魔力石賦予（只有 weapon 有 imbue 槽）
+    if (inst.imbue && def.slot === 'weapon') {
+      for (const color of ['red', 'blue', 'yellow', 'mega']) {
+        const slots = inst.imbue[color] || [];
+        for (const slot of slots) {
+          if (!slot.effect) continue;
+          for (const [stat, value] of Object.entries(slot.effect)) {
+            if (stat === 'atk') s.atkPct = (s.atkPct || 0) + value;  // 賦予的「攻擊力 %」走 atkPct（最後乘到 atk）
+            else s[stat] = (s[stat] || 0) + value;
+          }
+        }
+      }
+    }
     // 鍛造效果（終焉套裝：每件依 smithStage 累加已解鎖效果）
     if (GAME_DATA.isSmithEligible(def) && inst.smithStage > 0) {
       const unlocked = GAME_DATA.getSmithUnlockedEffects(inst.smithStage);
@@ -1111,6 +1125,87 @@ function exchangeShard(exchangeId) {
   }
   scheduleSave();
   return { ok: true, label, costShard: ex.cost };
+}
+
+// ============================================================================
+// 魔力石賦予系統
+// ============================================================================
+// 把魔力石加進玩家庫存
+function gainMagicStone(stoneId, qty, charId) {
+  const cs = charId ? STATE.characters[charId] : activeChar();
+  if (!cs) return;
+  if (!cs.bag) cs.bag = makeEmptyBag();
+  if (!cs.bag.magicStones) cs.bag.magicStones = {};
+  cs.bag.magicStones[stoneId] = (cs.bag.magicStones[stoneId] || 0) + qty;
+}
+
+// 賦予一顆魔力石到武器
+// 回傳：{ ok, reason?, slotIdx?, effect? }
+function imbueMagicStone(weaponInstId, stoneId) {
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[weaponInstId];
+  if (!inst) return { ok: false, reason: '找不到武器' };
+  const def = GAME_DATA.findEquipment(inst.itemId);
+  if (!def || def.slot !== 'weapon') return { ok: false, reason: '只能對武器賦予' };
+  const stoneDef = GAME_DATA.findMagicStone(stoneId);
+  if (!stoneDef) return { ok: false, reason: '無效的魔力石' };
+  // 檢查庫存
+  const have = (bag.magicStones && bag.magicStones[stoneId]) || 0;
+  if (have < 1) return { ok: false, reason: `${stoneDef.name} 庫存不足` };
+  // 檢查金幣
+  const cost = GAME_DATA.IMBUE_COSTS[stoneDef.color] || 0;
+  if ((STATE.gold || 0) < cost) return { ok: false, reason: `金幣不足（需 ${cost.toLocaleString()}）` };
+  // 檢查槽位上限
+  if (!inst.imbue) inst.imbue = { red: [], blue: [], yellow: [], mega: [] };
+  const slots = inst.imbue[stoneDef.color];
+  const cap = GAME_DATA.IMBUE_SLOT_CAPS[stoneDef.color] || 0;
+  if (slots.length >= cap) return { ok: false, reason: `${stoneDef.name} 槽位已滿（${cap} 顆）` };
+  // 扣資源 + roll 數值
+  STATE.gold -= cost;
+  bag.magicStones[stoneId] -= 1;
+  if (bag.magicStones[stoneId] <= 0) delete bag.magicStones[stoneId];
+  const effect = GAME_DATA.rollImbueEffect(stoneId);
+  slots.push({ stoneId, effect });
+  scheduleSave();
+  return { ok: true, slotIdx: slots.length - 1, effect, cost, color: stoneDef.color };
+}
+
+// 拆除一個賦予槽（石頭返還庫存，扣拆除費）
+function removeImbueSlot(weaponInstId, color, slotIdx) {
+  const bag = activeBag();
+  if (!bag) return { ok: false, reason: '無 active 角色' };
+  const inst = bag.equipment[weaponInstId];
+  if (!inst || !inst.imbue) return { ok: false, reason: '武器無賦予' };
+  const slots = inst.imbue[color];
+  if (!slots || slotIdx < 0 || slotIdx >= slots.length) return { ok: false, reason: '無效的槽位' };
+  const cost = GAME_DATA.IMBUE_COSTS.remove || 0;
+  if ((STATE.gold || 0) < cost) return { ok: false, reason: `拆除需 ${cost.toLocaleString()} 金幣` };
+  const removed = slots.splice(slotIdx, 1)[0];
+  STATE.gold -= cost;
+  // 石頭返還庫存
+  if (removed && removed.stoneId) {
+    if (!bag.magicStones) bag.magicStones = {};
+    bag.magicStones[removed.stoneId] = (bag.magicStones[removed.stoneId] || 0) + 1;
+  }
+  scheduleSave();
+  return { ok: true, returnedStoneId: removed.stoneId, cost };
+}
+
+// 計算一件武器所有賦予效果的總和（給 effectiveStats 用）
+function getImbueTotal(inst) {
+  const total = {};
+  if (!inst || !inst.imbue) return total;
+  for (const color of ['red', 'blue', 'yellow', 'mega']) {
+    const slots = inst.imbue[color] || [];
+    for (const slot of slots) {
+      if (!slot.effect) continue;
+      for (const [stat, value] of Object.entries(slot.effect)) {
+        total[stat] = (total[stat] || 0) + value;
+      }
+    }
+  }
+  return total;
 }
 
 // 詞綴重抽（消耗一張券）
@@ -1706,6 +1801,7 @@ window.GAME_STATE = {
   isDungeonUnlocked,
   gainGold, gainShard, gainExp, gainMaterial, consumeMaterial, craftMaterial,
   exchangeShard, rerollAffixes,
+  gainMagicStone, imbueMagicStone, removeImbueSlot, getImbueTotal,
   gainGem, consumeGem, socketGem, unsocketGem, sellGem, sellGemsBatch,
   gainPotion, consumePotion, buyPotion, setPotionSlot, setPotionThreshold,
   getGlobalBuffMod, activateGlobalBuff,

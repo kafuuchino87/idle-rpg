@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
-<link rel="stylesheet" href="style.css?v=273">
+<link rel="stylesheet" href="style.css?v=274">
 </head>
 <body>
 <div id="app">
@@ -99,6 +99,7 @@
           <button class="dock-toggle" data-win="char">角色</button>
           <button class="dock-toggle" data-win="dungeon">副本</button>
           <button class="dock-toggle" data-win="forge">強化</button>
+          <button class="dock-toggle" data-win="imbue">⚛ 賦予</button>
           <button class="dock-toggle" data-win="bag">背包</button>
           <button class="dock-toggle" data-win="skills">技能</button>
           <button class="dock-toggle" data-win="report">戰報</button>
@@ -132,6 +133,10 @@
   <div class="float-panel hidden" id="winForge" style="left:120px;top:130px">
     <div class="float-header"><span class="float-title">強化</span><button class="float-close" data-close="forge">×</button></div>
     <div class="float-body" id="tabForge"></div>
+  </div>
+  <div class="float-panel hidden" id="winImbue" style="left:140px;top:150px;width:560px">
+    <div class="float-header"><span class="float-title">魔力賦予</span><button class="float-close" data-close="imbue">×</button></div>
+    <div class="float-body" id="tabImbue"></div>
   </div>
   <div class="float-panel hidden" id="winBag" style="left:160px;top:170px">
     <div class="float-header"><span class="float-title">背包</span><button class="float-close" data-close="bag">×</button></div>
@@ -264,12 +269,12 @@
   </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/data.js?v=273"></script>
-<script src="js/state.js?v=273"></script>
-<script src="js/pixel.js?v=273"></script>
-<script src="js/procedural.js?v=273"></script>
-<script src="js/battle.js?v=273"></script>
-<script src="js/multiplayer.js?v=273"></script>
-<script src="js/game.js?v=273"></script>
+<script src="js/data.js?v=274"></script>
+<script src="js/state.js?v=274"></script>
+<script src="js/pixel.js?v=274"></script>
+<script src="js/procedural.js?v=274"></script>
+<script src="js/battle.js?v=274"></script>
+<script src="js/multiplayer.js?v=274"></script>
+<script src="js/game.js?v=274"></script>
 </body>
 </html>

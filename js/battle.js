@@ -1807,6 +1807,7 @@ function onDungeonClear() {
   let specialSSROnly = false;  // 特殊副本掉裝備時強制 SSR
   if (d.special === 'exp') { expMul = 3.5; goldMul = 0.3; equipDropChance = 0.008; specialSSROnly = true; }
   else if (d.special === 'mat') { expMul = 0.3; matMul = 6; equipDropChance = 0.008; specialSSROnly = true; }
+  else if (d.special === 'imbue') { expMul = 1.0; goldMul = 1.0; equipDropChance = 0; matMul = 0; }  // 魔力試煉境：只走魔力石 + 寶箱
   if (d.isRaid) { equipDropChance = 0.03; goldMul = 1.5; expMul = 1.5; }
 
   // 全域 buff 加成（卷軸）
@@ -1876,6 +1877,22 @@ function onDungeonClear() {
         bonusEquipMsg = `<span class="lg-drop">★★${firstTag} 獲得 [${pickedDef.rarity}] ${pickedDef.name}${affixDesc}</span>`;
         logLine(bonusEquipMsg, '');
         matMsgs.push(`★★${firstTag}${pickedDef.name}`);
+      }
+    }
+  }
+  // 魔力石掉落（魔力試煉境用）
+  if (d.magicStones) {
+    for (const [color, cfg] of Object.entries(d.magicStones)) {
+      if (Math.random() < (cfg.chance || 0)) {
+        const [lo, hi] = cfg.qty || [1, 1];
+        const qty = lo + Math.floor(Math.random() * (hi - lo + 1));
+        const stoneId = 'mstone-' + color;
+        const stoneDef = GAME_DATA.findMagicStone && GAME_DATA.findMagicStone(stoneId);
+        if (stoneDef) {
+          GAME_STATE.gainMagicStone(stoneId, qty, _battleCharId);
+          const icon = stoneDef.icon || '◆';
+          matMsgs.push(`${icon} ${stoneDef.name} +${qty}`);
+        }
       }
     }
   }
