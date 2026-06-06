@@ -615,8 +615,8 @@ const REGIONS = [
       // 高難度綜合本：給比經驗副本更多 XP+金幣 + 只掉魔力石和寶箱
       // 玩家用這裡的石頭去武器賦予介面強化武器
       { id: 'sp-imbue-trial', name: '魔力試煉境', cp: 150000, unlock: 'sp-exp-elite', requiredLv: 99,
-        special: 'imbue', baseTime: 60, expBase: 150000, goldBase: 50000,  // 金幣下修：賦予費 20 萬 / 場掉 5 萬 → 4 場才夠 1 次賦予
-        difficultyMul: 12, atkCoefOverride: 0.018,           // 難度比 神祠 (7.5) 多 60%
+        special: 'imbue', baseTime: 60, expBase: 300000, goldBase: 50000,  // 經驗 2x（15→30 萬）補償 HP 上修拉長戰鬥；金幣維持 5 萬 → 4 場才夠 1 次賦予
+        difficultyMul: 20, atkCoefOverride: 0.011,           // HP 上修：難度 12→20（+67%），atkCoef 同步下修保持原 BOSS 攻擊
         dropMats: [],  // 不掉一般材料
         // 魔力石掉落：1 場頂多 1 顆、顏色隨機
         // 巨型暫時不掉（之後新副本會開放）
