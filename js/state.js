@@ -1178,7 +1178,7 @@ function imbueMagicStone(weaponInstId, stoneId) {
   return { ok: true, slotIdx: slots.length - 1, effect, cost, color: stoneDef.color };
 }
 
-// 拆除一個賦予槽（石頭返還庫存，扣拆除費）
+// 拆除一個賦予槽（石頭直接銷毀，扣拆除費；要重洗就再丟新石頭）
 function removeImbueSlot(weaponInstId, color, slotIdx) {
   const bag = activeBag();
   if (!bag) return { ok: false, reason: '無 active 角色' };
@@ -1188,15 +1188,10 @@ function removeImbueSlot(weaponInstId, color, slotIdx) {
   if (!slots || slotIdx < 0 || slotIdx >= slots.length) return { ok: false, reason: '無效的槽位' };
   const cost = GAME_DATA.IMBUE_COSTS.remove || 0;
   if ((STATE.gold || 0) < cost) return { ok: false, reason: `拆除需 ${cost.toLocaleString()} 金幣` };
-  const removed = slots.splice(slotIdx, 1)[0];
+  slots.splice(slotIdx, 1);
   STATE.gold -= cost;
-  // 石頭返還庫存
-  if (removed && removed.stoneId) {
-    if (!bag.magicStones) bag.magicStones = {};
-    bag.magicStones[removed.stoneId] = (bag.magicStones[removed.stoneId] || 0) + 1;
-  }
   scheduleSave();
-  return { ok: true, returnedStoneId: removed.stoneId, cost };
+  return { ok: true, cost };
 }
 
 // 計算一件武器所有賦予效果的總和（給 effectiveStats 用）

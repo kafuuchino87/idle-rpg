@@ -3095,10 +3095,10 @@ function renderImbue() {
     slot.onclick = () => {
       const color = slot.dataset.color;
       const idx = parseInt(slot.dataset.idx, 10);
-      if (!confirm(`拆除這個賦予槽？\n石頭返還庫存、扣 ${GAME_DATA.IMBUE_COSTS.remove.toLocaleString()} 金幣（屬性會重抽）。`)) return;
+      if (!confirm(`拆除這個賦予槽？\n石頭直接銷毀（不返還），扣 ${GAME_DATA.IMBUE_COSTS.remove.toLocaleString()} 金幣。`)) return;
       const r = GAME_STATE.removeImbueSlot(weaponInstId, color, idx);
       if (!r.ok) { toast(r.reason, 'error'); return; }
-      toast(`已拆除 — 石頭返還庫存`, 'gold');
+      toast(`已拆除 — 石頭銷毀`, 'gold');
       renderImbue(); renderHud(); renderCharDetail();
     };
   });
