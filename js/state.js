@@ -68,7 +68,7 @@ function activeBag() {
 
 const SKILL_SLOTS = 5;
 
-const MAX_CHARACTERS = 4;
+const MAX_CHARACTERS = 6;
 
 function makeCharacterState(blueprintId, customName, slotIdx) {
   const bp = GAME_DATA.getCharacterBlueprint(blueprintId);
