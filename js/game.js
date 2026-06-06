@@ -2999,6 +2999,8 @@ function renderImbue() {
     atk: '攻擊力 %', skillDmg: '技能傷害 %', critDmg: '暴擊傷害 %',
     vsBoss: '對 BOSS %', crit: '暴擊率 %', dmgReduce: '減傷 %',
     def: '防禦 %', hp: '生命 %',
+    spd: '速度 %', cdReduce: 'CD 減 %', defPierce: '無視防禦 %',
+    maxMp: 'MP 上限 %',
   };
   const totalLines = Object.entries(totalEffect)
     .map(([k, v]) => `<span style="color:#ffd66e">${statName[k] || k}</span> <b>+${(v * 100).toFixed(1)}%</b>`)
@@ -3010,8 +3012,9 @@ function renderImbue() {
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
         為武器鑲嵌魔力石、賦予 % 屬性加成。每件武器 紅 / 藍 / 黃 各 10 槽、巨型 3 槽。<br>
         每顆石頭只 roll <b>1 條屬性</b>、上限 5%、屬性<b>完全隨機</b>。<br>
-        屬性池 8 種：攻擊 / 技能傷害 / 暴傷 / 對 BOSS / 暴擊 / 減傷 / 防禦 / 生命。<br>
-        三色機率一致 — 想堆出滿配武器要刷<b>大量</b>石頭。<br>
+        屬性池 12 種（涵蓋面板所有屬性）：攻擊 / 暴擊 / 暴傷 / 防禦 / 生命 / 減傷 /<br>
+        速度 / CD 減 / 對 BOSS / 技能傷害 / 無視防禦 / MP 上限。<br>
+        三色機率一致（每種 1/12 ≈ 8.3%） — 想堆出滿配武器要刷<b>大量</b>石頭。<br>
         巨型 3 槽：<span style="color:#888">🔒 目前無法獲得，之後新副本會開放。</span><br>
         魔力石從<b>魔力試煉境</b>掉落（1 場 1 顆、顏色隨機）— 副本入口在「副本 → 神窟區」。
       </div>

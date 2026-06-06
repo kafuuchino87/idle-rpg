@@ -907,16 +907,24 @@ const GEMS = (() => {
 // - 池子裡有玩家想要的（atk/skillDmg/critDmg）也有不太想要的（defPct/hpPct）
 // - 想堆出完美武器要刷很多顆石頭
 //
-// 8 種屬性池、全部上限 5%、紅藍黃機率完全均等（不加權）
+// 12 種屬性池（涵蓋面板所有屬性）、全部上限 5%、紅藍黃機率均等
 const IMBUE_STAT_POOL = [
+  // 攻擊組
   { stat: 'atk',       label: '攻擊力',     range: [0.01, 0.05] },
-  { stat: 'skillDmg',  label: '技能傷害',   range: [0.01, 0.05] },
-  { stat: 'critDmg',   label: '暴擊傷害',   range: [0.01, 0.05] },
-  { stat: 'vsBoss',    label: '對 BOSS',    range: [0.01, 0.05] },
   { stat: 'crit',      label: '暴擊率',     range: [0.01, 0.04] },
+  { stat: 'critDmg',   label: '暴擊傷害',   range: [0.01, 0.05] },
+  // 防禦組
+  { stat: 'def',       label: '防禦',       range: [0.01, 0.05] },
+  { stat: 'hp',        label: '生命',       range: [0.01, 0.05] },
   { stat: 'dmgReduce', label: '減傷',       range: [0.01, 0.04] },
-  { stat: 'def',       label: '防禦',       range: [0.01, 0.05] },  // 多數玩家不太想要的
-  { stat: 'hp',        label: '生命',       range: [0.01, 0.05] },  // 同上
+  // 機動組
+  { stat: 'spd',       label: '速度',       range: [0.01, 0.03] },  // 上限 5/10、給小一點
+  { stat: 'cdReduce',  label: 'CD 減',      range: [0.01, 0.03] },  // 上限 50%、給小一點
+  { stat: 'vsBoss',    label: '對 BOSS',    range: [0.01, 0.05] },
+  { stat: 'skillDmg',  label: '技能傷害',   range: [0.01, 0.05] },
+  { stat: 'defPierce', label: '無視防禦',   range: [0.01, 0.04] },  // 上限 95%
+  // 秘力組
+  { stat: 'maxMp',     label: 'MP 上限',    range: [0.01, 0.05] },  // 走 maxMpPct multiplier
 ];
 
 const MAGIC_STONES = {
