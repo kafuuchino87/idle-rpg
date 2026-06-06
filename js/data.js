@@ -124,6 +124,72 @@ const CHARACTERS = [
       { lv: 99, type: 'graduate' },
     ],
   },
+  // ============================================================================
+  // 璃安 — Rena 為原型的翠林之靈（弓系角色）
+  // ============================================================================
+  {
+    id: 'rean',
+    name: '璃安',
+    enName: 'Rean',
+    title: '翠林之靈',
+    weaponType: '翠玉弓',
+    role: '中距 / 雙形態（風舞 ↔ 神射）',
+    lore: '翠林深處千年沉睡的精靈，因古星之光甦醒。她攜弓而行，感知自然失衡之處——憤怒時，風暴自弓弦而生。一條路通往凡塵風舞，另一條飛向天境光神。',
+    palette: { skin: '#f4dfcf', hair: '#f5dc9a', cloth: '#a8d8a8', accent: '#7ee8a8' },
+    // 平衡：跟 月凜 / 雪羽 同等級
+    baseStats: { atk: 23, def: 10, hp: 190, spd: 1.10, crit: 0.13 },
+    paths: {
+      A: {
+        id: 'A', name: '風韻舞姬', tag: '多段風舞',
+        desc: '放下長弓改執雙扇，化身翠林的風暴具現。每一舞每一旋皆是利刃。',
+        tier2: { name: '風華舞姬', desc: '雙扇與風融為一體，舞步即殺戮。' },
+        tier3: { name: '風華絕舞', desc: '永恆的舞動如翠羽千舞無盡，敵人連倒下都來不及。' },
+      },
+      B: {
+        id: 'B', name: '光弓神使', tag: '長距神射',
+        desc: '弓弦上凝聚的不再只是風——是神之光。她聽見天境的召喚。',
+        tier2: { name: '翠林神使', desc: '神域翠光降臨弓身，箭矢化為神諭。' },
+        tier3: { name: '降臨光神', desc: '羽翼與神光全開，每箭都是神的審判。' },
+      },
+    },
+    unlocks: [
+      // 通用技能 (Lv 1 - 20)
+      { lv: 1,  type: 'skill',   pathAny: true, skill: 'verdant-shot' },        // 普攻
+      { lv: 1,  type: 'skill',   pathAny: true, skill: 'wind-arrow' },          // 單體
+      { lv: 5,  type: 'skill',   pathAny: true, skill: 'leaf-storm' },          // 多段 AOE
+      { lv: 10, type: 'passive', pathAny: true, passive: 'forest-blessing' },   // 攻速 + crit
+      { lv: 15, type: 'skill',   pathAny: true, skill: 'wind-veil' },           // 減傷 buff
+      { lv: 20, type: 'skill',   pathAny: true, skill: 'piercing-shot' },       // 單體必爆
+      { lv: 25, type: 'job',     tier: 1 },
+      // 一轉 Lv25 路線技
+      { lv: 25, type: 'skill', path: 'A', skill: 'whirlwind-slash' },           // A 連擊
+      { lv: 25, type: 'skill', path: 'B', skill: 'holy-pierce' },               // B 神聖單體
+      // Lv 35 路線被動 1
+      { lv: 35, type: 'passive', path: 'A', passive: 'wind-charm' },            // A 攻速
+      { lv: 35, type: 'passive', path: 'B', passive: 'sacred-grace' },          // B vsBoss
+      // Lv 40 通用：buff 技
+      { lv: 40, type: 'skill',   pathAny: true, skill: 'evergreen-aura' },
+      // Lv 45 路線技
+      { lv: 45, type: 'skill', path: 'A', skill: 'twin-fan-dance' },            // A AOE
+      { lv: 45, type: 'skill', path: 'B', skill: 'light-halo' },                // B 自治
+      { lv: 50, type: 'job',     tier: 2 },
+      // 二轉 Lv50
+      { lv: 50, type: 'skill', path: 'A', skill: 'tempest-bloom' },             // A 大 AOE
+      { lv: 50, type: 'skill', path: 'B', skill: 'divine-judgment' },           // B 對 BOSS
+      // Lv 60 路線被動 2
+      { lv: 60, type: 'passive', path: 'A', passive: 'twin-fan-art' },          // A 攻速+crit+技傷
+      { lv: 60, type: 'passive', path: 'B', passive: 'full-bloom' },            // B atk+hp+dmgReduce
+      // Lv 65 通用補給
+      { lv: 65, type: 'skill',   pathAny: true, skill: 'forest-vigor' },
+      { lv: 75, type: 'job',     tier: 3 },
+      // 三轉 Lv75 大招
+      { lv: 75, type: 'skill', path: 'A', skill: 'thousand-feather-dance' },    // A 終極
+      { lv: 75, type: 'skill', path: 'B', skill: 'oracle-arrow' },              // B 終極
+      // Lv 90 終極被動
+      { lv: 90, type: 'passive', pathAny: true, passive: 'verdant-soul' },
+      { lv: 99, type: 'graduate' },
+    ],
+  },
 ];
 
 // --------------------------------------------------------------------------
@@ -302,6 +368,90 @@ const SKILLS = {
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
+  // ============================================================================
+  // 璃安 — 弓系角色技能組
+  // ============================================================================
+  'verdant-shot': {
+    name: '翠葉射', tag: '普攻', kind: 'physical',
+    desc: '翠木長弓射出綠箭。',
+    mult: 1.0, cd: 0, isBasic: true,
+  },
+  'wind-arrow': {
+    name: '疾風箭', tag: '單體', kind: 'physical',
+    desc: '凝聚一發疾風利箭：300% 攻擊力強擊。CD 5s。',
+    mult: 3.0, cd: 5, mpCost: 90, costTier: 'light',
+  },
+  'leaf-storm': {
+    name: '落葉之嵐', tag: 'AOE 多段', kind: 'physical',
+    desc: '召喚旋風帶起落葉：5 段 × 80% AOE，共 400% 全體傷害。CD 6s。',
+    mult: [0.8, 0.8, 0.8, 0.8, 0.8], cd: 6, aoe: true, mpCost: 90, costTier: 'light',
+  },
+  'wind-veil': {
+    name: '風帷護身', tag: 'Buff', kind: 'self',
+    desc: '披上風之帷幕：受到傷害 -25%、攻擊速度 +30%，持續 8 秒。CD 14s。',
+    mult: 0, buff: { dmgReduce: 0.25, spdMul: 0.3, dur: 8 }, cd: 14, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'piercing-shot': {
+    name: '貫月射', tag: '單體必爆', kind: 'physical',
+    desc: '極致集中的一箭：450% 攻擊力、必爆。CD 8s。',
+    mult: 4.5, alwaysCrit: true, cd: 8, mpCost: 180, costTier: 'medium',
+  },
+  'evergreen-aura': {
+    name: '常綠之氣', tag: 'Buff', kind: 'self',
+    desc: '翠林之氣繚繞：攻擊力 +50%、暴擊 +15%，持續 8 秒。CD 14s。',
+    mult: 0, buff: { atk: 0.5, crit: 0.15, dur: 8 }, cd: 14, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'forest-vigor': {
+    name: '森之脈動', tag: '補給', kind: 'self',
+    desc: '森之脈動回血回藍：回 30% HP + 30% MP。CD 25s。',
+    mult: 0, heal: 0.30, restoreMp: 0.30, cd: 25, mpCost: 0, costTier: 'free',
+  },
+  // ─ A 路線：風韻舞姬 ─
+  'whirlwind-slash': {
+    name: '旋風斬', tag: '多段', kind: 'physical', path: 'A', requireTier: 1,
+    desc: '4 段風刃連擊：每段 180%，合計 720% 單體傷害。CD 9s。',
+    mult: [1.8, 1.8, 1.8, 1.8], cd: 9, mpCost: 180, costTier: 'medium',
+  },
+  'twin-fan-dance': {
+    name: '雙扇舞', tag: 'AOE 多段', kind: 'physical', path: 'A', requireTier: 1,
+    desc: '雙扇旋舞全場：5 段 × 150% AOE，合計 750%。CD 12s。',
+    mult: [1.5, 1.5, 1.5, 1.5, 1.5], cd: 12, aoe: true, mpCost: 180, costTier: 'medium',
+  },
+  'tempest-bloom': {
+    name: '風華絕舞', tag: '★ AOE 大招', kind: 'physical', path: 'A', requireTier: 2,
+    desc: '6 段範圍狂舞：每段 200% AOE，合計 1200%。CD 18s。',
+    mult: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0], cd: 18, aoe: true, mpCost: 270, costTier: 'heavy',
+  },
+  'thousand-feather-dance': {
+    name: '翠羽千舞', tag: '★大招★', kind: 'physical', path: 'A', requireTier: 3,
+    desc: '【終極奧義】十二段風暴：12 段 × 130% = 1560%，必爆 + 自身攻速 +200% 持續 8 秒。CD 25s。',
+    mult: [1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3],
+    alwaysCrit: true, buff: { spdMul: 2.0, dur: 8 },
+    cd: 25, mpCost: 270, costTier: 'heavy',
+  },
+  // ─ B 路線：光弓神使 ─
+  'holy-pierce': {
+    name: '聖光裂矢', tag: '單體神聖', kind: 'arcane', path: 'B', requireTier: 1,
+    desc: '凝聚神光的單體爆射：800% 攻擊力 + 對 BOSS +30%（合計 1040% vs BOSS）。CD 10s。',
+    mult: 8.0, vsBossBonus: 0.3, cd: 10, mpCost: 180, costTier: 'medium',
+  },
+  'light-halo': {
+    name: '光環庇護', tag: 'Buff / 治癒', kind: 'self', path: 'B', requireTier: 1,
+    desc: '神光庇護：回 30% maxHp + 減傷 25%（6 秒）。CD 22s。',
+    mult: 0, heal: 0.30, buff: { dmgReduce: 0.25, dur: 6 }, cd: 22, mpCost: 180, costTier: 'medium',
+  },
+  'divine-judgment': {
+    name: '神諭裁決', tag: '單體神聖', kind: 'arcane', path: 'B', requireTier: 2,
+    desc: '對單一目標 1200% 神聖傷害 + 對 BOSS +60%（合計 1920% vs BOSS）。CD 16s。',
+    mult: 12.0, vsBossBonus: 0.6, cd: 16, mpCost: 270, costTier: 'heavy',
+  },
+  'oracle-arrow': {
+    name: '神諭斷罪', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
+    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 30% 吸血。CD 25s。',
+    mult: 15.0, vsBossBonus: 1.0, alwaysCrit: true, lifesteal: 0.30,
+    cd: 25, mpCost: 270, costTier: 'heavy',
+  },
+
 };
 
 // --------------------------------------------------------------------------
@@ -322,6 +472,17 @@ const PASSIVES = {
   'last-stand':  { name: '背水之姫',   desc: 'HP < 40% 時，攻擊力 +50%、暴擊傷害 +30%（戰鬥中動態）。', apply: s => { s.lastStand = true; } },
   'angel-favor': { name: '神光庇護',   desc: 'HP 上限 +20%、減傷 +15%、暴擊傷害 +25%。',               apply: s => { s.hp *= 1.2; s.dmgReduce = (s.dmgReduce || 0) + 0.15; s.critDmg = (s.critDmg || 1.8) + 0.25; } },
   'mirror-soul': { name: '鏡之魂',     desc: '全屬性 +50%、技能傷害 +30%。',                            apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.skillDmg = (s.skillDmg || 0) + 0.3; } },
+
+  // ===== 璃安 被動 =====
+  'forest-blessing': { name: '森林祝福',  desc: '攻擊速度 +10%、暴擊 +5%。',                                apply: s => { s.spd *= 1.10; s.crit += 0.05; } },
+  // ─ A 路線（風韻舞姬 → 風華絕舞）：堆攻速 + crit + 技能傷
+  'wind-charm':      { name: '風韻',      desc: '攻擊速度 +30%、攻擊力 +10%。',                              apply: s => { s.spd *= 1.30; s.atk *= 1.10; } },
+  'twin-fan-art':    { name: '雙扇之術',  desc: '攻擊速度 +25%、暴擊率 +15%、技能傷害 +20%。',               apply: s => { s.spd *= 1.25; s.crit += 0.15; s.skillDmg = (s.skillDmg || 0) + 0.20; } },
+  // ─ B 路線（光弓神使 → 降臨光神）：堆 BOSS + 暴傷 + 生存
+  'sacred-grace':    { name: '神聖加持',  desc: '對 BOSS 傷害 +20%、暴擊傷害 +15%。',                        apply: s => { s.vsBoss = (s.vsBoss || 0) + 0.20; s.critDmg = (s.critDmg || 1.8) + 0.15; } },
+  'full-bloom':      { name: '滿開祝禱',  desc: '攻擊力 +20%、HP 上限 +20%、減傷 +10%。',                    apply: s => { s.atk *= 1.20; s.hp *= 1.20; s.dmgReduce = (s.dmgReduce || 0) + 0.10; } },
+  // 終極被動
+  'verdant-soul':    { name: '翠靈之魂',  desc: '全屬性 +50%、攻擊速度 +20%。',                              apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.spd *= 1.2; } },
 };
 
 // --------------------------------------------------------------------------
@@ -656,6 +817,11 @@ const RECIPES = [
   { id: 'craft-sr-mirror',   name: '星辰鏡',         target: 'eq-mirror-sr1',  cost: { gold: 4500, mats: { '星鋼': 25, '精鋼': 10 } }, requiredLv: 35 },
   { id: 'craft-ssr-mirror',  name: '月蝕真鏡',       target: 'eq-mirror-ssr1', cost: { gold: 18000, mats: { '神鋼': 30, '永晶': 10, '星鋼': 15 } }, requiredLv: 60 },
   { id: 'craft-ssr2-mirror', name: '月蝕·神煉鏡',    target: 'eq-mirror-ssr2', cost: { gold: 60000, mats: { '神鋼': 70, '永晶': 30 } }, requiredLv: 90 },
+  // 璃安弓製作配方（同階成本對齊）
+  { id: 'craft-r-bow',       name: '寒林弓',         target: 'eq-bow-r1',      cost: { gold: 1000, mats: { '精鋼': 15 } }, requiredLv: 15 },
+  { id: 'craft-sr-bow',      name: '月華弓',         target: 'eq-bow-sr1',     cost: { gold: 4500, mats: { '星鋼': 25, '精鋼': 10 } }, requiredLv: 35 },
+  { id: 'craft-ssr-bow',     name: '永光真弓',       target: 'eq-bow-ssr1',    cost: { gold: 18000, mats: { '神鋼': 30, '永晶': 10, '星鋼': 15 } }, requiredLv: 60 },
+  { id: 'craft-ssr2-bow',    name: '永光·神煉真弓',  target: 'eq-bow-ssr2',    cost: { gold: 60000, mats: { '神鋼': 70, '永晶': 30 } }, requiredLv: 90 },
   { id: 'craft-ssr2-head', name: '星辰·神煉冕',   target: 'eq-head-ssr2', cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
   { id: 'craft-ssr2-top',  name: '銀河·神煉戰袍', target: 'eq-top-ssr2',  cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
   { id: 'craft-ssr2-bot',  name: '永夜·神煉流袴', target: 'eq-bot-ssr2',  cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
@@ -1026,6 +1192,19 @@ const ITEMS = {
       fixed: {
         label: '夢淵星龍：攻擊 +(400+強化×40)、暴擊 +20%、暴傷 +90%、對王 +(40%+強化×2.5%)、技能傷害 +(40%+強化×2.5%)、減傷 +10%、無視防禦 +20%',
         effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
+      },
+    },
+    // ===== 璃安弓系武器（與月凜矛 / 雪羽鏡 同階對齊）=====
+    { id: 'eq-bow-prac',    slot: 'weapon', owner: 'rean', name: '練習弓',     rarity: 'N',   tier: 0, stats: { atk: 6 }, fixed: { label: '初心者護祐：基礎攻擊 +2', effect: { atk: 2 } } },
+    { id: 'eq-bow-r1',      slot: 'weapon', owner: 'rean', name: '寒林弓',     rarity: 'R',   tier: 1, setId: 'set-frost', stats: { atk: 25, crit: 0.02 }, fixed: { label: '寒霜弦：攻擊 +(12+強化×1.5)', effect: { atk: 'forge:12+1.5' } } },
+    { id: 'eq-bow-sr1',     slot: 'weapon', owner: 'rean', name: '月華弓',     rarity: 'SR',  tier: 2, setId: 'set-silvermoon', stats: { atk: 70, crit: 0.05 }, fixed: { label: '月華光輝：暴擊 +(5%+強化×0.8%)', effect: { crit: 'forge:0.05+0.008' } } },
+    { id: 'eq-bow-ssr1',    slot: 'weapon', owner: 'rean', name: '永光真弓',   rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 170, crit: 0.08, critDmg: 0.25 }, fixed: { label: '永光鋒芒：暴擊傷害 +(25%+強化×1.8%)', effect: { critDmg: 'forge:0.25+0.018' } } },
+    { id: 'eq-bow-ssr2',    slot: 'weapon', owner: 'rean', name: '永光·神煉真弓', rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 320, crit: 0.13, critDmg: 0.4 }, fixed: { label: '神煉永光：攻擊 +(45+強化×5)、暴擊 +4%', effect: { atk: 'forge:45+5', crit: 0.04 } } },
+    { id: 'eq-bow-ur1',     slot: 'weapon', owner: 'rean', name: '永光·神羽弓', rarity: 'UR', tier: 4,
+      stats: { atk: 600, crit: 0.20, critDmg: 0.6 },
+      fixed: {
+        label: '神羽永光：攻擊 +(150+強化×15)、暴擊 +10%、技能傷害 +20%、對 BOSS +15%',
+        effect: { atk: 'forge:150+15', crit: 0.10, skillDmg: 0.20, vsBoss: 0.15 },
       },
     },
     // ===== 戒指（純詞綴，無 stats / 無 fixed / 無 owner，N~SSR 製作取得，可用重抽券洗詞綴）=====
