@@ -3471,7 +3471,7 @@ function renderBag() {
       cell.innerHTML = `
         <div class="iname">${def.icon} ${def.name}</div>
         <div class="itag">${lock ? '🔒 未開放' : '魔力石'}</div>
-        <div class="qty" style="color:${glow}">${qty}</div>
+        <div class="qty" style="color:#000">${qty}</div>
       `;
       sGrid.appendChild(cell);
     }
