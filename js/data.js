@@ -618,13 +618,12 @@ const REGIONS = [
         special: 'imbue', baseTime: 60, expBase: 150000, goldBase: 200000,  // XP / 金幣比神祠 (50K/1.5K) 多 3x / 130x
         difficultyMul: 12, atkCoefOverride: 0.018,           // 難度比 神祠 (7.5) 多 60%
         dropMats: [],  // 不掉一般材料
-        // 魔力石掉落表（每次戰鬥獨立 roll）
-        // 巨型暫時不掉（之後新副本會開放） — 留註解別把表 disable 掉
-        magicStones: {
-          red:    { chance: 1.0, qty: [2, 5] },   // 必掉、2~5 顆
-          blue:   { chance: 1.0, qty: [2, 5] },   // 必掉
-          yellow: { chance: 1.0, qty: [2, 5] },   // 必掉
-          // mega:   { chance: 0.02, qty: [1, 1] },  // ← 預留註解、之後新副本開
+        // 魔力石掉落：1 場頂多 1 顆、顏色隨機
+        // 巨型暫時不掉（之後新副本會開放）
+        magicStoneDrop: {
+          chance: 1.0,                          // 必掉 1 顆（之後想壓難度可改 0.5）
+          colors: ['red', 'blue', 'yellow'],    // 隨機 1 色
+          qty: 1,
         },
         chestDropOverride: { divine: 0.08 },  // 8% 神格寶箱（補金幣的同時也給驚喜）
         enemies: ['魔力侍從', '結晶守衛'], boss: '魔力試煉主（神格・極）' },
@@ -908,7 +907,7 @@ const GEMS = (() => {
 // - 池子裡有玩家想要的（atk/skillDmg/critDmg）也有不太想要的（defPct/hpPct）
 // - 想堆出完美武器要刷很多顆石頭
 //
-// 8 種屬性池、全部上限 5%：
+// 8 種屬性池、全部上限 5%、紅藍黃機率完全均等（不加權）
 const IMBUE_STAT_POOL = [
   { stat: 'atk',       label: '攻擊力',     range: [0.01, 0.05] },
   { stat: 'skillDmg',  label: '技能傷害',   range: [0.01, 0.05] },
@@ -919,28 +918,22 @@ const IMBUE_STAT_POOL = [
   { stat: 'def',       label: '防禦',       range: [0.01, 0.05] },  // 多數玩家不太想要的
   { stat: 'hp',        label: '生命',       range: [0.01, 0.05] },  // 同上
 ];
-// 加權：專精屬性 4、其他 1 → 專精中獎率 4/(4+7) ≈ 36%
-const SPECIALTY_WEIGHT = 4;
-const OTHER_WEIGHT = 1;
 
 const MAGIC_STONES = {
   'mstone-red': {
     id: 'mstone-red', name: '紅魔力石', color: 'red', icon: '🔴',
-    label: '專精：攻擊力（約 36% 機率）',
-    desc: '蘊含烈火本能的赤紅結晶。攻擊力專精，但仍可能 roll 到其他屬性（含不需要的防禦 / 生命）。',
-    specialty: 'atk',
+    label: '紅色魔力結晶',
+    desc: '蘊含烈火本能的赤紅結晶。賦予時從 8 種屬性池子隨機抽 1 條（上限 5%）。',
   },
   'mstone-blue': {
     id: 'mstone-blue', name: '藍魔力石', color: 'blue', icon: '🔵',
-    label: '專精：技能傷害（約 36% 機率）',
-    desc: '深海回響般的蔚藍核心。技能傷害專精，但仍可能 roll 到其他屬性。',
-    specialty: 'skillDmg',
+    label: '藍色魔力結晶',
+    desc: '深海回響般的蔚藍核心。賦予時從 8 種屬性池子隨機抽 1 條（上限 5%）。',
   },
   'mstone-yellow': {
     id: 'mstone-yellow', name: '黃魔力石', color: 'yellow', icon: '🟡',
-    label: '專精：暴擊傷害（約 36% 機率）',
-    desc: '雷光凝練的金黃晶體。暴擊傷害專精，但仍可能 roll 到其他屬性。',
-    specialty: 'critDmg',
+    label: '黃色魔力結晶',
+    desc: '雷光凝練的金黃晶體。賦予時從 8 種屬性池子隨機抽 1 條（上限 5%）。',
   },
   'mstone-mega': {
     id: 'mstone-mega', name: '巨型魔力石', color: 'mega', icon: '💎',
@@ -963,20 +956,20 @@ const IMBUE_SLOT_CAPS = {
   mega:   3,
 };
 
-// 賦予花費（金幣）
+// 賦予花費（金幣）— 一次賦予 20 萬，相當昂貴
 const IMBUE_COSTS = {
-  red:    50_000,
-  blue:   50_000,
-  yellow: 50_000,
-  mega:   500_000,
-  remove: 200_000,  // 拆除單槽（石頭返還、保留庫存）
+  red:    200_000,
+  blue:   200_000,
+  yellow: 200_000,
+  mega:   2_000_000,
+  remove: 500_000,  // 拆除單槽（石頭返還、保留庫存）
 };
 
 // 取一顆魔力石 def
 function findMagicStone(id) { return MAGIC_STONES[id]; }
 
 // roll 出一顆石頭實際賦予的屬性
-// 紅藍黃：從 IMBUE_STAT_POOL 加權抽 1 條（專精屬性權重高、但不保證中）
+// 紅藍黃：從 IMBUE_STAT_POOL 均等隨機抽 1 條（三色機率完全一樣）
 // 巨型：固定 3 條主屬性同賦
 function rollImbueEffect(stoneId) {
   const def = MAGIC_STONES[stoneId];
@@ -990,21 +983,11 @@ function rollImbueEffect(stoneId) {
     }
     return result;
   }
-  // 紅藍黃：加權單抽
-  if (def.specialty) {
-    const weighted = IMBUE_STAT_POOL.map(p => ({
-      ...p,
-      weight: p.stat === def.specialty ? SPECIALTY_WEIGHT : OTHER_WEIGHT,
-    }));
-    const total = weighted.reduce((s, p) => s + p.weight, 0);
-    let roll = Math.random() * total;
-    for (const entry of weighted) {
-      roll -= entry.weight;
-      if (roll <= 0) {
-        const [lo, hi] = entry.range;
-        return { [entry.stat]: round(lo + Math.random() * (hi - lo)) };
-      }
-    }
+  // 紅藍黃：均等單抽
+  const pick = IMBUE_STAT_POOL[Math.floor(Math.random() * IMBUE_STAT_POOL.length)];
+  if (pick) {
+    const [lo, hi] = pick.range;
+    return { [pick.stat]: round(lo + Math.random() * (hi - lo)) };
   }
   return null;
 }

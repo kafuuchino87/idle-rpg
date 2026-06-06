@@ -1880,19 +1880,19 @@ function onDungeonClear() {
       }
     }
   }
-  // 魔力石掉落（魔力試煉境用）
-  if (d.magicStones) {
-    for (const [color, cfg] of Object.entries(d.magicStones)) {
-      if (Math.random() < (cfg.chance || 0)) {
-        const [lo, hi] = cfg.qty || [1, 1];
-        const qty = lo + Math.floor(Math.random() * (hi - lo + 1));
-        const stoneId = 'mstone-' + color;
-        const stoneDef = GAME_DATA.findMagicStone && GAME_DATA.findMagicStone(stoneId);
-        if (stoneDef) {
-          GAME_STATE.gainMagicStone(stoneId, qty, _battleCharId);
-          const icon = stoneDef.icon || '◆';
-          matMsgs.push(`${icon} ${stoneDef.name} +${qty}`);
-        }
+  // 魔力石掉落（魔力試煉境用）— 一場最多 1 顆、顏色隨機
+  if (d.magicStoneDrop) {
+    const cfg = d.magicStoneDrop;
+    if (Math.random() < (cfg.chance || 0)) {
+      const colors = cfg.colors || ['red', 'blue', 'yellow'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const qty = cfg.qty || 1;
+      const stoneId = 'mstone-' + color;
+      const stoneDef = GAME_DATA.findMagicStone && GAME_DATA.findMagicStone(stoneId);
+      if (stoneDef) {
+        GAME_STATE.gainMagicStone(stoneId, qty, _battleCharId);
+        const icon = stoneDef.icon || '◆';
+        matMsgs.push(`${icon} ${stoneDef.name} +${qty}`);
       }
     }
   }

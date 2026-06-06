@@ -3009,11 +3009,11 @@ function renderImbue() {
       <div style="color:var(--accent);font-weight:600;margin-bottom:4px">⚛ 魔力賦予系統</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.6">
         為武器鑲嵌魔力石、賦予 % 屬性加成。每件武器 紅 / 藍 / 黃 各 10 槽、巨型 3 槽。<br>
-        每顆石頭只 roll <b>1 條屬性</b>、上限 5%、但**屬性本身是隨機的** —<br>
-        紅石「專精」攻擊力（約 36% 機率），但仍可能洗到防禦、生命、減傷等不想要的；藍黃同理。<br>
-        要洗出滿配武器 → 必須**大量刷石頭**。<br>
+        每顆石頭只 roll <b>1 條屬性</b>、上限 5%、屬性<b>完全隨機</b>。<br>
+        屬性池 8 種：攻擊 / 技能傷害 / 暴傷 / 對 BOSS / 暴擊 / 減傷 / 防禦 / 生命。<br>
+        三色機率一致 — 想堆出滿配武器要刷<b>大量</b>石頭。<br>
         巨型 3 槽：<span style="color:#888">🔒 目前無法獲得，之後新副本會開放。</span><br>
-        魔力石從<b>魔力試煉境</b>掉落 — 副本入口在「副本 → 神窟區」。
+        魔力石從<b>魔力試煉境</b>掉落（1 場 1 顆、顏色隨機）— 副本入口在「副本 → 神窟區」。
       </div>
     </div>
     <div class="imbue-weapon" style="background:var(--bg2);padding:10px 12px;border-radius:6px;border:1px solid var(--line);margin-bottom:10px">
@@ -3442,6 +3442,39 @@ function renderBag() {
   if (Object.keys(_activeBag().materials).length === 0) matGrid.innerHTML = '<div style="color:var(--muted);font-size:11px">無</div>';
   matSec.appendChild(matGrid);
   root.appendChild(matSec);
+
+  // ===== 魔力石（賦予系統用）=====
+  const stones = _activeBag().magicStones || {};
+  const stoneEntries = Object.entries(stones).filter(([, q]) => q > 0);
+  if (stoneEntries.length > 0 || true) {  // 一律顯示（讓玩家知道有這分類）
+    const sSec = document.createElement('div');
+    sSec.className = 'bag-section';
+    sSec.innerHTML = `<h4>魔力石 <span style="color:var(--muted);font-size:10px;font-weight:400">在「⚛ 賦予」分頁鑲嵌到武器上</span></h4>`;
+    const sGrid = document.createElement('div');
+    sGrid.className = 'bag-grid';
+    // 固定列出 4 種（已知種類，未取得顯示 0）
+    const ALL_STONES = ['mstone-red', 'mstone-blue', 'mstone-yellow', 'mstone-mega'];
+    for (const stoneId of ALL_STONES) {
+      const def = GAME_DATA.findMagicStone && GAME_DATA.findMagicStone(stoneId);
+      if (!def) continue;
+      const qty = stones[stoneId] || 0;
+      const lock = def.notObtainable;
+      const COLOR_GLOW = { red: '#ff5e5e', blue: '#5e9eff', yellow: '#ffd05e', mega: '#c084ff' };
+      const glow = COLOR_GLOW[def.color] || '#888';
+      const cell = document.createElement('div');
+      cell.className = `bag-item ${qty > 0 ? 'SR' : 'N'}`;
+      cell.style.borderColor = glow;
+      cell.style.opacity = (qty === 0 && lock) ? '0.45' : (qty === 0 ? '0.65' : '1');
+      cell.innerHTML = `
+        <div class="iname">${def.icon} ${def.name}</div>
+        <div class="itag">${lock ? '🔒 未開放' : '魔力石'}</div>
+        <div class="qty" style="color:${glow}">${qty}</div>
+      `;
+      sGrid.appendChild(cell);
+    }
+    sSec.appendChild(sGrid);
+    root.appendChild(sSec);
+  }
 
   // ===== 寶箱 =====
   const chests = _activeBag().chests || {};
