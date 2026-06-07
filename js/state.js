@@ -1322,6 +1322,11 @@ function openChest(chestId) {
       gainPass(r.id, r.qty);
       const p = GAME_DATA.findPass(r.id);
       granted.push({ label: `${p ? p.name : r.id} ×${r.qty}`, kind: 'pass', rarity: p?.rarity || 'SSR' });
+    } else if (r.kind === 'magicstone') {
+      // 魔力石（賦予用）— 顯示顏色 icon + 名稱
+      gainMagicStone(r.id, r.qty || 1);
+      const s = GAME_DATA.findMagicStone(r.id);
+      granted.push({ label: `${s ? s.icon + ' ' + s.name : r.id} ×${r.qty || 1}`, kind: 'magicstone', color: s?.color, rarity: r.id === 'mstone-mega' ? 'UR' : 'SR' });
     }
   }
   return { ok: true, rewards: granted, chestName: GAME_DATA.findChest(chestId)?.name };
@@ -1334,7 +1339,7 @@ function openChestBatch(chestId, n) {
   const have = bag.chests?.[chestId] || 0;
   if (have < 1) return { ok: false, reason: '沒有此寶箱' };
   const actualN = Math.min(n, have);
-  const accum = { gold: 0, shard: 0, materials: {}, potions: {}, passes: {}, gems: [], equips: [] };
+  const accum = { gold: 0, shard: 0, materials: {}, potions: {}, passes: {}, gems: [], equips: [], magicStones: {} };
   let opened = 0;
   for (let i = 0; i < actualN; i++) {
     if (!consumeChest(chestId, 1)) break;
@@ -1346,6 +1351,7 @@ function openChestBatch(chestId, n) {
       else if (r.kind === 'material') { gainMaterial(r.name, r.qty); accum.materials[r.name] = (accum.materials[r.name] || 0) + r.qty; }
       else if (r.kind === 'potion') { gainPotion(r.id, r.qty); accum.potions[r.id] = (accum.potions[r.id] || 0) + r.qty; }
       else if (r.kind === 'pass') { gainPass(r.id, r.qty); accum.passes[r.id] = (accum.passes[r.id] || 0) + r.qty; }
+      else if (r.kind === 'magicstone') { gainMagicStone(r.id, r.qty || 1); accum.magicStones[r.id] = (accum.magicStones[r.id] || 0) + (r.qty || 1); }
       else if (r.kind === 'gem-random') {
         const [tMin, tMax] = r.tier;
         const pool = GAME_DATA.GEMS.filter(g => g.tier >= tMin && g.tier <= tMax);
@@ -1375,6 +1381,10 @@ function openChestBatch(chestId, n) {
   for (const [id, qty] of Object.entries(accum.passes)) {
     const p = GAME_DATA.findPass(id);
     granted.push({ label: `${p ? p.name : id} ×${qty}`, kind: 'pass', rarity: p?.rarity || 'SSR' });
+  }
+  for (const [id, qty] of Object.entries(accum.magicStones)) {
+    const s = GAME_DATA.findMagicStone(id);
+    granted.push({ label: `${s ? s.icon + ' ' + s.name : id} ×${qty}`, kind: 'magicstone', color: s?.color, rarity: id === 'mstone-mega' ? 'UR' : 'SR' });
   }
   const gemGroup = {};
   for (const g of accum.gems) {

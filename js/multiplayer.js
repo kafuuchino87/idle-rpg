@@ -336,7 +336,7 @@ function handleMessage(fromPeerId, data) {
         if (d && cs && (!d.requiredLv || cs.level >= d.requiredLv)) {
           // 無盡塔 fallback 路徑也要扣自己 1 張入場券（與 raid-launch 路徑一致）
           if (d.isEndless) {
-            const ok = GAME_STATE.consumePass('pass-endless', 1);
+            const ok = GAME_STATE.consumePass(d.passId || 'pass-endless', 1);
             if (!ok) {
               if (typeof toast === 'function') toast('你的入場券不足，無法跟進無盡塔', 'error');
               return;

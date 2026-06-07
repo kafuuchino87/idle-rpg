@@ -664,8 +664,44 @@ const REGIONS = [
           { label: '多人', value: '團隊累積傷害共享、每人各扣 1 張通行證', color: 'var(--accent)' },
         ],
         bossPortrait: 'assets/portraits/endless-boss.png',
+        passId: 'pass-endless',
         enemies: [],
         boss: '終焉鎧神 · 蝕痕' },
+      // ===== 暗影結晶塔（100M DPS 世代，依累積傷害領魔力石寶箱）=====
+      { id: 'endless-crystal', name: '暗影結晶塔 · 霸主試煉', cp: 1_500_000, unlock: 'raid-calamity', requiredLv: 99,
+        isEndless: true, baseTime: 30, timeLimit: 30,
+        expBase: 0, goldBase: 0,
+        passId: 'pass-crystal',
+        // BOSS 週期技「結晶崩斬」：每 5 秒一週期，最後 1.5 秒蓄力（紅光預警），週期到劈出 80% 最大生命一刀（受玩家減傷影響）
+        bossChargeSlash: { name: '結晶崩斬', interval: 5, chargeTime: 1.5, damagePct: 0.8 },
+        // 階梯校準：solo 100M DPS × 30s = 30 億 ≈ 階梯 III；IV/V 需 buff/組隊（團隊傷害累加）
+        damageTiers: [
+          { dmg:   600_000_000, label: 'I',   rewards: { chests: { 'chest-mana': 1 } } },
+          { dmg: 1_200_000_000, label: 'II',  rewards: { chests: { 'chest-mana': 1 } } },
+          { dmg: 2_400_000_000, label: 'III', rewards: { chests: { 'chest-mana': 1 } } },
+          { dmg: 4_000_000_000, label: 'IV',  rewards: { chests: { 'chest-mana': 2 } } },
+          { dmg: 6_000_000_000, label: 'V',   rewards: { chests: { 'chest-mana': 3 } } },
+        ],
+        lore: [
+          '暗影礦脈最深處，結晶霸主自億萬魔力石中甦醒。',
+          '它的鎧甲由魔力石凝成，每一次揮劍都震碎山岩。',
+          '時限三十秒 — 傾盡全力，看你能擊碎多少結晶。',
+        ],
+        warning: '時限 30 秒。BOSS 無血量上限，依累積傷害領取魔力石寶箱。多人連線時團隊傷害累加。入場需消耗 1 張「暗影結晶通行證」。',
+        rewards: [
+          { label: '時限', value: '30 秒（BOSS 無 HP 上限）', color: 'var(--accent)' },
+          { label: '入場', value: '消耗 1 張暗影結晶通行證', color: 'var(--shard)' },
+          { label: '階梯 I',   value: '6 億傷害 → 魔力石寶箱 ×1',  color: 'var(--muted)' },
+          { label: '階梯 II',  value: '12 億 → 魔力石寶箱 ×1', color: 'var(--hp-self)' },
+          { label: '階梯 III', value: '24 億 → 魔力石寶箱 ×1（solo 100M 標準線）', color: 'var(--exp)' },
+          { label: '階梯 IV',  value: '40 億 → 魔力石寶箱 ×2', color: 'var(--gold)' },
+          { label: '階梯 V',   value: '60 億 → 魔力石寶箱 ×3（需 buff/組隊）', color: 'var(--hp-enemy)' },
+          { label: '多人', value: '團隊累積傷害共享、每人各扣 1 張通行證', color: 'var(--accent)' },
+        ],
+        bossPortrait: 'assets/portraits/endless-crystal-boss.png',
+        bossPortraitTall: true,
+        enemies: [],
+        boss: '暗影結晶霸主' },
     ],
   },
   // ===== 襲擊戰（Lv 99 endgame，超級難）=====
@@ -945,14 +981,8 @@ const MAGIC_STONES = {
   },
   'mstone-mega': {
     id: 'mstone-mega', name: '巨型魔力石', color: 'mega', icon: '💎',
-    label: '綜合 · 三屬性同賦',
-    desc: '極稀有的奇蹟結晶。一次同賦攻擊、技能傷害、暴擊傷害三種屬性，數值高範圍。',
-    megaMain: {
-      atk: [0.08, 0.18],
-      skillDmg: [0.06, 0.14],
-      critDmg: [0.10, 0.25],
-    },
-    notObtainable: true,  // 暫時無法取得（之後新副本會開放）
+    label: '巨型 · 單屬性雙倍',
+    desc: '極稀有的巨型結晶。賦予方式同一般魔力石（隨機 1 條屬性），但數值為一般的兩倍（如攻擊 5%~10%）。暗影結晶塔極低機率產出。',
   },
 };
 
@@ -983,21 +1013,16 @@ function rollImbueEffect(stoneId) {
   const def = MAGIC_STONES[stoneId];
   if (!def) return null;
   const round = v => Math.round(v * 1000) / 1000;
-  // 巨型：固定 3 條
-  if (def.megaMain) {
-    const result = {};
-    for (const [stat, [lo, hi]] of Object.entries(def.megaMain)) {
-      result[stat] = round(lo + Math.random() * (hi - lo));
-    }
-    return result;
-  }
-  // 紅藍黃：均等單抽
+  // 均等從屬性池抽 1 條（紅藍黃機率完全一樣）
   const pick = IMBUE_STAT_POOL[Math.floor(Math.random() * IMBUE_STAT_POOL.length)];
-  if (pick) {
-    const [lo, hi] = pick.range;
-    return { [pick.stat]: round(lo + Math.random() * (hi - lo)) };
+  if (!pick) return null;
+  const [lo, hi] = pick.range;
+  // 巨型魔力石：同一條屬性，但數值為一般的兩倍（例：攻擊一般上限 5% → 巨型 5%~10% 隨機）
+  if (def.color === 'mega') {
+    return { [pick.stat]: round(hi + Math.random() * hi) };  // [hi, 2*hi]
   }
-  return null;
+  // 紅藍黃：一般上限（例：攻擊 1%~5%）
+  return { [pick.stat]: round(lo + Math.random() * (hi - lo)) };
 }
 
 // ===== 藥水 / 卷軸 =====
@@ -1062,6 +1087,11 @@ const PASSES = {
     desc: '進入「無盡塔 · 鏡之終焉」需消耗 1 張。寶箱低機率掉落。',
     dungeonId: 'endless-tower',
   },
+  'pass-crystal': {
+    id: 'pass-crystal', name: '暗影結晶通行證', rarity: 'SSR', icon: '◈',
+    desc: '進入「暗影結晶塔 · 霸主試煉」需消耗 1 張。金箱/神格箱低機率掉落。',
+    dungeonId: 'endless-crystal',
+  },
 };
 function findPass(id) { return PASSES[id]; }
 
@@ -1113,6 +1143,7 @@ const CHESTS = {
       { kind: 'gem-random', tier: [2, 3], weight: 7 },
       { kind: 'equip-rarity', rarity: 'SR', weight: 7 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 2 },  // 2%
+      { kind: 'pass', id: 'pass-crystal', min: 1, max: 1, weight: 2 },  // 2%
       { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 1.5 },  // 金箱 1.5%
     ],
   },
@@ -1132,7 +1163,20 @@ const CHESTS = {
       { kind: 'gem-random', tier: [3, 4], weight: 10 },
       { kind: 'equip-rarity', rarity: 'SSR', weight: 9 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 8 },  // 8%
+      { kind: 'pass', id: 'pass-crystal', min: 1, max: 1, weight: 8 },  // 8%
       { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 5 },  // 神箱 5%
+    ],
+  },
+  // 魔力石寶箱：暗影結晶塔專屬，每箱開出 1 顆魔力石（紅/藍/黃隨機，極低機率巨型）
+  'chest-mana': {
+    id: 'chest-mana', name: '魔力石寶箱', rarity: 'SR', color: '#b46cff',
+    desc: '暗影結晶塔的獎勵。每箱開出 1 顆魔力石（紅/藍/黃隨機），極低機率開出巨型魔力石。',
+    rolls: 1,
+    pool: [
+      { kind: 'magicstone', id: 'mstone-red',    weight: 33 },
+      { kind: 'magicstone', id: 'mstone-blue',   weight: 33 },
+      { kind: 'magicstone', id: 'mstone-yellow', weight: 33 },
+      { kind: 'magicstone', id: 'mstone-mega',   weight: 1 },  // ~1% 巨型
     ],
   },
 };

@@ -214,6 +214,13 @@ function buildWaves(dungeon) {
     boss.hp = Number.MAX_SAFE_INTEGER;
     boss.maxHp = Number.MAX_SAFE_INTEGER;
     boss.isEndlessBoss = true;
+    if (dungeon.bossPortrait) {
+      boss.portrait = dungeon.bossPortrait;            // 戰鬥卡顯示立繪
+      boss.portraitTall = !!dungeon.bossPortraitTall;  // 直幅圖 cover 填滿卡片
+    }
+    if (dungeon.bossChargeSlash) {
+      boss.chargeSlash = { ...dungeon.bossChargeSlash, timer: dungeon.bossChargeSlash.interval, charging: false };
+    }
     return [[boss]];
   }
   // 多階 BOSS RAID（skipMobs + bosses 陣列）：不出小怪，每階一波 BOSS
@@ -423,6 +430,7 @@ function tickBattle(dt) {
     if (BATTLE.enemy && BATTLE.enemy.isEndlessBoss) {
       const elapsed = 30 - BATTLE._endlessTimeLeft;
       BATTLE.enemy.atk = Math.floor(1500 + elapsed * 150);
+      if (BATTLE.enemy.chargeSlash) tickEndlessChargeSlash(BATTLE.enemy, dtSec);
     }
     if (BATTLE._endlessTimeLeft <= 0 && !BATTLE._cleared) {
       BATTLE._endlessTimeLeft = 0;
@@ -562,6 +570,37 @@ function tickBattle(dt) {
         }
       }
     }
+  }
+}
+
+// ===== 無盡塔 BOSS 週期蓄力斬（參考鏡夢拔刀斬）=====
+// 每 interval 秒一個週期：最後 chargeTime 秒進入蓄力姿態（boss-charging 紅光脈動 + 預警 log），
+// 週期結束劈出 damagePct 最大生命的一刀（受玩家減傷影響，開盾可大幅減免）。各客戶端各自處理自己的玩家。
+function tickEndlessChargeSlash(e, dtSec) {
+  const cs = e.chargeSlash;
+  if (!cs) return;
+  cs.timer -= dtSec;
+  // 剩 chargeTime 秒 → 進入蓄力姿態
+  if (!cs.charging && cs.timer <= cs.chargeTime) {
+    cs.charging = true;
+    e.openingState = 'active';  // 觸發 renderEnemyCards 的 boss-charging class
+    if (typeof logLine === 'function') {
+      logLine(`<span class="lg-fail">⚠ ${e.name} 高舉巨劍蓄力【${cs.name}】！${cs.chargeTime} 秒後劈出 ${Math.round(cs.damagePct * 100)}% 最大生命的一刀（開盾／減傷可大幅減免）</span>`, '');
+    }
+    if (typeof window.bossChargingStart === 'function') window.bossChargingStart(cs.chargeTime);
+  }
+  // 週期到 → 揮砍
+  if (cs.timer <= 0) {
+    cs.charging = false;
+    cs.timer = cs.interval;
+    e.openingState = null;
+    const reduce = Math.min(0.9, (BATTLE.player.dmgReduce || 0) + getBuffMod('dmgReduce'));
+    const dmg = Math.floor(BATTLE.player.maxHp * cs.damagePct * (1 - reduce));
+    BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+    if (typeof logLine === 'function') {
+      logLine(`<span class="lg-fail">✘【${cs.name}】${e.name} 巨劍劈下，造成 ${dmg.toLocaleString()} 傷害！</span>`, '');
+    }
+    if (typeof window.bossSlash === 'function') window.bossSlash(cs.name, dmg);
   }
 }
 
@@ -1756,6 +1795,14 @@ function onEndlessTimeUp() {
     if (r.shard) {
       GAME_STATE.gainShard(r.shard);
       granted.shard += r.shard;
+    }
+    if (r.chests) {
+      for (const [c, q] of Object.entries(r.chests)) {
+        GAME_STATE.gainChest(c, q, charId);
+        const ex = granted.chests.find(x => x.id === c);
+        if (ex) ex.qty += q;
+        else granted.chests.push({ id: c, qty: q });
+      }
     }
   }
 

@@ -743,17 +743,21 @@ function renderClearSummary() {
     const fmtM = (n) => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : Math.floor(n).toLocaleString();
     const grantedMats = (lc.endlessGranted && lc.endlessGranted.mats) || {};
     const grantedGems = (lc.endlessGranted && lc.endlessGranted.gems) || [];
+    const grantedChests = (lc.endlessGranted && lc.endlessGranted.chests) || [];
     const matHtmlE = Object.entries(grantedMats).map(([n, q]) =>
       `<span class="cs-mat" style="color:${TIER_COLOR[n] || 'var(--text)'}">${n} +${q}</span>`
     ).join('');
     const gemHtmlE = grantedGems.map(name => `<span class="cs-drop">💎 ${name}</span>`).join('');
+    const chestHtmlE = grantedChests.map(c => {
+      const cd = GAME_DATA.CHESTS[c.id];
+      return `<span class="cs-drop" style="color:${cd?.color || 'var(--accent)'}">📦 ${cd?.name || c.id} ×${c.qty}</span>`;
+    }).join('');
     body.innerHTML = `
       <span class="cs-name">${lc.dungeonName}</span>
       <span class="cs-time">30s ⏱</span>
       <span class="cs-dmg">累積 ${fmtM(lc.endlessTotalDmg || 0)}</span>
       <span class="cs-num">★ 階梯 ${lc.endlessTierLabel || '未達'}</span>
-      ${matHtmlE || gemHtmlE || '<span class="cs-mat" style="color:var(--muted)">未達階梯 I</span>'}
-      ${matHtmlE ? '' : ''}${gemHtmlE}
+      ${(matHtmlE + gemHtmlE + chestHtmlE) || '<span class="cs-mat" style="color:var(--muted)">未達階梯 I</span>'}
     `;
     renderBattleReport();
     return;
@@ -1840,9 +1844,11 @@ window.showRaidPreview = function(dungeonId) {
     }
     // 無盡塔：先檢查並扣入場券（早退失敗）
     if (d.isEndless) {
-      const ok = GAME_STATE.consumePass('pass-endless', 1);
+      const passId = d.passId || 'pass-endless';
+      const ok = GAME_STATE.consumePass(passId, 1);
       if (!ok) {
-        toast('入場券不足！從寶箱中可低機率掉落「虛無通行證」', 'error');
+        const passName = GAME_DATA.findPass(passId)?.name || '入場券';
+        toast(`入場券不足！從寶箱中可低機率掉落「${passName}」`, 'error');
         return;
       }
     }
@@ -4476,13 +4482,17 @@ window.showResultModal = function(lc) {
   } else if (lc.isEndless) {
     lootSection.style.display = '';
     const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
-    const g = lc.endlessGranted || { mats: {}, gems: [], shard: 0 };
+    const g = lc.endlessGranted || { mats: {}, gems: [], chests: [], shard: 0 };
     const matHtml = Object.entries(g.mats || {}).map(([n, q]) =>
       `<span class="result-loot-item" style="color:${TIER_COLOR[n] || 'var(--text)'}">${n} +${q}</span>`
     ).join('');
     const gemHtml = (g.gems || []).map(name => `<span class="result-loot-item">💎 ${name}</span>`).join('');
+    const chestHtmlG = (g.chests || []).map(c => {
+      const cd = GAME_DATA.CHESTS[c.id];
+      return `<span class="result-loot-item" style="color:${cd?.color || 'var(--accent)'}">📦 ${cd?.name || c.id} ×${c.qty}</span>`;
+    }).join('');
     const shardHtml = (g.shard > 0) ? `<span class="result-loot-item shard">魂晶 +${g.shard}</span>` : '';
-    lootEl.innerHTML = (shardHtml + matHtml + gemHtml) || '<span class="result-loot-item">未達階梯 I，無獎勵</span>';
+    lootEl.innerHTML = (shardHtml + matHtml + gemHtml + chestHtmlG) || '<span class="result-loot-item">未達階梯 I，無獎勵</span>';
   } else {
     lootSection.style.display = '';
     const TIER_COLOR = { '粗鋼': '#b0b0b0', '精鋼': '#5fa8ff', '星鋼': '#c084ff', '神鋼': '#ffb84d', '永晶': '#ff5e7a', '夢晶': '#ff8a3c' };
@@ -4888,7 +4898,7 @@ function hookMpCallbacks() {
       }
       // 無盡塔：guest 也要扣自己 1 張入場券（按設定「每人扣 1 張」）
       if (d.isEndless) {
-        const ok = GAME_STATE.consumePass('pass-endless', 1);
+        const ok = GAME_STATE.consumePass(d.passId || 'pass-endless', 1);
         if (!ok) {
           toast(`你的入場券不足，無法跟進無盡塔（房主已開戰）`, 'error');
           return;
