@@ -2929,8 +2929,10 @@ function renderDungeonList() {
       else if (d.special === 'forge') typeTag = '<span style="color:var(--gold);font-size:10px;margin-left:4px">強化</span>';
       else if (d.isRaid) typeTag = '<span style="color:var(--hp-enemy);font-size:10px;margin-left:4px">RAID</span>';
       else if (d.isEndless) {
-        const passCount = (cs && cs.bag && cs.bag.passes && cs.bag.passes['pass-endless']) || 0;
-        typeTag = `<span style="color:var(--accent);font-size:10px;margin-left:4px">✦ 通行證 ×${passCount}</span>`;
+        const passId = d.passId || 'pass-endless';
+        const passCount = (cs && cs.bag && cs.bag.passes && cs.bag.passes[passId]) || 0;
+        const passIcon = GAME_DATA.findPass(passId)?.icon || '✦';
+        typeTag = `<span style="color:var(--accent);font-size:10px;margin-left:4px">${passIcon} 通行證 ×${passCount}</span>`;
       }
       // Lv 99 顯示「需畢業」，其他顯示「需 LvN」
       const lvTag = d.requiredLv
