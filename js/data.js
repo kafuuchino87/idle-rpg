@@ -690,7 +690,7 @@ const REGIONS = [
           { label: '材料',   value: '神鋼 / 永晶 / 夢晶（35%）', color: 'var(--shard)' },
           { label: '魔法石', value: 'T3-T5 必掉', color: 'var(--hp-self)' },
           { label: '寶箱',   value: '金箱 20% / 神格箱 8%', color: 'var(--accent)' },
-          { label: 'UR 武器', value: '永夜·狐神矛系列（3% 機率）', color: 'var(--hp-enemy)' },
+          { label: 'UR 武器', value: '永夜·狐神矛 / 虛無真鏡 / 神羽弓（3% 機率，隨機角色）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-calamity.png',
         enemies: ['虛影侍從（災厄）', '夢魘碎片（災厄）', '鏡面碎魂（災厄）', '逆世執事（災厄）'],
@@ -716,7 +716,7 @@ const REGIONS = [
         // 通關必掉星淵材料；低機率掉永恆星辰；UR 武器只掉 ur2 系列（不掉 ur1）
         guaranteedMats: { '星淵碎片': [3, 5], '星龍鱗片': [2, 4] },
         bonusMats: [{ name: '永恆星辰', chance: 0.05, qty: [1, 1] }],
-        weaponDropOverride: ['eq-weap-ur2', 'eq-mirror-ur2'],  // 武器位掉落限定此清單
+        weaponDropOverride: ['eq-weap-ur2', 'eq-mirror-ur2', 'eq-bow-ur2'],  // 武器位掉落限定三角色 UR2 清單
         lore: [
           '星淵的封印崩裂於萬年沉睡之後。',
           '夜空中現出兩道光影 — 黑豹的咆哮與星龍的哀鳴。',
@@ -730,7 +730,7 @@ const REGIONS = [
           { label: '★ 星淵碎片', value: '必掉 ×3~5（UR 武器材料）', color: 'var(--shard)' },
           { label: '★ 星龍鱗片', value: '必掉 ×2~4（UR 武器材料）', color: 'var(--shard)' },
           { label: '★ 永恆星辰', value: '低機率掉落（極限強化用）', color: 'var(--hp-enemy)' },
-          { label: 'UR 武器', value: '星淵·噬月矛 / 星龍·夢淵鏡（2% 機率）', color: 'var(--hp-enemy)' },
+          { label: 'UR 武器', value: '星淵·噬月矛 / 星龍·夢淵鏡 / 星淵·穿宙神羽弓（2% 機率）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-dragon.png',  // 預覽用龍當代表
         enemies: [],
@@ -1320,10 +1320,18 @@ const ITEMS = {
     { id: 'eq-bow-ssr1',    slot: 'weapon', owner: 'rean', name: '永光真弓',   rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 170, crit: 0.08, critDmg: 0.25 }, fixed: { label: '永光鋒芒：暴擊傷害 +(25%+強化×1.8%)', effect: { critDmg: 'forge:0.25+0.018' } } },
     { id: 'eq-bow-ssr2',    slot: 'weapon', owner: 'rean', name: '永光·神煉真弓', rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 320, crit: 0.13, critDmg: 0.4 }, fixed: { label: '神煉永光：攻擊 +(45+強化×5)、暴擊 +4%', effect: { atk: 'forge:45+5', crit: 0.04 } } },
     { id: 'eq-bow-ur1',     slot: 'weapon', owner: 'rean', name: '永光·神羽弓', rarity: 'UR', tier: 4,
-      stats: { atk: 600, crit: 0.20, critDmg: 0.6 },
+      stats: { atk: 720, crit: 0.25, critDmg: 0.80 },
       fixed: {
-        label: '神羽永光：攻擊 +(150+強化×15)、暴擊 +10%、技能傷害 +20%、對 BOSS +15%',
-        effect: { atk: 'forge:150+15', crit: 0.10, skillDmg: 0.20, vsBoss: 0.15 },
+        label: '神羽永光：攻擊 +(160+強化×16)、暴擊 +10%、暴傷 +30%、對王 +(20%+強化×1.2%)、技能傷害 +(20%+強化×1.2%)',
+        effect: { atk: 'forge:160+16', crit: 0.10, critDmg: 0.30, vsBoss: 'forge:0.20+0.012', skillDmg: 'forge:0.20+0.012' },
+      },
+    },
+    // ===== 璃安星淵 UR 弓（雙影獵討專屬掉落，與月凜矛 / Eve 鏡 UR2 同階）=====
+    { id: 'eq-bow-ur2',     slot: 'weapon', owner: 'rean', name: '星淵·穿宙神羽弓', rarity: 'UR', tier: 5,
+      stats: { atk: 1500, crit: 0.35, critDmg: 1.20 },
+      fixed: {
+        label: '穿宙神羽：攻擊 +(400+強化×40)、暴擊 +20%、暴傷 +90%、對王 +(40%+強化×2.5%)、技能傷害 +(40%+強化×2.5%)、減傷 +10%、無視防禦 +20%',
+        effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
       },
     },
     // ===== 戒指（純詞綴，無 stats / 無 fixed / 無 owner，N~SSR 製作取得，可用重抽券洗詞綴）=====
@@ -1471,7 +1479,7 @@ const UR_GROWTH_COSTS = [
 const UR_GROWTH_MAX_STAGE = 10;
 // 判斷裝備是否可用 UR 武器成長
 function isUrGrowable(def) {
-  return def && (def.id === 'eq-weap-ur2' || def.id === 'eq-mirror-ur2');
+  return def && (def.id === 'eq-weap-ur2' || def.id === 'eq-mirror-ur2' || def.id === 'eq-bow-ur2');
 }
 function getUrGrowthCost(stage) {
   return UR_GROWTH_COSTS.find(c => c.stage === stage);
