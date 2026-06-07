@@ -1173,10 +1173,10 @@ const CHESTS = {
     desc: '暗影結晶塔的獎勵。每箱開出 1 顆魔力石（紅/藍/黃隨機），極低機率開出巨型魔力石。',
     rolls: 1,
     pool: [
-      { kind: 'magicstone', id: 'mstone-red',    weight: 33 },
-      { kind: 'magicstone', id: 'mstone-blue',   weight: 33 },
-      { kind: 'magicstone', id: 'mstone-yellow', weight: 33 },
-      { kind: 'magicstone', id: 'mstone-mega',   weight: 1 },  // ~1% 巨型
+      { kind: 'magicstone', id: 'mstone-red',    weight: 49 },
+      { kind: 'magicstone', id: 'mstone-blue',   weight: 49 },
+      { kind: 'magicstone', id: 'mstone-yellow', weight: 49 },
+      { kind: 'magicstone', id: 'mstone-mega',   weight: 3 },  // 3/150 = 2% 巨型
     ],
   },
 };
