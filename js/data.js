@@ -190,6 +190,72 @@ const CHARACTERS = [
       { lv: 99, type: 'graduate' },
     ],
   },
+  // ============================================================================
+  // 米菈 — PROJECT: PHOTON 的研究員，西方科技神格化角色（浮游砲系）
+  // ============================================================================
+  {
+    id: 'mira',
+    name: '米菈',
+    enName: 'Mira',
+    title: '光子研究員',
+    weaponType: '浮游砲',
+    role: '中遠距 / 雙形態（機械戰術 ↔ 神格昇華）',
+    lore: '災厄之後出生的天才研究員，破解上古「光子協議」。當代碼開始與她融合，她明白自己從來不是觀察者——她是「協議」本身。一條路操控光子化為武器，另一條讓自身昇華為神格。',
+    palette: { skin: '#f5e6d3', hair: '#e5e3e8', cloth: '#3a4a6c', accent: '#8aa8ff' },
+    // 偏向低 atk / 高 crit / 高 critDmg — 科學家風格精準打擊
+    baseStats: { atk: 21, def: 11, hp: 195, spd: 1.05, crit: 0.16 },
+    paths: {
+      A: {
+        id: 'A', name: '戰術神兵', tag: '無人機編隊',
+        desc: '將光子轉化為武器，操控無人機編隊與光子砲，成為人造神兵。',
+        tier2: { name: '光子指揮官', desc: '指揮整支機械艦隊，每次施法都是齊射轟炸。' },
+        tier3: { name: '光子戰神', desc: '滿天浮游砲環繞，已脫離人類，成為機械化神格。' },
+      },
+      B: {
+        id: 'B', name: '神格昇華', tag: '聖光神諭',
+        desc: '將自身肉體融入光子協議，成為神格化的存在，獲得翅膀與聖光治癒之力。',
+        tier2: { name: '翼觸天境', desc: '半透明翅膀展開，光子環抱身軀，神格化進展中。' },
+        tier3: { name: '光子聖母', desc: '三層光環、巨大羽翼，已是新時代的母神化身。' },
+      },
+    },
+    unlocks: [
+      // 通用技能 (Lv 1 - 20)
+      { lv: 1,  type: 'skill',   pathAny: true, skill: 'photon-shot' },         // 普攻
+      { lv: 1,  type: 'skill',   pathAny: true, skill: 'focus-cannon' },        // 單體
+      { lv: 5,  type: 'skill',   pathAny: true, skill: 'scatter-burst' },       // AOE 多段
+      { lv: 10, type: 'passive', pathAny: true, passive: 'precision-calib' },   // crit + critDmg
+      { lv: 15, type: 'skill',   pathAny: true, skill: 'force-field' },         // 減傷 buff
+      { lv: 20, type: 'skill',   pathAny: true, skill: 'quantum-pierce' },      // 必爆單體
+      { lv: 25, type: 'job',     tier: 1 },
+      // 一轉 Lv25 路線技
+      { lv: 25, type: 'skill', path: 'A', skill: 'tactical-drone' },            // A 召喚無人機
+      { lv: 25, type: 'skill', path: 'B', skill: 'sacred-light' },              // B AOE+治癒
+      // Lv 35 路線被動 1
+      { lv: 35, type: 'passive', path: 'A', passive: 'mech-sync' },             // A 召喚物+攻速
+      { lv: 35, type: 'passive', path: 'B', passive: 'divine-soaked' },         // B 治癒+減傷
+      // Lv 40 通用：強力 buff
+      { lv: 40, type: 'skill',   pathAny: true, skill: 'overload-protocol' },
+      // Lv 45 路線技
+      { lv: 45, type: 'skill', path: 'A', skill: 'missile-volley' },            // A AOE 齊射
+      { lv: 45, type: 'skill', path: 'B', skill: 'halo-shelter' },              // B 全隊護盾
+      { lv: 50, type: 'job',     tier: 2 },
+      // 二轉 Lv50
+      { lv: 50, type: 'skill', path: 'A', skill: 'annihilation-formation' },    // A 大召喚編隊
+      { lv: 50, type: 'skill', path: 'B', skill: 'judgment-pillar' },           // B 單體神聖
+      // Lv 60 路線被動 2
+      { lv: 60, type: 'passive', path: 'A', passive: 'firepower-dominance' },   // A atk+crit+召喚
+      { lv: 60, type: 'passive', path: 'B', passive: 'ether-grace' },           // B 暴傷+vsBoss
+      // Lv 65 通用補給
+      { lv: 65, type: 'skill',   pathAny: true, skill: 'protocol-reboot' },
+      { lv: 75, type: 'job',     tier: 3 },
+      // 三轉 Lv75 大招
+      { lv: 75, type: 'skill', path: 'A', skill: 'eternal-annihilation' },      // A 終極召喚
+      { lv: 75, type: 'skill', path: 'B', skill: 'photon-oracle' },             // B 終極神諭
+      // Lv 90 終極被動
+      { lv: 90, type: 'passive', pathAny: true, passive: 'photon-divinity' },
+      { lv: 99, type: 'graduate' },
+    ],
+  },
 ];
 
 // --------------------------------------------------------------------------
@@ -452,6 +518,91 @@ const SKILLS = {
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
+  // ============================================================================
+  // 米菈 — 浮游砲系角色技能組
+  // ============================================================================
+  'photon-shot': {
+    name: '光子彈', tag: '普攻', kind: 'arcane',
+    desc: '浮游砲射出光子彈丸。',
+    mult: 1.0, cd: 0, isBasic: true,
+  },
+  'focus-cannon': {
+    name: '聚光砲', tag: '單體', kind: 'arcane',
+    desc: '集中光子能量單體爆射：280% 攻擊力。CD 4s。',
+    mult: 2.8, cd: 4, mpCost: 90, costTier: 'light',
+  },
+  'scatter-burst': {
+    name: '散光彈', tag: 'AOE 多段', kind: 'arcane',
+    desc: '散射光子彈幕：5 段 × 80% AOE，合計 400% 全體傷害。CD 5s。',
+    mult: [0.8, 0.8, 0.8, 0.8, 0.8], cd: 5, aoe: true, mpCost: 90, costTier: 'light',
+  },
+  'force-field': {
+    name: '力場護罩', tag: 'Buff', kind: 'self',
+    desc: '展開光子力場：受到傷害 -25%，持續 8 秒。CD 14s。',
+    mult: 0, buff: { dmgReduce: 0.25, dur: 8 }, cd: 14, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'quantum-pierce': {
+    name: '量子穿刺', tag: '單體必爆', kind: 'arcane',
+    desc: '光子相位穿透裝甲：450% 攻擊力、必爆。CD 8s。',
+    mult: 4.5, alwaysCrit: true, cd: 8, mpCost: 180, costTier: 'medium',
+  },
+  'overload-protocol': {
+    name: '過載協議', tag: 'Buff', kind: 'self',
+    desc: '強制過載光子核心：攻擊力 +60%、暴擊 +15%，持續 8 秒。CD 15s。',
+    mult: 0, buff: { atk: 0.6, crit: 0.15, dur: 8 }, cd: 15, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'protocol-reboot': {
+    name: '協議重啟', tag: '補給', kind: 'self',
+    desc: '緊急重啟光子協議：回 20% HP + 20% MP。CD 25s。',
+    mult: 0, heal: 0.20, restoreMp: 0.20, cd: 25, mpCost: 0, costTier: 'free',
+  },
+  // ─ A 路線：戰術神兵 ─
+  'tactical-drone': {
+    name: '戰術無人機', tag: '召喚', kind: 'arcane', path: 'A', requireTier: 1,
+    desc: '召喚 3 架無人機協同作戰：即發 200% + 持續 4 秒每 0.5 秒攻擊（單次 70% × ~8 次 ≈ 560% 召喚），合計 ~760%。可暴擊，無敵人時暫停。CD 8s。',
+    mult: 2.0, summon: { dps: 0.7, dur: 4, interval: 0.5 }, cd: 8, mpCost: 180, costTier: 'medium',
+  },
+  'missile-volley': {
+    name: '飛彈齊射', tag: 'AOE 多段', kind: 'arcane', path: 'A', requireTier: 1,
+    desc: '6 枚追蹤光子飛彈：每枚 120% AOE，合計 720%。CD 10s。',
+    mult: [1.2, 1.2, 1.2, 1.2, 1.2, 1.2], cd: 10, aoe: true, mpCost: 180, costTier: 'medium',
+  },
+  'annihilation-formation': {
+    name: '殲滅編隊', tag: '★ AOE 召喚', kind: 'arcane', path: 'A', requireTier: 2,
+    desc: '6 架無人機殲滅編隊：即發 250% AOE + 持續 7 秒每 0.4 秒攻擊（單次 100% × ~17 次 ≈ 1750% 召喚），合計 ~2000% AOE。CD 16s。',
+    mult: 2.5, aoe: true, summon: { dps: 1.0, dur: 7, interval: 0.4 }, cd: 16, mpCost: 270, costTier: 'heavy',
+  },
+  'eternal-annihilation': {
+    name: '永恆滅殺編隊', tag: '★大招★', kind: 'arcane', path: 'A', requireTier: 3,
+    desc: '【終極奧義】12 架神兵編隊降臨：即發 600% AOE + 持續 10 秒每 0.3 秒攻擊（單次 150% × ~33 次 ≈ 4950% 召喚），合計 ~5550% AOE。施放後自身攻速 +100% 持續 10 秒。CD 30s。',
+    mult: 6.0, aoe: true, summon: { dps: 1.5, dur: 10, interval: 0.3 },
+    buff: { spdMul: 1.0, dur: 10 },
+    cd: 30, mpCost: 270, costTier: 'heavy',
+  },
+  // ─ B 路線：神格昇華 ─
+  'sacred-light': {
+    name: '聖光治癒', tag: '治療+AOE', kind: 'arcane', path: 'B', requireTier: 1,
+    desc: '聖光綻放：對全體 300% AOE + 自身與隊友各回復 15% 最大 HP。CD 8s。',
+    mult: 3.0, aoe: true, heal: 0.15, healAlly: true, cd: 8, mpCost: 180, costTier: 'medium',
+  },
+  'halo-shelter': {
+    name: '光環庇護', tag: '★護盾★', kind: 'self', path: 'B', requireTier: 1,
+    desc: '光環籠罩全隊：受到傷害 -30% 持續 10 秒、自身與隊友各回復 25% 最大 HP。CD 18s。',
+    mult: 0, buff: { dmgReduce: 0.3, dur: 10 }, heal: 0.25, healAlly: true,
+    cd: 18, isBuff: true, mpCost: 90, costTier: 'light',
+  },
+  'judgment-pillar': {
+    name: '審判光柱', tag: '單體神聖', kind: 'arcane', path: 'B', requireTier: 2,
+    desc: '從天而降的神聖光柱：1100% 攻擊力 + 對 BOSS +50%（合計 1650% vs BOSS）。CD 14s。',
+    mult: 11.0, vsBossBonus: 0.5, cd: 14, mpCost: 270, costTier: 'heavy',
+  },
+  'photon-oracle': {
+    name: '光子神諭', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
+    desc: '【終極奧義】光子協議全開：1800% 攻擊力 + 對 BOSS +80%（合計 3240% vs BOSS）+ 必爆 + 自身與隊友各回復 50% HP。CD 28s。',
+    mult: 18.0, vsBossBonus: 0.8, alwaysCrit: true, heal: 0.50, healAlly: true,
+    cd: 28, mpCost: 270, costTier: 'heavy',
+  },
+
 };
 
 // --------------------------------------------------------------------------
@@ -483,6 +634,17 @@ const PASSIVES = {
   'full-bloom':      { name: '滿開祝禱',  desc: '攻擊力 +20%、HP 上限 +20%、減傷 +10%。',                    apply: s => { s.atk *= 1.20; s.hp *= 1.20; s.dmgReduce = (s.dmgReduce || 0) + 0.10; } },
   // 終極被動
   'verdant-soul':    { name: '翠靈之魂',  desc: '全屬性 +50%、攻擊速度 +20%。',                              apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.spd *= 1.2; } },
+
+  // ===== 米菈 被動 =====
+  'precision-calib':     { name: '精準校準', desc: '暴擊率 +5%、暴擊傷害 +15%。',                              apply: s => { s.crit += 0.05; s.critDmg = (s.critDmg || 1.8) + 0.15; } },
+  // ─ A 路線（戰術神兵 → 光子戰神）：堆召喚物 + 攻擊
+  'mech-sync':           { name: '機械協同', desc: '召喚物傷害 +50%、攻擊速度 +10%。',                          apply: s => { s.summonMul = (s.summonMul || 1) * 1.5; s.spd *= 1.10; } },
+  'firepower-dominance': { name: '火力獨佔', desc: '攻擊力 +25%、暴擊率 +10%、召喚物傷害 +40%。',                apply: s => { s.atk *= 1.25; s.crit += 0.10; s.summonMul = (s.summonMul || 1) * 1.4; } },
+  // ─ B 路線（神格昇華 → 光子聖母）：治癒 + 對 BOSS + 暴傷
+  'divine-soaked':       { name: '神光浸潤', desc: '治癒效果 +40%、受到傷害 -10%。',                            apply: s => { s.healMul = (s.healMul || 1) * 1.4; s.dmgReduce = (s.dmgReduce || 0) + 0.10; } },
+  'ether-grace':         { name: '乙太恩典', desc: '對 BOSS 傷害 +20%、暴擊傷害 +20%。',                        apply: s => { s.vsBoss = (s.vsBoss || 0) + 0.20; s.critDmg = (s.critDmg || 1.8) + 0.20; } },
+  // 終極被動
+  'photon-divinity':     { name: '光子神格', desc: '全屬性 +50%、技能傷害 +20%。',                              apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.skillDmg = (s.skillDmg || 0) + 0.20; } },
 };
 
 // --------------------------------------------------------------------------
@@ -726,7 +888,7 @@ const REGIONS = [
           { label: '材料',   value: '神鋼 / 永晶 / 夢晶（35%）', color: 'var(--shard)' },
           { label: '魔法石', value: 'T3-T5 必掉', color: 'var(--hp-self)' },
           { label: '寶箱',   value: '金箱 20% / 神格箱 8%', color: 'var(--accent)' },
-          { label: 'UR 武器', value: '永夜·狐神矛 / 虛無真鏡 / 神羽弓（3% 機率，隨機角色）', color: 'var(--hp-enemy)' },
+          { label: 'UR 武器', value: '永夜·狐神矛 / 虛無真鏡 / 神羽弓 / 光子裁決砲（3% 機率，隨機角色）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-calamity.png',
         enemies: ['虛影侍從（災厄）', '夢魘碎片（災厄）', '鏡面碎魂（災厄）', '逆世執事（災厄）'],
@@ -752,7 +914,7 @@ const REGIONS = [
         // 通關必掉星淵材料；低機率掉永恆星辰；UR 武器只掉 ur2 系列（不掉 ur1）
         guaranteedMats: { '星淵碎片': [3, 5], '星龍鱗片': [2, 4] },
         bonusMats: [{ name: '永恆星辰', chance: 0.05, qty: [1, 1] }],
-        weaponDropOverride: ['eq-weap-ur2', 'eq-mirror-ur2', 'eq-bow-ur2'],  // 武器位掉落限定三角色 UR2 清單
+        weaponDropOverride: ['eq-weap-ur2', 'eq-mirror-ur2', 'eq-bow-ur2', 'eq-cannon-ur2'],  // 武器位掉落限定四角色 UR2 清單
         lore: [
           '星淵的封印崩裂於萬年沉睡之後。',
           '夜空中現出兩道光影 — 黑豹的咆哮與星龍的哀鳴。',
@@ -766,7 +928,7 @@ const REGIONS = [
           { label: '★ 星淵碎片', value: '必掉 ×3~5（UR 武器材料）', color: 'var(--shard)' },
           { label: '★ 星龍鱗片', value: '必掉 ×2~4（UR 武器材料）', color: 'var(--shard)' },
           { label: '★ 永恆星辰', value: '低機率掉落（極限強化用）', color: 'var(--hp-enemy)' },
-          { label: 'UR 武器', value: '星淵·噬月矛 / 星龍·夢淵鏡 / 星淵·穿宙神羽弓（2% 機率）', color: 'var(--hp-enemy)' },
+          { label: 'UR 武器', value: '星淵·噬月矛 / 星龍·夢淵鏡 / 穿宙神羽弓 / 光子神諭砲（2% 機率）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-dragon.png',  // 預覽用龍當代表
         enemies: [],
@@ -874,6 +1036,11 @@ const RECIPES = [
   { id: 'craft-sr-bow',      name: '月華弓',         target: 'eq-bow-sr1',     cost: { gold: 4500, mats: { '星鋼': 25, '精鋼': 10 } }, requiredLv: 35 },
   { id: 'craft-ssr-bow',     name: '永光真弓',       target: 'eq-bow-ssr1',    cost: { gold: 18000, mats: { '神鋼': 30, '永晶': 10, '星鋼': 15 } }, requiredLv: 60 },
   { id: 'craft-ssr2-bow',    name: '永光·神煉真弓',  target: 'eq-bow-ssr2',    cost: { gold: 60000, mats: { '神鋼': 70, '永晶': 30 } }, requiredLv: 90 },
+  // 米菈浮游砲製作配方（同階成本對齊）
+  { id: 'craft-r-cannon',    name: '寒鋼砲',         target: 'eq-cannon-r1',   cost: { gold: 1000, mats: { '精鋼': 15 } }, requiredLv: 15 },
+  { id: 'craft-sr-cannon',   name: '星輝砲',         target: 'eq-cannon-sr1',  cost: { gold: 4500, mats: { '星鋼': 25, '精鋼': 10 } }, requiredLv: 35 },
+  { id: 'craft-ssr-cannon',  name: '永光相位砲',     target: 'eq-cannon-ssr1', cost: { gold: 18000, mats: { '神鋼': 30, '永晶': 10, '星鋼': 15 } }, requiredLv: 60 },
+  { id: 'craft-ssr2-cannon', name: '永光·神煉相位砲', target: 'eq-cannon-ssr2', cost: { gold: 60000, mats: { '神鋼': 70, '永晶': 30 } }, requiredLv: 90 },
   { id: 'craft-ssr2-head', name: '星辰·神煉冕',   target: 'eq-head-ssr2', cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
   { id: 'craft-ssr2-top',  name: '銀河·神煉戰袍', target: 'eq-top-ssr2',  cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
   { id: 'craft-ssr2-bot',  name: '永夜·神煉流袴', target: 'eq-bot-ssr2',  cost: { gold: 50000, mats: { '神鋼': 60, '永晶': 25 } }, requiredLv: 90 },
@@ -1378,6 +1545,26 @@ const ITEMS = {
         effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
       },
     },
+    // ===== 米菈浮游砲系列（與月凜矛 / 雪羽鏡 / 璃安弓 同階對齊）=====
+    { id: 'eq-cannon-prac',  slot: 'weapon', owner: 'mira', name: '練習砲',         rarity: 'N',   tier: 0, stats: { atk: 6 }, fixed: { label: '初心者護祐：基礎攻擊 +2', effect: { atk: 2 } } },
+    { id: 'eq-cannon-r1',    slot: 'weapon', owner: 'mira', name: '寒鋼砲',         rarity: 'R',   tier: 1, setId: 'set-frost', stats: { atk: 25, crit: 0.02 }, fixed: { label: '寒霜光子：攻擊 +(12+強化×1.5)', effect: { atk: 'forge:12+1.5' } } },
+    { id: 'eq-cannon-sr1',   slot: 'weapon', owner: 'mira', name: '星輝砲',         rarity: 'SR',  tier: 2, setId: 'set-silvermoon', stats: { atk: 70, crit: 0.05 }, fixed: { label: '星輝光譜：暴擊 +(5%+強化×0.8%)', effect: { crit: 'forge:0.05+0.008' } } },
+    { id: 'eq-cannon-ssr1',  slot: 'weapon', owner: 'mira', name: '永光相位砲',     rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 170, crit: 0.08, critDmg: 0.25 }, fixed: { label: '相位破裂：暴擊傷害 +(25%+強化×1.8%)', effect: { critDmg: 'forge:0.25+0.018' } } },
+    { id: 'eq-cannon-ssr2',  slot: 'weapon', owner: 'mira', name: '永光·神煉相位砲', rarity: 'SSR', tier: 3, setId: 'set-eternalnight', stats: { atk: 320, crit: 0.13, critDmg: 0.4 }, fixed: { label: '神煉相位：攻擊 +(45+強化×5)、暴擊 +4%', effect: { atk: 'forge:45+5', crit: 0.04 } } },
+    { id: 'eq-cannon-ur1',   slot: 'weapon', owner: 'mira', name: '永夜·光子裁決砲', rarity: 'UR', tier: 4,
+      stats: { atk: 720, crit: 0.25, critDmg: 0.80 },
+      fixed: {
+        label: '光子裁決：攻擊 +(160+強化×16)、暴擊 +10%、暴傷 +30%、對王 +(20%+強化×1.2%)、技能傷害 +(20%+強化×1.2%)',
+        effect: { atk: 'forge:160+16', crit: 0.10, critDmg: 0.30, vsBoss: 'forge:0.20+0.012', skillDmg: 'forge:0.20+0.012' },
+      },
+    },
+    { id: 'eq-cannon-ur2',   slot: 'weapon', owner: 'mira', name: '星淵·光子神諭砲', rarity: 'UR', tier: 5,
+      stats: { atk: 1500, crit: 0.35, critDmg: 1.20 },
+      fixed: {
+        label: '光子神諭：攻擊 +(400+強化×40)、暴擊 +20%、暴傷 +90%、對王 +(40%+強化×2.5%)、技能傷害 +(40%+強化×2.5%)、減傷 +10%、無視防禦 +20%',
+        effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
+      },
+    },
     // ===== 戒指（純詞綴，無 stats / 無 fixed / 無 owner，N~SSR 製作取得，可用重抽券洗詞綴）=====
     { id: 'eq-ring-n',    slot: 'ring', name: '練習戒指', rarity: 'N',   tier: 0, stats: {} },
     { id: 'eq-ring-r',    slot: 'ring', name: '寒鐵戒指', rarity: 'R',   tier: 1, stats: {} },
@@ -1523,7 +1710,7 @@ const UR_GROWTH_COSTS = [
 const UR_GROWTH_MAX_STAGE = 10;
 // 判斷裝備是否可用 UR 武器成長
 function isUrGrowable(def) {
-  return def && (def.id === 'eq-weap-ur2' || def.id === 'eq-mirror-ur2' || def.id === 'eq-bow-ur2');
+  return def && (def.id === 'eq-weap-ur2' || def.id === 'eq-mirror-ur2' || def.id === 'eq-bow-ur2' || def.id === 'eq-cannon-ur2');
 }
 function getUrGrowthCost(stage) {
   return UR_GROWTH_COSTS.find(c => c.stage === stage);
