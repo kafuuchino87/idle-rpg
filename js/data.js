@@ -982,7 +982,7 @@ const MAGIC_STONES = {
   'mstone-mega': {
     id: 'mstone-mega', name: '巨型魔力石', color: 'mega', icon: '💎',
     label: '巨型 · 單屬性雙倍',
-    desc: '極稀有的巨型結晶。賦予方式同一般魔力石（隨機 1 條屬性），但數值為一般的兩倍（如攻擊 5%~10%）。暗影結晶塔極低機率產出。',
+    desc: '稀有的巨型結晶。賦予方式同一般魔力石（隨機 1 條屬性），但數值為一般的兩倍（如攻擊 5%~10%）。暗影結晶塔魔力石寶箱 5% 機率產出。',
   },
 };
 
@@ -1167,16 +1167,16 @@ const CHESTS = {
       { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 5 },  // 神箱 5%
     ],
   },
-  // 魔力石寶箱：暗影結晶塔專屬，每箱開出 1 顆魔力石（紅/藍/黃隨機，極低機率巨型）
+  // 魔力石寶箱：暗影結晶塔專屬，每箱開出 1 顆魔力石（紅/藍/黃隨機，5% 機率巨型）
   'chest-mana': {
     id: 'chest-mana', name: '魔力石寶箱', rarity: 'SR', color: '#b46cff',
-    desc: '暗影結晶塔的獎勵。每箱開出 1 顆魔力石（紅/藍/黃隨機），極低機率開出巨型魔力石。',
+    desc: '暗影結晶塔的獎勵。每箱開出 1 顆魔力石（紅/藍/黃隨機），5% 機率開出巨型魔力石。',
     rolls: 1,
     pool: [
-      { kind: 'magicstone', id: 'mstone-red',    weight: 49 },
-      { kind: 'magicstone', id: 'mstone-blue',   weight: 49 },
-      { kind: 'magicstone', id: 'mstone-yellow', weight: 49 },
-      { kind: 'magicstone', id: 'mstone-mega',   weight: 3 },  // 3/150 = 2% 巨型
+      { kind: 'magicstone', id: 'mstone-red',    weight: 19 },
+      { kind: 'magicstone', id: 'mstone-blue',   weight: 19 },
+      { kind: 'magicstone', id: 'mstone-yellow', weight: 19 },
+      { kind: 'magicstone', id: 'mstone-mega',   weight: 3 },  // 3/60 = 5% 巨型
     ],
   },
 };
