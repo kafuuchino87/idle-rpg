@@ -598,8 +598,8 @@ const SKILLS = {
   },
   'photon-oracle': {
     name: '光子神諭', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】光子協議全開：1800% 攻擊力 + 對 BOSS +80%（合計 3240% vs BOSS）+ 必爆 + 自身與隊友各回復 50% HP。CD 28s。',
-    mult: 18.0, vsBossBonus: 0.8, alwaysCrit: true, heal: 0.50, healAlly: true,
+    desc: '【終極奧義】光子協議全開：1800% 攻擊力 + 對 BOSS +80%（合計 3240% vs BOSS）+ 必爆 + 自身與隊友 MP 全滿（回 100%）。CD 28s。',
+    mult: 18.0, vsBossBonus: 0.8, alwaysCrit: true, restoreMp: 1.0, restoreMpAlly: true,
     cd: 28, mpCost: 270, costTier: 'heavy',
   },
 

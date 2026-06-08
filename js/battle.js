@@ -1483,6 +1483,18 @@ function castSkill(sk, sidHint) {
       if (window.floatDamage) floatDamage('+' + heal, 'heal');
     }
   }
+  // MP 回復（protocol-reboot / forest-vigor / photon-oracle 大招）
+  if (sk.restoreMp && sk.restoreMp > 0) {
+    const gain = Math.floor((BATTLE.player.maxMp || 0) * sk.restoreMp);
+    BATTLE.player.mp = Math.min(BATTLE.player.maxMp, (BATTLE.player.mp || 0) + gain);
+    if (gain > 0) {
+      logLine(`<span class="lg-clear">${sk.name} 回復 +${gain} MP</span>`, '');
+      if (window.floatDamage) floatDamage('+' + gain + ' MP', 'mp');
+    }
+    if (sk.restoreMpAlly && window.MP_API && window.MP_API.broadcastRestoreMpAlly) {
+      window.MP_API.broadcastRestoreMpAlly(sk.restoreMp, sk.name);
+    }
+  }
   // 神諭織縷觸發：每施放一個技能疊一層
   triggerCoreSet('on-skill-cast');
 }

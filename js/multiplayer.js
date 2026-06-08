@@ -196,6 +196,12 @@ function broadcastHealAlly(pct, skillName) {
   broadcast('heal-ally', { pct, name: skillName || '' });
 }
 
+// ===== 米菈光子神諭：廣播給隊友按各自 maxMp 計算回 MP =====
+function broadcastRestoreMpAlly(pct, skillName) {
+  if (MP.role === 'solo' || !MP.peer) return;
+  broadcast('restore-mp-ally', { pct, name: skillName || '' });
+}
+
 // ===== 廣播自己的傷害給所有隊友（雙向）=====
 // Host：對方累計到 damageStats 顯示，自己對敵人扣血是本地處理
 // Guest：Host 收到會幫忙扣敵人 HP（權威），其他 Guest 累計到 damageStats 顯示
@@ -599,6 +605,20 @@ function handleMessage(fromPeerId, data) {
       }
     }
   }
+  // 收到米菈光子神諭 → 按自己 maxMp 補 MP（同樣不補死人）
+  if (data.type === 'restore-mp-ally' && (MP.role === 'host' || MP.role === 'guest')) {
+    const b = window.BATTLE;
+    if (b && b.running && !b._dead && b.player && (b.player.maxMp || 0) > 0) {
+      const pct = Math.max(0, Math.min(1, data.payload.pct || 0));
+      const amount = Math.floor((b.player.maxMp || 0) * pct);
+      if (amount > 0) {
+        b.player.mp = Math.min(b.player.maxMp, (b.player.mp || 0) + amount);
+        const allyName = (MP.players[fromPeerId] && MP.players[fromPeerId].nickname) || '隊友';
+        if (typeof window.logLine === 'function') window.logLine(`<span class="lg-clear">${allyName} 的 ${data.payload.name || '神諭'} 補充你 +${amount} MP</span>`, '');
+        if (typeof window.floatDamage === 'function') window.floatDamage('+' + amount + ' MP', 'mp');
+      }
+    }
+  }
   // 收到隊友的傷害廣播 → 累計到自己 damageStats 給戰報顯示
   if (data.type === 'dmg-dealt' && (MP.role === 'host' || MP.role === 'guest')) {
     const b = window.BATTLE;
@@ -738,6 +758,7 @@ window.MP_API = {
   broadcastBattleState,
   broadcastEnemySync,
   broadcastHealAlly,
+  broadcastRestoreMpAlly,
   broadcastEndlessEnd,
   reportDamageDealt,
   sendTo,
