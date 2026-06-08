@@ -388,8 +388,8 @@ const SKILLS = {
   },
   'wind-veil': {
     name: '風帷護身', tag: 'Buff', kind: 'self',
-    desc: '披上風之帷幕：受到傷害 -25%、攻擊速度 +30%，持續 8 秒。CD 14s。',
-    mult: 0, buff: { dmgReduce: 0.25, spdMul: 0.3, dur: 8 }, cd: 14, isBuff: true, mpCost: 90, costTier: 'light',
+    desc: '披上風之帷幕：受到傷害 -25%，持續 8 秒。CD 14s。',
+    mult: 0, buff: { dmgReduce: 0.25, dur: 8 }, cd: 14, isBuff: true, mpCost: 90, costTier: 'light',
   },
   'piercing-shot': {
     name: '貫月射', tag: '單體必爆', kind: 'physical',
@@ -403,8 +403,8 @@ const SKILLS = {
   },
   'forest-vigor': {
     name: '森之脈動', tag: '補給', kind: 'self',
-    desc: '森之脈動回血回藍：回 30% HP + 30% MP。CD 25s。',
-    mult: 0, heal: 0.30, restoreMp: 0.30, cd: 25, mpCost: 0, costTier: 'free',
+    desc: '森之脈動回血回藍：回 20% HP + 20% MP。CD 25s。',
+    mult: 0, heal: 0.20, restoreMp: 0.20, cd: 25, mpCost: 0, costTier: 'free',
   },
   // ─ A 路線：風韻舞姬 ─
   'whirlwind-slash': {
@@ -424,16 +424,16 @@ const SKILLS = {
   },
   'thousand-feather-dance': {
     name: '翠羽千舞', tag: '★大招★', kind: 'physical', path: 'A', requireTier: 3,
-    desc: '【終極奧義】十二段風暴：12 段 × 130% = 1560%，必爆 + 自身攻速 +200% 持續 8 秒。CD 25s。',
+    desc: '【終極奧義】十二段風暴：12 段 × 130% = 1560%，必爆 + 自身攻速 +150% 持續 8 秒。CD 25s。',
     mult: [1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3, 1.3],
-    alwaysCrit: true, buff: { spdMul: 2.0, dur: 8 },
+    alwaysCrit: true, buff: { spdMul: 1.5, dur: 8 },
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
   // ─ B 路線：光弓神使 ─
   'holy-pierce': {
     name: '聖光裂矢', tag: '單體神聖', kind: 'arcane', path: 'B', requireTier: 1,
-    desc: '凝聚神光的單體爆射：800% 攻擊力 + 對 BOSS +30%（合計 1040% vs BOSS）。CD 10s。',
-    mult: 8.0, vsBossBonus: 0.3, cd: 10, mpCost: 180, costTier: 'medium',
+    desc: '凝聚神光的單體爆射：500% 攻擊力 + 對 BOSS +30%（合計 650% vs BOSS）。CD 10s。',
+    mult: 5.0, vsBossBonus: 0.3, cd: 10, mpCost: 180, costTier: 'medium',
   },
   'light-halo': {
     name: '光環庇護', tag: 'Buff / 治癒', kind: 'self', path: 'B', requireTier: 1,
@@ -447,8 +447,8 @@ const SKILLS = {
   },
   'oracle-arrow': {
     name: '神諭斷罪', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 30% 吸血。CD 25s。',
-    mult: 15.0, vsBossBonus: 1.0, alwaysCrit: true, lifesteal: 0.30,
+    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 15% 吸血。CD 25s。',
+    mult: 15.0, vsBossBonus: 1.0, alwaysCrit: true, lifesteal: 0.15,
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
