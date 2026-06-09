@@ -545,6 +545,13 @@ function handleMessage(fromPeerId, data) {
     const b = window.BATTLE;
     if (!b || !b.running || b._dead || !b.player) return;  // 戰鬥已結束 / 自己已死 → 忽略
     const id = data.payload.id;
+    // 緋月姬 薔薇詛咒雨 MP 扣除：獨立路徑，不扣 HP（提前 return）
+    if (id === 'curseRainMp') {
+      const mpLoss = Math.floor((b.player.maxMp || 0) * (data.payload.dmgPct || 0));
+      b.player.mp = Math.max(0, (b.player.mp || 0) - mpLoss);
+      if (typeof window.floatDamage === 'function') window.floatDamage('💧 MP -' + mpLoss, 'enemy');
+      return;
+    }
     const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0));
     if (dmg > 0) {
       b.player.hp = Math.max(0, b.player.hp - dmg);

@@ -3113,8 +3113,13 @@ function renderEnemyCards() {
         if (shFill) shFill.style.width = ((e.shield / e.shieldMax) * 100) + '%';
       }
       if (countdownEl) {
-        countdownEl.style.display = 'flex';
-        countdownEl.textContent = Math.max(0, e.shieldBreakTimer).toFixed(1);
+        // 緋月姬 Phase 2 不顯示倒數大字（避免破壞視覺）
+        if (e.bossSkillTag === 'crimson') {
+          countdownEl.style.display = 'none';
+        } else {
+          countdownEl.style.display = 'flex';
+          countdownEl.textContent = Math.max(0, e.shieldBreakTimer).toFixed(1);
+        }
       }
     } else {
       card.classList.remove('shield-active');
