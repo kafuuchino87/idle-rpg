@@ -1021,12 +1021,12 @@ const REGIONS = [
         },
         bosses: [
           // Phase 1 — 戀舞之鐮：純血戰熱身，無 shield 機制
-          { name: '戀舞 · 緋月姬', portrait: 'assets/portraits/raid-rosedance.png',
+          { name: '戀舞 · 緋月姬', portrait: 'assets/portraits/raid-bloodscythe-art.png',
             portraitTall: true,
             hpOverride: 8_000_000_000,   // 80 億 HP
           },
           // Phase 2 — 血咒覺醒：千年血契護盾即死（10 秒內不破則全隊扣 60% maxHP）
-          { name: '血咒 · 緋月姬', portrait: 'assets/portraits/raid-bloodcurse.png',
+          { name: '血咒 · 緋月姬', portrait: 'assets/portraits/raid-bloodcurse-art.png',
             portraitTall: true,
             hpMul: 1.5, atkMul: 1.3,
             shield: { firstAt: 5, interval: 35, hpFixed: 20_000_000, breakTime: 10 } },
@@ -1055,7 +1055,7 @@ const REGIONS = [
           { label: '✿ 罪薔之心', value: '10% 機率（罪薔薇系材料）', color: 'var(--hp-enemy)' },
           { label: '★★ UR 戒指', value: '首通必掉「緋月血契」、之後 8% 機率（處決效果）', color: 'var(--hp-enemy)' },
         ],
-        bossPortrait: 'assets/portraits/raid-rosedance.png',
+        bossPortrait: 'assets/portraits/raid-bloodscythe-art.png',
         enemies: [],
         boss: '緋月姬' },
     ],
