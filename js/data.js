@@ -1034,7 +1034,7 @@ const REGIONS = [
               newHp: 50_000_000_000,       // 補滿至 500億
               atkMul: 1.3,
               ragePhrase: '「啊啊──！還不夠！讓我再聞一次那血的味道！」',
-              shield: { firstAt: 5, interval: 35, hpFixed: 20_000_000, breakTime: 10 },
+              shield: { firstAt: 5, interval: 15, hpFixed: 500_000_000, breakTime: 10 },
             },
           },
         ],
@@ -1058,7 +1058,7 @@ const REGIONS = [
           '每當薔薇花瓣飄落，她便會迎接闖入者——以為那是她等待的人歸來。',
           '她不認得你，但你的血液，讓她想起了那位再也不會回來的人。',
         ],
-        warning: '此為雙階 BOSS 副本（戀舞 → 血咒）。Phase 2 啟動「千年血契」護盾，10 秒內不破則全隊扣 60% maxHP。建議三人團 + 補師。',
+        warning: '此為雙階 BOSS 副本（戀舞 → 血咒）。Phase 2 每 15 秒啟動「千年血契」護盾（5 億 HP），10 秒內不破則全隊扣 60% maxHP。建議三人團 + 高 DPS 配置。',
         rewards: [
           { label: '經驗值', value: '80,000', color: 'var(--exp)' },
           { label: '金幣',   value: '130,000', color: 'var(--gold)' },
