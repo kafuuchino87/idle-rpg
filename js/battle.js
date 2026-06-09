@@ -469,6 +469,12 @@ function tickBattle(dt) {
   if (!Number.isFinite(BATTLE.player.hp)) BATTLE.player.hp = 0;
   if (!Number.isFinite(BATTLE.player.mp)) BATTLE.player.mp = 0;
   if (BATTLE.enemy && !Number.isFinite(BATTLE.enemy.hp)) BATTLE.enemy.hp = 0;
+  // ⚠️ 測試用：副本 testNoKill = true 時玩家永遠死不了（clamp HP >= 1）
+  const _testD = GAME_DATA.getDungeon(BATTLE.dungeonId);
+  if (_testD && _testD.testNoKill && BATTLE.player.hp < 1) {
+    BATTLE.player.hp = 1;
+    BATTLE._dead = false;  // 即便已被標記也復活
+  }
   // 凍結倒數
   if (BATTLE.freezes > 0) BATTLE.freezes -= dtSec;
 
