@@ -158,6 +158,9 @@ function startBattle(dungeonId, charId) {
   BATTLE.mirrorBoss = null;     // 幻夢之主技能排程狀態（spawnNextWave 觸發時 init）
   BATTLE.bossDying = false;     // BOSS 死亡動畫狀態（鎖血 1、暫停一切）
   BATTLE.bossDyingTimer = 0;
+  BATTLE.bossRaging = false;    // 血鐮緋月姬爆走變形狀態（鎖血、暫停一切）
+  BATTLE.bossRagingTimer = 0;
+  BATTLE.bossRagingPending = null;  // 爆走結束後要套用的 phaseTransition 設定
   // 快取已裝戒指的觸發效果（procId / proc 來自戒指 def）
   BATTLE.ringProcs = (() => {
     const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0, executeThreshold: 0, executeBonus: 0 };
@@ -378,6 +381,7 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
   }
   if (bossConfig?.portrait) e.portrait = bossConfig.portrait;
   if (bossConfig?.portraitTall) e.portraitTall = true;
+  if (bossConfig?.phaseTransition) e.phaseTransition = bossConfig.phaseTransition;
   // 開場拔刀斬：戰鬥開始時 BOSS 進入蓄力姿態，凝聚特大護盾
   if (bossConfig?.openingAttack) {
     e.openingAttack = bossConfig.openingAttack;
@@ -475,6 +479,14 @@ function tickBattle(dt) {
       // guest：等 host enemy-sync 帶 cleared=true 觸發 onDungeonClear
     }
     return;  // 死亡動畫期間暫停一切 — 不跑技能 / 攻擊 / 護盾 / regen
+  }
+  // 血鐮緋月姬爆走變形倒數（HP 鎖在閾值，3 秒後套用 Phase 2）
+  if (BATTLE.bossRaging) {
+    BATTLE.bossRagingTimer -= dtSec;
+    if (BATTLE.bossRagingTimer <= 0) {
+      applyBossRageTransition();
+    }
+    return;  // 爆走期間暫停一切
   }
   // BOSS 護盾即死機制（雙影獵討的 shieldConfig）
   tickBossShield(dtSec);
@@ -1116,6 +1128,47 @@ function mirrorBossDamageHook(rawDmg) {
   return rawDmg;
 }
 
+// 血鐮緋月姬：HP 到閾值時觸發爆走變形（鎖血、3 秒動畫、套用 Phase 2 設定）
+function enterBossRageTransition(pt) {
+  if (!BATTLE.enemy || BATTLE.bossRaging || BATTLE.enemy._transitioned) return;
+  BATTLE.enemy.hp = pt.atHp;  // 鎖血在閾值
+  BATTLE.bossRaging = true;
+  BATTLE.bossRagingTimer = 3.0;
+  BATTLE.bossRagingPending = pt;
+  // 清掉執行中的招式 / DoT / 護盾
+  BATTLE.dots = [];
+  BATTLE.summons = [];
+  if (BATTLE.enemy.shield) { BATTLE.enemy.shield = 0; BATTLE.enemy.shieldMax = 0; }
+  logLine(`<span class="lg-skill">★ ${BATTLE.enemy.name}：${pt.ragePhrase || '「血咒覺醒——」'}</span>`, '');
+  if (typeof window.bossRageStart === 'function') window.bossRageStart({ pending: pt });
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('boss-rage', { dungeonId: BATTLE.dungeonId, pt });
+  }
+}
+
+function applyBossRageTransition() {
+  const pt = BATTLE.bossRagingPending;
+  BATTLE.bossRaging = false;
+  BATTLE.bossRagingTimer = 0;
+  BATTLE.bossRagingPending = null;
+  if (!BATTLE.enemy || !pt) return;
+  // 套用 Phase 2 設定：補滿 HP、改名、改立繪、加攻擊、加護盾配置
+  BATTLE.enemy.name = pt.newName || BATTLE.enemy.name;
+  BATTLE.enemy.portrait = pt.newPortrait || BATTLE.enemy.portrait;
+  BATTLE.enemy.maxHp = pt.newHp || BATTLE.enemy.maxHp;
+  BATTLE.enemy.hp = pt.newHp || BATTLE.enemy.hp;
+  if (pt.atkMul) BATTLE.enemy.atk = Math.floor(BATTLE.enemy.atk * pt.atkMul);
+  if (pt.shield) {
+    BATTLE.enemy.shieldConfig = pt.shield;
+    BATTLE.enemy.shieldTimer = pt.shield.firstAt || 0;
+    BATTLE.enemy.shield = 0; BATTLE.enemy.shieldMax = 0;
+    BATTLE.enemy.shieldBreakTimer = 0;
+  }
+  BATTLE.enemy._transitioned = true;  // 防止重複觸發
+  if (typeof window.bossRageEnd === 'function') window.bossRageEnd();
+  logLine(`<span class="lg-clear">★ ${BATTLE.enemy.name} 覺醒！血量回滿至 ${(pt.newHp/1e8).toFixed(0)}億，攻擊力上升！</span>`, '');
+}
+
 // 鏡夢縛魂：BOSS 死亡動畫進場
 // HP 鎖在 1，暫停所有技能、玩家攻擊、BOSS 攻擊
 // 3 秒後 hp → 0、onEnemyDown → onDungeonClear
@@ -1604,6 +1657,13 @@ function applyDamage(dmg, isCrit) {
     }
   } else if (actualDmg > 0) {
     BATTLE.enemy.hp -= actualDmg;
+  }
+  // 血鐮緋月姬：HP 跌到閾值時觸發爆走變形（只 host / solo 觸發）
+  if (BATTLE.enemy.phaseTransition && !BATTLE.enemy._transitioned && BATTLE._mpMode !== 'guest') {
+    const pt = BATTLE.enemy.phaseTransition;
+    if (BATTLE.enemy.hp <= pt.atHp) {
+      enterBossRageTransition(pt);
+    }
   }
   // 統計用原始傷害（玩家輸出表）
   trackDamage(rawDmg, BATTLE._activeSkillId, isCrit);

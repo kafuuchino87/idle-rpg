@@ -2312,6 +2312,43 @@ window.bossDeathStart = function() {
   setTimeout(() => flashFullscreen('rgba(255, 220, 230, 0.5)', 800), 1400);
 };
 
+// ── 血鐮緋月姬爆走變形動畫（HP 鎖在閾值、3 秒、然後套用 Phase 2）──
+// 視覺序列：紅光閃 → BOSS 卡狂震 → Phase 2 立繪淡入 → 紅光收尾
+window.bossRageStart = function(info) {
+  const card = document.querySelector('.enemy-card');
+  if (card) {
+    card.classList.add('boss-raging');
+    // 1.5 秒後切立繪
+    if (info && info.pending && info.pending.newPortrait) {
+      setTimeout(() => {
+        const img = card.querySelector('img');
+        if (img) {
+          img.style.transition = 'opacity 0.6s ease';
+          img.style.opacity = '0';
+          setTimeout(() => {
+            img.src = info.pending.newPortrait;
+            img.style.opacity = '1';
+          }, 600);
+        }
+      }, 1500);
+    }
+  }
+  // 螢幕紅光連續閃 3 次（殺氣噴發）
+  flashFullscreen('rgba(255, 30, 70, 0.55)', 500);
+  setTimeout(() => flashFullscreen('rgba(255, 50, 90, 0.45)', 600), 900);
+  setTimeout(() => flashFullscreen('rgba(255, 80, 120, 0.35)', 700), 1900);
+};
+
+window.bossRageEnd = function() {
+  const card = document.querySelector('.enemy-card');
+  if (card) {
+    card.classList.remove('boss-raging');
+    // 短暫 power-up flash 標記覺醒完成
+    card.classList.add('boss-awakened');
+    setTimeout(() => card.classList.remove('boss-awakened'), 1200);
+  }
+};
+
 // ── 戰鬥結束清除所有 BOSS 招式殘留視覺（class / 浮層 / 元素）──
 // 在 stopBattle / onBattleFail / onDungeonClear 後呼叫
 window.cleanupMirrorAnims = function() {

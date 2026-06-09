@@ -1020,16 +1020,21 @@ const REGIONS = [
           ],
         },
         bosses: [
-          // Phase 1 — 戀舞之鐮：純血戰熱身，無 shield 機制
+          // 單一 BOSS + 中途爆走變形機制（HP 鎖在閾值 → 爆走動畫 → 補滿 + 變身）
+          // Phase 1（戀舞之鐮）→ HP 200億；剩 50億 觸發爆走 → Phase 2（血咒覺醒）500億 + atk×1.3 + 護盾即死
           { name: '戀舞 · 緋月姬', portrait: 'assets/portraits/raid-bloodscythe-art.png',
             portraitTall: true,
-            hpOverride: 8_000_000_000,   // 80 億 HP
+            hpOverride: 20_000_000_000,  // 200億 HP
+            phaseTransition: {
+              atHp: 5_000_000_000,         // 50億 觸發爆走
+              newName: '血咒 · 緋月姬',
+              newPortrait: 'assets/portraits/raid-bloodcurse-art.png',
+              newHp: 50_000_000_000,       // 補滿至 500億
+              atkMul: 1.3,
+              ragePhrase: '「啊啊──！還不夠！讓我再聞一次那血的味道！」',
+              shield: { firstAt: 5, interval: 35, hpFixed: 20_000_000, breakTime: 10 },
+            },
           },
-          // Phase 2 — 血咒覺醒：千年血契護盾即死（10 秒內不破則全隊扣 60% maxHP）
-          { name: '血咒 · 緋月姬', portrait: 'assets/portraits/raid-bloodcurse-art.png',
-            portraitTall: true,
-            hpMul: 1.5, atkMul: 1.3,
-            shield: { firstAt: 5, interval: 35, hpFixed: 20_000_000, breakTime: 10 } },
         ],
         guaranteedMats: { '神鋼': [15, 25], '永晶': [5, 10] },
         bonusMats: [
