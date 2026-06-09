@@ -123,7 +123,9 @@ function enterGame() {
           const allAllyDead = playerIds.length > 0 && playerIds.every(id => {
             const p = players[id];
             const bs = p && p.battleState;
-            return bs && (bs.dead || (bs.inBattle && bs.maxHp > 0 && bs.hp <= 0));
+            if (!bs) return true;
+            if (!bs.inBattle) return true;  // ★ 沒進副本不算戰友
+            return bs.dead || (bs.maxHp > 0 && bs.hp <= 0);
           });
           if (allAllyDead && typeof window.onBattleFail === 'function') {
             b._teamWipeFired = true;

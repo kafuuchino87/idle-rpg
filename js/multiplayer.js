@@ -312,7 +312,9 @@ function handleMessage(fromPeerId, data) {
       const allAllyDead = playerIds.length > 0 && playerIds.every(id => {
         const p = MP.players[id];
         const bs = p && p.battleState;
-        return bs && (bs.dead || (bs.inBattle && bs.maxHp > 0 && bs.hp <= 0));
+        if (!bs) return true;
+        if (!bs.inBattle) return true;  // ★ 沒進副本不算戰友
+        return bs.dead || (bs.maxHp > 0 && bs.hp <= 0);
       });
       if (allAllyDead) {
         b._teamWipeFired = true;
@@ -518,9 +520,27 @@ function handleMessage(fromPeerId, data) {
         window.logLine(`<span class="lg-fail">✘ 鏡牢爆裂！${dmg.toLocaleString()} 傷害！</span>`, '');
       }
       if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
+    } else if (['crimsonSlash', 'roseBarrier', 'bloodPact', 'moonFinale'].includes(id) && b.player) {
+      // 緋月姬蓄力可打斷招式：成功打斷只播動畫，失敗扣血
+      const broken = !!data.payload.broken;
+      if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim(id + 'End', { broken });
+      if (!broken) {
+        const dmg = Math.floor(b.player.maxHp * (data.payload.dmgPct || 0));
+        b.player.hp = Math.max(0, b.player.hp - dmg);
+        if (typeof window.logLine === 'function') {
+          window.logLine(`<span class="lg-fail">✘ 未及時打斷！${dmg.toLocaleString()} 傷害！</span>`, '');
+        }
+        if (typeof window.floatDamage === 'function') window.floatDamage('🌹 ' + dmg, 'enemy');
+        if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);
+      } else {
+        if (typeof window.logLine === 'function') {
+          window.logLine(`<span class="lg-clear">✓ 打斷成功！</span>`, '');
+        }
+      }
     }
   }
   // 鏡夢縛魂：技能每段傷害（shadowDance / ribbonRain / ribbonBind DoT）
+  // ★ 緋月姬技能也走同一條：roseDance / curseSpiral 多段 + scytheFrenzy / curseRain DoT
   if (data.type === 'boss-skill-tick' && MP.role === 'guest') {
     const b = window.BATTLE;
     if (!b || !b.running || b._dead || !b.player) return;  // 戰鬥已結束 / 自己已死 → 忽略
@@ -538,6 +558,12 @@ function handleMessage(fromPeerId, data) {
         if (typeof window.floatDamage === 'function') window.floatDamage('🎀 ' + dmg, 'enemy');
       } else if (id === 'ribbonBind') {
         // 紅絲縛魂每秒 DoT
+        if (typeof window.floatDamage === 'function') window.floatDamage('🩸 ' + dmg, 'enemy');
+      } else if (id === 'roseDance' || id === 'curseSpiral') {
+        if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim(id + 'Hit', {});
+        if (typeof window.floatDamage === 'function') window.floatDamage('🌹 ' + dmg, 'enemy');
+      } else if (id === 'scytheFrenzy' || id === 'curseRain') {
+        if (typeof window.bossSkillAnim === 'function') window.bossSkillAnim(id + 'Tick', {});
         if (typeof window.floatDamage === 'function') window.floatDamage('🩸 ' + dmg, 'enemy');
       }
       if (b.player.hp <= 0) markGuestDeadAndBroadcast(b);

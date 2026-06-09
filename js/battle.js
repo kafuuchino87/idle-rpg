@@ -581,7 +581,9 @@ function tickBattle(dt) {
       const allAllyDead = playerIds.length > 0 && playerIds.every(id => {
         const p = players[id];
         const bs = p && p.battleState;
-        return bs && (bs.dead || (bs.inBattle && bs.maxHp > 0 && bs.hp <= 0));
+        if (!bs) return true;             // 無資料 → 不算戰友
+        if (!bs.inBattle) return true;    // ★ 沒進副本（連線中但沒打）→ 不算戰友，視為 out
+        return bs.dead || (bs.maxHp > 0 && bs.hp <= 0);
       });
       if (allAllyDead) {
         BATTLE._teamWipeFired = true;
@@ -1390,22 +1392,31 @@ function castMoonFinale() {
 }
 
 // === tick：執行中招式倒數 / 結算 ===
-// 共用受傷工具：clamp 到 0、玩家已死就跳過後續招式邏輯
+// 共用受傷工具：clamp 到 0、玩家已死就跳過自己受傷（但招式繼續跑、廣播照常）
 function crimsonDealPlayerDmg(dmg) {
   if (!Number.isFinite(dmg) || dmg <= 0) return;
-  if (BATTLE._dead) return;
+  if (BATTLE._dead) return;  // 自己已死跳過，但 caller 仍會廣播給 guest
   BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
   if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+}
+
+// 廣播緋月姬技能傷害給 guest（host 端權威）
+function crimsonBroadcastTick(id, dmgPct) {
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    window.MP_API.broadcast('boss-skill-tick', { id, dmgPct, dungeonId: BATTLE.dungeonId });
+  }
+}
+function crimsonBroadcastFail(id, dmgPct, extra) {
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    window.MP_API.broadcast('boss-skill-fail', Object.assign({ id, dmgPct, dungeonId: BATTLE.dungeonId }, extra || {}));
+  }
 }
 
 function tickCrimsonActive(dt) {
   const a = BATTLE.crimsonBoss.active;
   if (!a) return;
-  // 玩家已死 → 中止當前招式，跳過後續傷害
-  if (BATTLE._dead) {
-    BATTLE.crimsonBoss.active = null;
-    return;
-  }
+  // ★ 不要在玩家死時中斷招式 — boss 是團隊敵人，guest 還活著就該繼續打他
+  // crimsonDealPlayerDmg 內部會自動跳過已死玩家的扣血
   a.timer -= dt;
   // 對白蓄力結束 → 真正施法
   if (a.id === 'preCast' && a.timer <= 0) {
@@ -1420,6 +1431,7 @@ function tickCrimsonActive(dt) {
     if (a.hitCD <= 0) {
       const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.dmgPerHit);
       crimsonDealPlayerDmg(dmg);
+      crimsonBroadcastTick(a.id, a.dmgPerHit);  // 廣播給 guest（每段）
       logLine(`<span class="lg-fail">${a.name} 第 ${a.hits - a.hitsLeft + 1}/${a.hits} 段：${dmg} 傷害</span>`, '');
       fireBossSkillAnim(a.id + 'Hit', { hitIdx: a.hits - a.hitsLeft + 1 });
       a.hitsLeft--;
@@ -1436,6 +1448,7 @@ function tickCrimsonActive(dt) {
     if (a.dotCD <= 0) {
       const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.dotPct);
       crimsonDealPlayerDmg(dmg);
+      crimsonBroadcastTick(a.id, a.dotPct);  // 廣播給 guest（每 tick）
       logLine(`<span class="lg-fail">${a.name}：${dmg} 傷害</span>`, '');
       fireBossSkillAnim(a.id + 'Tick', {});
       a.dotCD = a.dotInterval;
@@ -1452,6 +1465,7 @@ function tickCrimsonActive(dt) {
     if (broken) {
       logLine(`<span class="lg-clear">✓ 打斷成功！${a.name} 被中斷</span>`, '');
       fireBossSkillAnim(a.id + 'End', { broken: true });
+      crimsonBroadcastFail(a.id, 0, { broken: true });
       // roseBarrier 成功打斷給玩家 +25% 受傷 buff（破防 debuff on BOSS）
       if (a.id === 'roseBarrier' && a.rewardBuff) {
         BATTLE.buffs.push({ vsBossExpose: a.rewardBuff.vulnMul, dur: a.rewardBuff.dur, _name: '薔薇祭壇破' });
@@ -1460,6 +1474,7 @@ function tickCrimsonActive(dt) {
     } else {
       const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.failDmgPct);
       crimsonDealPlayerDmg(dmg);
+      crimsonBroadcastFail(a.id, a.failDmgPct, { broken: false });
       logLine(`<span class="lg-fail">✗ 未及時打斷！${a.name} 造成 ${dmg} 傷害（${Math.round(a.failDmgPct*100)}%）</span>`, '');
       fireBossSkillAnim(a.id + 'End', { broken: false });
     }
