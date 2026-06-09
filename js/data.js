@@ -1025,6 +1025,8 @@ const REGIONS = [
           { name: '戀舞 · 緋月姬', portrait: 'assets/portraits/raid-bloodscythe-art.png',
             portraitTall: true,
             hpOverride: 20_000_000_000,  // 200億 HP
+            bossSkillTag: 'crimson',     // 啟用緋月姬專屬 4 招循環
+            debuffImmune: true,          // 免疫一切負面狀態（冰封 / DoT debuff 等）
             phaseTransition: {
               atHp: 5_000_000_000,         // 50億 觸發爆走
               newName: '血咒 · 緋月姬',

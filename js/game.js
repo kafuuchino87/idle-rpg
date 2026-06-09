@@ -2075,6 +2075,25 @@ window.bossSkillAnim = function(name, data) {
     case 'mirrorCage':     mirrorAnim_mirrorCage(data); break;
     case 'mirrorCageEnd':  mirrorAnim_mirrorCageEnd(data); break;
     case 'awakening':      mirrorAnim_awakening(data); break;
+    // 緋月姬 8 招
+    case 'roseDance':         crimsonAnim_scytheArc(data, 'roseDance'); break;
+    case 'roseDanceHit':      crimsonAnim_arcHit(data); break;
+    case 'crimsonSlash':      crimsonAnim_chargeSlash(data, '緋月斬'); break;
+    case 'crimsonSlashEnd':   crimsonAnim_chargeEnd(data); break;
+    case 'scytheFrenzy':      crimsonAnim_scytheOrbit(data); break;
+    case 'scytheFrenzyTick':  crimsonAnim_orbitTick(data); break;
+    case 'scytheFrenzyEnd':   crimsonAnim_orbitEnd(data); break;
+    case 'roseBarrier':       crimsonAnim_pentagram(data, '薔薇結界', false); break;
+    case 'roseBarrierEnd':    crimsonAnim_pentagramEnd(data); break;
+    case 'curseSpiral':       crimsonAnim_scytheArc(data, 'curseSpiral'); break;
+    case 'curseSpiralHit':    crimsonAnim_arcHit(data); break;
+    case 'bloodPact':         crimsonAnim_pentagram(data, '千年血契', true); break;
+    case 'bloodPactEnd':      crimsonAnim_pentagramEnd(data); break;
+    case 'curseRain':         crimsonAnim_petalRain(data); break;
+    case 'curseRainTick':     crimsonAnim_petalRainTick(data); break;
+    case 'curseRainEnd':      crimsonAnim_petalRainEnd(data); break;
+    case 'moonFinale':        crimsonAnim_finale(data); break;
+    case 'moonFinaleEnd':     crimsonAnim_finaleEnd(data); break;
   }
 };
 
@@ -2281,6 +2300,217 @@ function mirrorAnim_awakening(data) {
   }
 }
 
+// ============================================================================
+// 緋月姬 8 招動畫（使用 raid-scythe-icon.png）
+// ============================================================================
+const CRIMSON_SCYTHE_IMG = 'assets/portraits/raid-scythe-icon.png';
+
+// 連續斬擊弧（roseDance / curseSpiral）：一把鐮從上方斬下，每段刷新一次
+function crimsonAnim_scytheArc(data, _id) {
+  const stage = _getBattleStage(); if (!stage) return;
+  stage.querySelectorAll('.crimson-arc').forEach(el => el.remove());
+  // 預備：bossCard 紅光震動
+  const card = _getBossCard();
+  if (card) {
+    card.classList.add('crimson-charging');
+    setTimeout(() => card.classList.remove('crimson-charging'), 600);
+  }
+}
+
+function crimsonAnim_arcHit(data) {
+  const stage = _getBattleStage(); if (!stage) return;
+  const arc = document.createElement('div');
+  arc.className = 'crimson-arc';
+  arc.innerHTML = `<img src="${CRIMSON_SCYTHE_IMG}" alt="scythe">`;
+  // 隨機位置與角度做出「不同方向斬擊」感
+  const angle = -45 + Math.random() * 90;
+  arc.style.setProperty('--arc-angle', angle + 'deg');
+  arc.style.left = (15 + Math.random() * 60) + '%';
+  stage.appendChild(arc);
+  setTimeout(() => { try { arc.remove(); } catch (e) {} }, 700);
+  // 玩家方紅閃
+  const pcard = _getPlayerCard();
+  if (pcard) {
+    pcard.classList.remove('crimson-slash-hit');
+    void pcard.offsetWidth;
+    pcard.classList.add('crimson-slash-hit');
+    setTimeout(() => pcard.classList.remove('crimson-slash-hit'), 400);
+  }
+}
+
+// 緋月斬蓄力（crimsonSlash）：BOSS 卡上方浮現巨型鐮，逐漸發紅
+function crimsonAnim_chargeSlash(data, label) {
+  const card = _getBossCard(); if (!card) return;
+  card.querySelectorAll('.crimson-big-scythe').forEach(el => el.remove());
+  const scythe = document.createElement('div');
+  scythe.className = 'crimson-big-scythe';
+  scythe.innerHTML = `<img src="${CRIMSON_SCYTHE_IMG}" alt="scythe"><div class="crimson-charge-label">${label}</div>`;
+  scythe.style.setProperty('--charge-dur', (data.duration || 2.5) + 's');
+  card.appendChild(scythe);
+}
+
+function crimsonAnim_chargeEnd(data) {
+  const card = _getBossCard(); if (!card) return;
+  const scythe = card.querySelector('.crimson-big-scythe');
+  if (scythe) {
+    if (data && data.broken) scythe.classList.add('break');
+    else scythe.classList.add('strike');
+    setTimeout(() => { try { scythe.remove(); } catch (e) {} }, 800);
+  }
+  if (!data || !data.broken) {
+    // 玩家方大紅閃
+    flashFullscreen('rgba(220, 20, 50, 0.6)', 700);
+    const pcard = _getPlayerCard();
+    if (pcard) {
+      pcard.classList.remove('crimson-finale-hit');
+      void pcard.offsetWidth;
+      pcard.classList.add('crimson-finale-hit');
+      setTimeout(() => pcard.classList.remove('crimson-finale-hit'), 800);
+    }
+  }
+}
+
+// 千鐮亂舞（scytheFrenzy）：6 把鐮環繞 BOSS 旋轉
+function crimsonAnim_scytheOrbit(data) {
+  const card = _getBossCard(); if (!card) return;
+  card.querySelectorAll('.crimson-orbit').forEach(el => el.remove());
+  const orbit = document.createElement('div');
+  orbit.className = 'crimson-orbit';
+  const count = data.count || 6;
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'crimson-orbit-scythe';
+    s.style.setProperty('--orbit-angle', (i * (360 / count)) + 'deg');
+    s.innerHTML = `<img src="${CRIMSON_SCYTHE_IMG}" alt="scythe">`;
+    orbit.appendChild(s);
+  }
+  card.appendChild(orbit);
+}
+
+function crimsonAnim_orbitTick(data) {
+  // 每秒玩家方輕微紅閃
+  const pcard = _getPlayerCard();
+  if (pcard) {
+    pcard.classList.remove('crimson-tick-hit');
+    void pcard.offsetWidth;
+    pcard.classList.add('crimson-tick-hit');
+    setTimeout(() => pcard.classList.remove('crimson-tick-hit'), 300);
+  }
+}
+
+function crimsonAnim_orbitEnd(data) {
+  const card = _getBossCard(); if (!card) return;
+  card.querySelectorAll('.crimson-orbit').forEach(el => {
+    el.classList.add('end');
+    setTimeout(() => { try { el.remove(); } catch (e) {} }, 500);
+  });
+}
+
+// 薔薇結界 / 千年血契：地面浮現五芒星魔法陣（紅光環）
+function crimsonAnim_pentagram(data, label, big) {
+  const stage = _getBattleStage(); if (!stage) return;
+  stage.querySelectorAll('.crimson-pentagram').forEach(el => el.remove());
+  const p = document.createElement('div');
+  p.className = 'crimson-pentagram' + (big ? ' big' : '');
+  p.style.setProperty('--charge-dur', (data.duration || 4) + 's');
+  p.innerHTML = `
+    <svg viewBox="0 0 100 100">
+      <polygon points="50,8 62,38 94,38 67,58 78,92 50,72 22,92 33,58 6,38 38,38"
+        fill="none" stroke="rgba(255,80,120,0.95)" stroke-width="1.3"/>
+      <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(220,40,80,0.8)" stroke-width="0.6"/>
+      <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(220,40,80,0.5)" stroke-width="0.4"/>
+    </svg>
+    <div class="crimson-pentagram-label">${label}</div>
+  `;
+  stage.appendChild(p);
+}
+
+function crimsonAnim_pentagramEnd(data) {
+  const stage = _getBattleStage(); if (!stage) return;
+  stage.querySelectorAll('.crimson-pentagram').forEach(el => {
+    el.classList.add(data && data.broken ? 'broken' : 'fired');
+    setTimeout(() => { try { el.remove(); } catch (e) {} }, 800);
+  });
+  if (data && !data.broken) {
+    flashFullscreen('rgba(220, 20, 50, 0.55)', 700);
+  }
+}
+
+// 薔薇詛咒雨（curseRain）：花瓣雨佈滿戰場
+function crimsonAnim_petalRain(data) {
+  const stage = _getBattleStage(); if (!stage) return;
+  stage.querySelectorAll('.crimson-rain').forEach(el => el.remove());
+  const rain = document.createElement('div');
+  rain.className = 'crimson-rain';
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'crimson-rain-petal';
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.animationDelay = (Math.random() * 2) + 's';
+    p.style.animationDuration = (1.8 + Math.random() * 1.2) + 's';
+    rain.appendChild(p);
+  }
+  stage.appendChild(rain);
+}
+
+function crimsonAnim_petalRainTick(data) {
+  const pcard = _getPlayerCard();
+  if (pcard) {
+    pcard.classList.remove('crimson-tick-hit');
+    void pcard.offsetWidth;
+    pcard.classList.add('crimson-tick-hit');
+    setTimeout(() => pcard.classList.remove('crimson-tick-hit'), 300);
+  }
+}
+
+function crimsonAnim_petalRainEnd(data) {
+  const stage = _getBattleStage(); if (!stage) return;
+  stage.querySelectorAll('.crimson-rain').forEach(el => {
+    el.classList.add('end');
+    setTimeout(() => { try { el.remove(); } catch (e) {} }, 800);
+  });
+}
+
+// 緋月終焉（moonFinale）：巨型鐮 + 紅色月亮 + 螢幕震
+function crimsonAnim_finale(data) {
+  const card = _getBossCard(); if (!card) return;
+  card.querySelectorAll('.crimson-big-scythe, .crimson-finale').forEach(el => el.remove());
+  const fin = document.createElement('div');
+  fin.className = 'crimson-finale';
+  fin.style.setProperty('--charge-dur', (data.duration || 5) + 's');
+  fin.innerHTML = `
+    <div class="crimson-finale-moon"></div>
+    <div class="crimson-finale-scythe"><img src="${CRIMSON_SCYTHE_IMG}" alt="scythe"></div>
+    <div class="crimson-finale-label">緋月終焉</div>
+  `;
+  card.appendChild(fin);
+  // 螢幕輕震 5 秒（蓄力中持續）
+  const app = document.getElementById('app');
+  if (app) {
+    app.classList.add('screen-shake');
+    setTimeout(() => app.classList.remove('screen-shake'), (data.duration || 5) * 1000);
+  }
+}
+
+function crimsonAnim_finaleEnd(data) {
+  const card = _getBossCard(); if (!card) return;
+  const fin = card.querySelector('.crimson-finale');
+  if (fin) {
+    fin.classList.add(data && data.broken ? 'break' : 'strike');
+    setTimeout(() => { try { fin.remove(); } catch (e) {} }, 800);
+  }
+  if (!data || !data.broken) {
+    flashFullscreen('rgba(255, 0, 30, 0.75)', 900);
+    const pcard = _getPlayerCard();
+    if (pcard) {
+      pcard.classList.remove('crimson-finale-hit');
+      void pcard.offsetWidth;
+      pcard.classList.add('crimson-finale-hit');
+      setTimeout(() => pcard.classList.remove('crimson-finale-hit'), 1000);
+    }
+  }
+}
+
 // ── 對話氣泡：BOSS 放招前在卡片旁邊吐一句 ──
 window.bossSpeak = function(text, durationSec) {
   const card = _getBossCard();
@@ -2357,7 +2587,8 @@ window.cleanupMirrorAnims = function() {
     card.classList.remove(
       'boss-charging', 'boss-slashing', 'boss-flowermoon',
       'boss-shadowdance', 'boss-awakened', 'boss-awakening-burst',
-      'boss-healed', 'mirror-clones-active', 'shield-active'
+      'boss-healed', 'mirror-clones-active', 'shield-active',
+      'boss-raging', 'crimson-charging'
     );
     // 倒數覆蓋層 + 護盾條 hide
     const cd = card.querySelector('.shield-countdown-overlay');
@@ -2365,13 +2596,16 @@ window.cleanupMirrorAnims = function() {
     const sh = card.querySelector('.enemy-shield');
     if (sh) sh.style.display = 'none';
     // 子元素移除
-    card.querySelectorAll('.mirror-clone, .flowermoon-petals, .flowermoon-ripple, .boss-speak-bubble').forEach(el => el.remove());
+    card.querySelectorAll('.mirror-clone, .flowermoon-petals, .flowermoon-ripple, .boss-speak-bubble, .crimson-big-scythe, .crimson-orbit, .crimson-finale').forEach(el => el.remove());
   });
   // 玩家卡 class
   document.querySelectorAll('.player-side .fighter-card, .player-card').forEach(card => {
-    card.classList.remove('player-ribbon-bound', 'player-caged', 'player-hit-flash', 'boss-slash-hit');
+    card.classList.remove('player-ribbon-bound', 'player-caged', 'player-hit-flash', 'boss-slash-hit', 'crimson-slash-hit', 'crimson-tick-hit', 'crimson-finale-hit');
     card.querySelectorAll('.mirror-cage-frame').forEach(el => el.remove());
   });
+  // 戰場舞台層級
+  const stage = document.getElementById('battleStage');
+  if (stage) stage.querySelectorAll('.crimson-arc, .crimson-pentagram, .crimson-rain').forEach(el => el.remove());
   // 全螢幕浮層
   ['ribbonRainLayer', 'bossSlashFlash'].forEach(id => {
     const el = document.getElementById(id);
@@ -2380,7 +2614,7 @@ window.cleanupMirrorAnims = function() {
   document.querySelectorAll('.fullscreen-flash, .ribbon-projectile, .shadowdance-slash, .ribbon-falling').forEach(el => el.remove());
   // 螢幕震屏 class
   const app = document.getElementById('app');
-  if (app) app.classList.remove('screen-shake-hard');
+  if (app) app.classList.remove('screen-shake-hard', 'screen-shake');
 };
 
 // helper：整螢幕色閃

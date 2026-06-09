@@ -382,6 +382,7 @@ function makeEnemy(name, dungeon, isBoss, bossConfig) {
   if (bossConfig?.portrait) e.portrait = bossConfig.portrait;
   if (bossConfig?.portraitTall) e.portraitTall = true;
   if (bossConfig?.phaseTransition) e.phaseTransition = bossConfig.phaseTransition;
+  if (bossConfig?.debuffImmune) e.debuffImmune = true;
   // 開場拔刀斬：戰鬥開始時 BOSS 進入蓄力姿態，凝聚特大護盾
   if (bossConfig?.openingAttack) {
     e.openingAttack = bossConfig.openingAttack;
@@ -488,6 +489,8 @@ function tickBattle(dt) {
     }
     return;  // 爆走期間暫停一切
   }
+  // 緋月姬技能排程
+  tickCrimsonBoss(dtSec);
   // BOSS 護盾即死機制（雙影獵討的 shieldConfig）
   tickBossShield(dtSec);
   // 幻夢之主技能排程（鏡夢縛魂 7 招）
@@ -1128,18 +1131,25 @@ function mirrorBossDamageHook(rawDmg) {
   return rawDmg;
 }
 
-// 血鐮緋月姬：HP 到閾值時觸發爆走變形（鎖血、3 秒動畫、套用 Phase 2 設定）
+// 血鐮緋月姬：HP 到閾值時觸發爆走變形（鎖血、4 秒動畫、套用 Phase 2 設定）
 function enterBossRageTransition(pt) {
   if (!BATTLE.enemy || BATTLE.bossRaging || BATTLE.enemy._transitioned) return;
   BATTLE.enemy.hp = pt.atHp;  // 鎖血在閾值
   BATTLE.bossRaging = true;
-  BATTLE.bossRagingTimer = 3.0;
+  BATTLE.bossRagingTimer = 4.0;  // 拉長至 4 秒讓對白看完
   BATTLE.bossRagingPending = pt;
   // 清掉執行中的招式 / DoT / 護盾
   BATTLE.dots = [];
   BATTLE.summons = [];
   if (BATTLE.enemy.shield) { BATTLE.enemy.shield = 0; BATTLE.enemy.shieldMax = 0; }
-  logLine(`<span class="lg-skill">★ ${BATTLE.enemy.name}：${pt.ragePhrase || '「血咒覺醒——」'}</span>`, '');
+  if (BATTLE.crimsonBoss) BATTLE.crimsonBoss.active = null;  // 清招式排程狀態
+  // 對白用 bossSpeak 氣泡顯示（之前只進 log 看不到）
+  const ragePhrase = pt.ragePhrase || '「血咒覺醒——」';
+  if (typeof window.bossSpeak === 'function') window.bossSpeak(ragePhrase, 3.5);
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('boss-speak', { text: ragePhrase, duration: 3.5, dungeonId: BATTLE.dungeonId });
+  }
+  logLine(`<span class="lg-skill">★ ${BATTLE.enemy.name}：${ragePhrase}</span>`, '');
   if (typeof window.bossRageStart === 'function') window.bossRageStart({ pending: pt });
   if (BATTLE._mpMode === 'host' && window.MP_API) {
     MP_API.broadcast('boss-rage', { dungeonId: BATTLE.dungeonId, pt });
@@ -1204,6 +1214,254 @@ function fireBossSkillAnim(name, data) {
   if (BATTLE._mpMode === 'host' && window.MP_API) {
     MP_API.broadcast('boss-skill', { id: name, data: data || {}, dungeonId: BATTLE.dungeonId });
   }
+}
+
+// ============================================================================
+// 血鐮緋月姬技能系統（bossSkillTag = 'crimson'）
+// Phase 1（戀舞）：roseDance → crimsonSlash → scytheFrenzy → roseBarrier 循環
+// Phase 2（血咒）：curseSpiral → bloodPact → curseRain → moonFinale 循環
+// 每招施放前 1.5 秒對白氣泡
+// ============================================================================
+const CRIMSON_SKILLS_P1 = ['roseDance', 'crimsonSlash', 'scytheFrenzy', 'roseBarrier'];
+const CRIMSON_SKILLS_P2 = ['curseSpiral', 'bloodPact', 'curseRain', 'moonFinale'];
+
+const CRIMSON_CALLOUTS = {
+  roseDance:    '翩翩起舞——獻你一束血薔薇！',
+  crimsonSlash: '凝聚我千年的思念——緋月一斬！',
+  scytheFrenzy: '為他綻放——千鐮的祝福！',
+  roseBarrier:  '進入我的薔薇祭壇——找出真正的我吧。',
+  curseSpiral:  '不夠！還不夠！再讓我聞那血的味道！',
+  bloodPact:    '以千年血契之名——將你的靈魂獻給我！',
+  curseRain:    '花開似血，墜落成詛咒——',
+  moonFinale:   '終止這份等待吧——一切歸於虛無！',
+};
+const CRIMSON_PRECAST_TIME = 1.5;
+
+function initCrimsonBoss() {
+  const e = BATTLE.enemy;
+  if (!e || e.bossSkillTag !== 'crimson') return;
+  if (BATTLE.crimsonBoss) return;
+  BATTLE.crimsonBoss = {
+    skillIdx: 0,
+    cdTimer: 0,
+    skillCD: 4,   // 入場 4 秒進第一招
+    active: null,
+  };
+}
+
+function tickCrimsonBoss(dt) {
+  const e = BATTLE.enemy;
+  if (!e || e.hp <= 0) return;
+  if (e.bossSkillTag !== 'crimson') return;
+  if (!BATTLE.crimsonBoss) initCrimsonBoss();
+  if (BATTLE._mpMode === 'guest') {
+    if (BATTLE.crimsonBoss && BATTLE.crimsonBoss.active) {
+      BATTLE.crimsonBoss.active.timer = Math.max(0, (BATTLE.crimsonBoss.active.timer || 0) - dt);
+    }
+    return;
+  }
+  const cb = BATTLE.crimsonBoss;
+  // 啟動中招式繼續 tick
+  if (cb.active) {
+    tickCrimsonActive(dt);
+    return;
+  }
+  // 下一招倒數
+  cb.cdTimer += dt;
+  if (cb.cdTimer >= cb.skillCD) {
+    const schedule = e._transitioned ? CRIMSON_SKILLS_P2 : CRIMSON_SKILLS_P1;
+    const skillId = schedule[cb.skillIdx % schedule.length];
+    castCrimsonSkill(skillId);
+    cb.skillIdx++;
+    cb.cdTimer = 0;
+    cb.skillCD = 5;
+  }
+}
+
+function castCrimsonSkill(id) {
+  // 先進 precast — 對白氣泡 + 蓄力 1.5s
+  const callout = CRIMSON_CALLOUTS[id];
+  if (callout) {
+    BATTLE.crimsonBoss.active = {
+      id: 'preCast', nextId: id, timer: CRIMSON_PRECAST_TIME, name: '對白',
+    };
+    fireBossSpeak(callout, CRIMSON_PRECAST_TIME);
+    return;
+  }
+  doCrimsonCast(id);
+}
+
+function doCrimsonCast(id) {
+  switch (id) {
+    case 'roseDance':    castRoseDance();    break;
+    case 'crimsonSlash': castCrimsonSlash(); break;
+    case 'scytheFrenzy': castScytheFrenzy(); break;
+    case 'roseBarrier':  castRoseBarrier();  break;
+    case 'curseSpiral':  castCurseSpiral();  break;
+    case 'bloodPact':    castBloodPact();    break;
+    case 'curseRain':    castCurseRain();    break;
+    case 'moonFinale':   castMoonFinale();   break;
+  }
+}
+
+// === P1 #1 薔薇連舞：即發 4 段，每段 22% maxHP，AOE ===
+function castRoseDance() {
+  BATTLE.crimsonBoss.active = {
+    id: 'roseDance', timer: 2.0, name: '薔薇連舞',
+    hits: 4, hitsLeft: 4, hitInterval: 0.5, hitCD: 0.3, dmgPerHit: 0.22,
+  };
+  logLine(`<span class="lg-fail">✦【薔薇連舞】緋月姬揮鐮 4 段斬擊！每段 22% 最大生命！</span>`, '');
+  fireBossSkillAnim('roseDance', { duration: 2.0, hits: 4 });
+}
+
+// === P1 #2 緋月斬：2.5s 蓄力 → 80% maxHP；對她造成 8 億傷害可打斷 ===
+function castCrimsonSlash() {
+  BATTLE.crimsonBoss.active = {
+    id: 'crimsonSlash', timer: 2.5, name: '緋月斬',
+    failDmgPct: 0.80, dmgThreshold: 800_000_000, dmgDealt: 0,
+  };
+  logLine(`<span class="lg-fail">✦【緋月斬】緋月姬蓄力一斬！2.5 秒內造成 8 億傷害可打斷，否則扣 80% 生命！</span>`, '');
+  fireBossSkillAnim('crimsonSlash', { duration: 2.5 });
+}
+
+// === P1 #3 千鐮亂舞：5 秒持續 DoT，每秒 12% maxHP（不可打斷）===
+function castScytheFrenzy() {
+  BATTLE.crimsonBoss.active = {
+    id: 'scytheFrenzy', timer: 5.0, name: '千鐮亂舞',
+    dotInterval: 1.0, dotCD: 1.0, dotPct: 0.12,
+  };
+  logLine(`<span class="lg-fail">✦【千鐮亂舞】6 把浮空鐮環繞 — 持續 5 秒，每秒扣 12% 生命！</span>`, '');
+  fireBossSkillAnim('scytheFrenzy', { duration: 5.0, count: 6 });
+}
+
+// === P1 #4 薔薇結界：4 秒內須對她造成 12 億傷害，失敗扣全隊 55% HP，成功 +25% 受傷 8s ===
+function castRoseBarrier() {
+  BATTLE.crimsonBoss.active = {
+    id: 'roseBarrier', timer: 4.0, name: '薔薇結界',
+    failDmgPct: 0.55, dmgThreshold: 1_200_000_000, dmgDealt: 0,
+    rewardBuff: { id: 'crimsonExposed', dur: 8, vulnMul: 0.25 },
+  };
+  logLine(`<span class="lg-fail">✦【薔薇結界】緋月姬召出五芒星結界！4 秒內造成 12 億傷害可破，否則全隊扣 55% HP！</span>`, '');
+  fireBossSkillAnim('roseBarrier', { duration: 4.0 });
+}
+
+// === P2 #1 血咒迴旋：即發 5 段，每段 26% maxHP，AOE 加強版 ===
+function castCurseSpiral() {
+  BATTLE.crimsonBoss.active = {
+    id: 'curseSpiral', timer: 2.5, name: '血咒迴旋',
+    hits: 5, hitsLeft: 5, hitInterval: 0.5, hitCD: 0.3, dmgPerHit: 0.26,
+  };
+  logLine(`<span class="lg-fail">✦【血咒迴旋】緋月姬狂舞 5 段斬擊！每段 26% 最大生命！</span>`, '');
+  fireBossSkillAnim('curseSpiral', { duration: 2.5, hits: 5 });
+}
+
+// === P2 #2 千年血契：3.5s 蓄力 → 90% maxHP；打斷需 15 億傷害 ===
+function castBloodPact() {
+  BATTLE.crimsonBoss.active = {
+    id: 'bloodPact', timer: 3.5, name: '千年血契',
+    failDmgPct: 0.90, dmgThreshold: 1_500_000_000, dmgDealt: 0,
+  };
+  logLine(`<span class="lg-fail">✦【千年血契】緋月姬召出血契魔法陣！3.5 秒內造成 15 億傷害可打斷，否則扣 90% 生命！</span>`, '');
+  fireBossSkillAnim('bloodPact', { duration: 3.5 });
+}
+
+// === P2 #3 薔薇詛咒雨：6 秒持續，每秒 14% maxHP（不可打斷）===
+function castCurseRain() {
+  BATTLE.crimsonBoss.active = {
+    id: 'curseRain', timer: 6.0, name: '薔薇詛咒雨',
+    dotInterval: 1.0, dotCD: 1.0, dotPct: 0.14,
+  };
+  logLine(`<span class="lg-fail">✦【薔薇詛咒雨】血薔薇花瓣降下 — 持續 6 秒，每秒扣 14% 生命！</span>`, '');
+  fireBossSkillAnim('curseRain', { duration: 6.0 });
+}
+
+// === P2 #4 緋月終焉：5s 蓄力 → 95% maxHP；打斷需 18 億傷害（必殺技）===
+function castMoonFinale() {
+  BATTLE.crimsonBoss.active = {
+    id: 'moonFinale', timer: 5.0, name: '緋月終焉',
+    failDmgPct: 0.95, dmgThreshold: 1_800_000_000, dmgDealt: 0,
+  };
+  logLine(`<span class="lg-fail">✦【緋月終焉】緋月姬凝聚千年怨念！5 秒內造成 18 億傷害可打斷，否則扣 95% 生命！</span>`, '');
+  fireBossSkillAnim('moonFinale', { duration: 5.0 });
+}
+
+// === tick：執行中招式倒數 / 結算 ===
+function tickCrimsonActive(dt) {
+  const a = BATTLE.crimsonBoss.active;
+  if (!a) return;
+  a.timer -= dt;
+  // 對白蓄力結束 → 真正施法
+  if (a.id === 'preCast' && a.timer <= 0) {
+    const nextId = a.nextId;
+    BATTLE.crimsonBoss.active = null;
+    doCrimsonCast(nextId);
+    return;
+  }
+  // 多段傷害類（roseDance / curseSpiral）：依序打 hits
+  if ((a.id === 'roseDance' || a.id === 'curseSpiral') && a.hitsLeft > 0) {
+    a.hitCD -= dt;
+    if (a.hitCD <= 0) {
+      const dmg = Math.floor(BATTLE.player.maxHp * a.dmgPerHit);
+      BATTLE.player.hp -= dmg;
+      logLine(`<span class="lg-fail">${a.name} 第 ${a.hits - a.hitsLeft + 1}/${a.hits} 段：${dmg} 傷害</span>`, '');
+      fireBossSkillAnim(a.id + 'Hit', { hitIdx: a.hits - a.hitsLeft + 1 });
+      a.hitsLeft--;
+      a.hitCD = a.hitInterval;
+      if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+    }
+    if (a.hitsLeft <= 0 && a.timer <= 0.1) {
+      BATTLE.crimsonBoss.active = null;
+    }
+    return;
+  }
+  // DoT 類（scytheFrenzy / curseRain）：定時扣血
+  if (a.id === 'scytheFrenzy' || a.id === 'curseRain') {
+    a.dotCD -= dt;
+    if (a.dotCD <= 0) {
+      const dmg = Math.floor(BATTLE.player.maxHp * a.dotPct);
+      BATTLE.player.hp -= dmg;
+      logLine(`<span class="lg-fail">${a.name}：${dmg} 傷害</span>`, '');
+      fireBossSkillAnim(a.id + 'Tick', {});
+      a.dotCD = a.dotInterval;
+      if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+    }
+    if (a.timer <= 0) {
+      BATTLE.crimsonBoss.active = null;
+      fireBossSkillAnim(a.id + 'End', {});
+    }
+    return;
+  }
+  // 蓄力可打斷類（crimsonSlash / roseBarrier / bloodPact / moonFinale）：結算判定
+  if (a.timer <= 0) {
+    const broken = a.dmgDealt >= a.dmgThreshold;
+    if (broken) {
+      logLine(`<span class="lg-clear">✓ 打斷成功！${a.name} 被中斷</span>`, '');
+      fireBossSkillAnim(a.id + 'End', { broken: true });
+      // roseBarrier 成功打斷給玩家 +25% 受傷 buff（破防 debuff on BOSS）
+      if (a.id === 'roseBarrier' && a.rewardBuff) {
+        BATTLE.buffs.push({ vsBossExpose: a.rewardBuff.vulnMul, dur: a.rewardBuff.dur, _name: '薔薇祭壇破' });
+        logLine(`<span class="lg-clear">✦ 薔薇祭壇破裂！緋月姬 8 秒內受傷 +25%！</span>`, '');
+      }
+    } else {
+      const dmg = Math.floor(BATTLE.player.maxHp * a.failDmgPct);
+      BATTLE.player.hp -= dmg;
+      logLine(`<span class="lg-fail">✗ 未及時打斷！${a.name} 造成 ${dmg} 傷害（${Math.round(a.failDmgPct*100)}%）</span>`, '');
+      fireBossSkillAnim(a.id + 'End', { broken: false });
+      if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+    }
+    BATTLE.crimsonBoss.active = null;
+  }
+}
+
+// 緋月姬蓄力技計入打斷傷害累計（傷害 hook）
+function crimsonBossDamageHook(dmg) {
+  const cb = BATTLE.crimsonBoss;
+  if (!cb || !cb.active) return dmg;
+  const a = cb.active;
+  if (a.dmgThreshold !== undefined) {
+    a.dmgDealt = (a.dmgDealt || 0) + dmg;
+  }
+  return dmg;
 }
 
 function tickBuffs(dt) {
@@ -1493,9 +1751,12 @@ function castSkill(sk, sidHint) {
   if (sk.summon && BATTLE.enemy) {
     BATTLE.summons.push({ dps: BATTLE.player.atk * sk.summon.dps, dur: sk.summon.dur, acc: 0, sourceId: sid, _name: sk.name, _maxDur: sk.summon.dur, interval: sk.summon.interval || 0.35 });
   }
-  if (sk.freeze && BATTLE.enemy) {
+  if (sk.freeze && BATTLE.enemy && !BATTLE.enemy.debuffImmune) {
     BATTLE.freezes = sk.freeze;
     BATTLE._freezeMax = sk.freeze;  // 紀錄初始時長供 UI 進度條用
+  } else if (sk.freeze && BATTLE.enemy && BATTLE.enemy.debuffImmune) {
+    // BOSS 免疫負面狀態
+    logLine(`<span class="lg-fail">${BATTLE.enemy.name} 免疫了「${sk.name}」的冰封效果！</span>`, '');
   }
   if (sk.buff) BATTLE.buffs.push({ ...sk.buff, _skillId: sid, _name: sk.name, _maxDur: sk.buff.dur });
   if (sk.lifesteal && total > 0) {
@@ -1634,6 +1895,16 @@ function applyDamage(dmg, isCrit) {
   if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
       && typeof mirrorBossDamageHook === 'function') {
     actualDmg = mirrorBossDamageHook(rawDmg);
+  }
+  // 緋月姬技能打斷傷害累計（蓄力 / DPS-check 招式）
+  if (BATTLE.enemy.bossSkillTag === 'crimson' && BATTLE._mpMode !== 'guest'
+      && typeof crimsonBossDamageHook === 'function') {
+    actualDmg = crimsonBossDamageHook(rawDmg);
+  }
+  // 薔薇祭壇破裂：vsBossExpose buff 期間敵人受傷增加
+  const exposeBuff = (BATTLE.buffs || []).find(b => b.vsBossExpose);
+  if (exposeBuff && BATTLE.enemy.isBoss) {
+    actualDmg = Math.floor(actualDmg * (1 + exposeBuff.vsBossExpose));
   }
   // 無盡塔：HP 不扣（保持 MAX_SAFE_INTEGER），改累積到 totalDmg
   if (BATTLE._endlessMode) {

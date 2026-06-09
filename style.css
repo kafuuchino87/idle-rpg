@@ -1262,6 +1262,249 @@ button.primary:hover { filter: brightness(1.1); }
   70%  { opacity: 0.7; }
   100% { opacity: 0; }
 }
+
+/* === 9. 緋月姬技能動畫 === */
+
+/* 蓄力前夕 BOSS 卡紅光 */
+.enemy-card.crimson-charging .card-frame {
+  animation: crimsonChargeGlow 0.6s ease;
+}
+@keyframes crimsonChargeGlow {
+  0%, 100% { box-shadow: 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 60px rgba(255, 40, 80, 0.95); }
+}
+
+/* 連續斬擊：飛過螢幕的鐮 */
+.crimson-arc {
+  position: absolute;
+  top: 10%;
+  width: 240px; height: 240px;
+  pointer-events: none;
+  z-index: 50;
+  animation: crimsonArcFly 0.7s ease-out forwards;
+  transform: rotate(var(--arc-angle, 0deg));
+  filter: drop-shadow(0 0 24px #ff3060);
+}
+.crimson-arc img { width: 100%; height: 100%; object-fit: contain; }
+@keyframes crimsonArcFly {
+  0%   { opacity: 0; transform: translateY(-80px) rotate(var(--arc-angle, 0deg)) scale(0.6); }
+  20%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(60vh) rotate(calc(var(--arc-angle, 0deg) + 180deg)) scale(1.4); }
+}
+
+/* 玩家被斬：紅閃 */
+.crimson-slash-hit { animation: crimsonSlashHit 0.4s ease forwards; }
+@keyframes crimsonSlashHit {
+  0%   { box-shadow: 0 0 0 transparent; transform: translateX(0); }
+  30%  { box-shadow: 0 0 50px rgba(255, 40, 80, 0.9); transform: translateX(-6px); }
+  60%  { transform: translateX(4px); }
+  100% { box-shadow: 0 0 0 transparent; transform: translateX(0); }
+}
+
+/* 緋月斬蓄力：BOSS 卡上方浮大鐮 */
+.crimson-big-scythe {
+  position: absolute;
+  top: -120px; left: 50%;
+  width: 200px; height: 200px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 30;
+  filter: drop-shadow(0 0 28px #ff3060);
+  animation: crimsonBigScytheCharge var(--charge-dur, 2.5s) ease forwards;
+}
+.crimson-big-scythe img { width: 100%; height: 100%; object-fit: contain; animation: crimsonScytheSpin 1.4s linear infinite; }
+.crimson-big-scythe.strike { animation: crimsonBigScytheStrike 0.8s ease forwards !important; }
+.crimson-big-scythe.break  { animation: crimsonBigScytheBreak  0.8s ease forwards !important; }
+.crimson-charge-label {
+  position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
+  color: #ff5078; font-size: 14px; font-weight: 700; letter-spacing: 3px;
+  text-shadow: 0 0 10px rgba(255, 70, 120, 0.9);
+  white-space: nowrap;
+}
+@keyframes crimsonBigScytheCharge {
+  0%   { transform: translateX(-50%) translateY(-20px) scale(0.4); opacity: 0; }
+  30%  { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(0) scale(1.2); opacity: 1; filter: drop-shadow(0 0 50px #ff0030) brightness(1.5); }
+}
+@keyframes crimsonBigScytheStrike {
+  0%   { transform: translateX(-50%) scale(1.2); }
+  40%  { transform: translateX(-50%) scale(2.5) translateY(100px); opacity: 1; }
+  100% { transform: translateX(-50%) scale(3) translateY(200px); opacity: 0; }
+}
+@keyframes crimsonBigScytheBreak {
+  0%   { transform: translateX(-50%) scale(1.2); opacity: 1; }
+  50%  { transform: translateX(-50%) scale(0.8) rotate(180deg); opacity: 0.5; filter: brightness(0.4); }
+  100% { transform: translateX(-50%) scale(0.2) rotate(540deg); opacity: 0; }
+}
+@keyframes crimsonScytheSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* 千鐮亂舞：6 把環繞鐮 */
+.crimson-orbit {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 300px; height: 300px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 20;
+  animation: crimsonOrbitRotate 3s linear infinite;
+}
+.crimson-orbit.end { animation: crimsonOrbitOut 0.5s ease forwards; }
+.crimson-orbit-scythe {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 90px; height: 90px;
+  transform: translate(-50%, -50%) rotate(var(--orbit-angle, 0deg)) translateY(-130px);
+  filter: drop-shadow(0 0 12px #ff3060);
+}
+.crimson-orbit-scythe img { width: 100%; height: 100%; object-fit: contain; animation: crimsonScytheSpin 1.8s linear infinite; }
+@keyframes crimsonOrbitRotate { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes crimsonOrbitOut {
+  to { transform: translate(-50%, -50%) scale(1.6) rotate(180deg); opacity: 0; }
+}
+
+/* 玩家持續扣血微紅閃 */
+.crimson-tick-hit { animation: crimsonTickHit 0.3s ease forwards; }
+@keyframes crimsonTickHit {
+  0%, 100% { box-shadow: 0 0 0 transparent; }
+  50%      { box-shadow: 0 0 30px rgba(255, 80, 120, 0.7); }
+}
+
+/* 五芒星魔法陣（薔薇結界 / 千年血契） */
+.crimson-pentagram {
+  position: absolute;
+  left: 50%; bottom: 8%;
+  width: 320px; height: 320px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 5;
+  animation: crimsonPentagramIn 0.8s ease forwards, crimsonPentagramRotate 12s linear infinite 0.8s;
+  filter: drop-shadow(0 0 30px rgba(255, 40, 80, 0.8));
+}
+.crimson-pentagram.big { width: 420px; height: 420px; }
+.crimson-pentagram svg { width: 100%; height: 100%; }
+.crimson-pentagram-label {
+  position: absolute; top: 42%; left: 50%; transform: translateX(-50%);
+  color: #ff5078; font-size: 18px; font-weight: 700; letter-spacing: 4px;
+  text-shadow: 0 0 14px rgba(255, 70, 120, 0.95);
+  white-space: nowrap;
+}
+.crimson-pentagram.broken { animation: crimsonPentagramBroken 0.8s ease forwards; }
+.crimson-pentagram.fired  { animation: crimsonPentagramFired  0.8s ease forwards; }
+@keyframes crimsonPentagramIn {
+  0%   { transform: translateX(-50%) scale(0.3); opacity: 0; }
+  100% { transform: translateX(-50%) scale(1); opacity: 0.9; }
+}
+@keyframes crimsonPentagramRotate {
+  to { transform: translateX(-50%) rotate(360deg); }
+}
+@keyframes crimsonPentagramBroken {
+  0%   { transform: translateX(-50%) scale(1); opacity: 0.9; }
+  100% { transform: translateX(-50%) scale(0.5); opacity: 0; filter: brightness(0.4); }
+}
+@keyframes crimsonPentagramFired {
+  0%   { transform: translateX(-50%) scale(1); opacity: 0.9; }
+  50%  { transform: translateX(-50%) scale(2); opacity: 1; filter: brightness(2.5); }
+  100% { transform: translateX(-50%) scale(2.5); opacity: 0; }
+}
+
+/* 薔薇詛咒雨：花瓣雨 */
+.crimson-rain {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  overflow: hidden;
+}
+.crimson-rain.end { animation: crimsonRainOut 0.8s ease forwards; }
+.crimson-rain-petal {
+  position: absolute;
+  top: -30px;
+  width: 20px; height: 20px;
+  background: radial-gradient(ellipse 60% 100% at 50% 30%, #ff4068 0%, #b81940 60%, #6a0820 100%);
+  border-radius: 65% 35% 70% 30%;
+  filter: drop-shadow(0 0 6px rgba(255, 60, 100, 0.7));
+  animation: crimsonRainFall linear infinite;
+}
+@keyframes crimsonRainFall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.9; }
+  100% { transform: translateY(100vh) rotate(540deg); opacity: 0.6; }
+}
+@keyframes crimsonRainOut { to { opacity: 0; } }
+
+/* 緋月終焉：紅月 + 巨鐮 + 螢幕震 */
+.crimson-finale {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+.crimson-finale-moon {
+  position: absolute;
+  top: -50px; left: 50%; transform: translateX(-50%);
+  width: 280px; height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ff2050 0%, #b81030 50%, #6a0820 100%);
+  filter: drop-shadow(0 0 50px #ff0030);
+  animation: crimsonFinaleMoon var(--charge-dur, 5s) ease forwards;
+  opacity: 0;
+}
+.crimson-finale-scythe {
+  position: absolute;
+  top: 30%; left: 50%; transform: translateX(-50%);
+  width: 180px; height: 180px;
+  filter: drop-shadow(0 0 30px #ff0030);
+  animation: crimsonFinaleScythe var(--charge-dur, 5s) ease forwards;
+  opacity: 0;
+}
+.crimson-finale-scythe img { width: 100%; height: 100%; object-fit: contain; animation: crimsonScytheSpin 1.2s linear infinite; }
+.crimson-finale-label {
+  position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%);
+  color: #ff3060; font-size: 28px; font-weight: 900; letter-spacing: 8px;
+  text-shadow: 0 0 24px rgba(255, 30, 80, 1);
+  opacity: 0;
+  animation: crimsonFinaleLabel var(--charge-dur, 5s) ease forwards;
+}
+.crimson-finale.strike { animation: crimsonFinaleStrike 0.8s ease forwards !important; }
+.crimson-finale.break  { animation: crimsonFinaleBreak  0.8s ease forwards !important; }
+@keyframes crimsonFinaleMoon {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.3); }
+  30%  { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1.3); filter: drop-shadow(0 0 80px #ff0030) brightness(1.5); }
+}
+@keyframes crimsonFinaleScythe {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.5) translateY(-50px); }
+  40%  { opacity: 1; transform: translateX(-50%) scale(1.2) translateY(0); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1.6) translateY(0); }
+}
+@keyframes crimsonFinaleLabel {
+  0%   { opacity: 0; }
+  40%  { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1.3); }
+}
+@keyframes crimsonFinaleStrike {
+  0%   { opacity: 1; }
+  50%  { opacity: 1; filter: brightness(3); }
+  100% { opacity: 0; transform: scale(3); }
+}
+@keyframes crimsonFinaleBreak {
+  0%   { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.4); filter: brightness(0.3); }
+}
+
+/* 緋月終焉命中：玩家方爆炸閃光 */
+.crimson-finale-hit { animation: crimsonFinaleHit 1s ease forwards; }
+@keyframes crimsonFinaleHit {
+  0%   { transform: scale(1); box-shadow: 0 0 0 transparent; }
+  30%  { transform: scale(0.92); box-shadow: 0 0 100px rgba(255, 0, 30, 1); filter: brightness(0.4); }
+  70%  { transform: scale(1.02); }
+  100% { transform: scale(1); box-shadow: 0 0 0 transparent; filter: brightness(1); }
+}
 .screen-shake-hard {
   animation: screenShakeHard 0.8s ease;
 }
