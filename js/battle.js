@@ -1220,6 +1220,13 @@ function enterMirrorBossDying() {
 }
 
 function handleMirrorPlayerDead() {
+  // ⚠️ 測試用：testNoKill 副本中阻擋死亡與結算
+  const _d = GAME_DATA.getDungeon(BATTLE.dungeonId);
+  if (_d && _d.testNoKill) {
+    BATTLE.player.hp = Math.max(1, BATTLE.player.hp);
+    BATTLE._dead = false;
+    return;
+  }
   BATTLE._dead = true;
   if (BATTLE._mpMode === 'host' && window.MP_API) {
     MP_API.broadcast('player-dead', { dungeonId: BATTLE.dungeonId });
@@ -2515,6 +2522,13 @@ function onDungeonClear() {
 function onBattleFail() {
   const failedId = BATTLE.dungeonId;
   const d = GAME_DATA.getDungeon(failedId);
+  // ⚠️ 測試用：testNoKill 副本完全攔截戰敗結算（包含所有其他呼叫路徑）
+  if (d && d.testNoKill) {
+    BATTLE.player.hp = Math.max(1, BATTLE.player.hp);
+    BATTLE._dead = false;
+    logLine(`<span class="lg-clear">⚠ [TEST] ${d.name} 玩家死不了，攔截戰敗結算</span>`, '');
+    return;
+  }
   const clearTimeMs = BATTLE.startTime ? (performance.now() - BATTLE.startTime) : 0;
   logLine(`<span class="lg-fail">戰敗 ${d?.name || ''}！自動戰鬥已停止，請重整裝備後手動再戰。</span>`, '');
   // 戰敗也存 lastClear 紀錄（供結算彈窗顯示傷害統計）
