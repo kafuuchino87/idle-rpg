@@ -654,8 +654,8 @@ function renderCharDetail() {
       <div class="stat-card offense">
         <div class="stat-card-title">攻擊組</div>
         <div class="stat-row-pair"><span>攻擊</span><b>${s.atk}</b></div>
-        <div class="stat-row-pair"><span>暴擊</span><b>${(s.crit * 100).toFixed(1)}%</b></div>
-        <div class="stat-row-pair"><span>暴傷</span><b>${(s.critDmg * 100).toFixed(0)}%</b></div>
+        <div class="stat-row-pair"><span>暴擊</span><b>${(s.crit * 100).toFixed(1)}%${s.crit > 1.0 ? `<span style="color:var(--gold);font-size:10px;margin-left:6px" title="超過 100% 的部分 1:1 轉成暴傷">(+${((s.crit - 1.0) * 100).toFixed(1)}% → 暴傷)</span>` : ''}</b></div>
+        <div class="stat-row-pair"><span>暴傷</span><b>${s.crit > 1.0 ? `${((s.critDmg + (s.crit - 1.0)) * 100).toFixed(0)}%<span style="color:var(--gold);font-size:10px;margin-left:6px" title="基礎 ${(s.critDmg*100).toFixed(0)}% + 暴擊溢出 ${((s.crit - 1.0)*100).toFixed(1)}%">(${(s.critDmg*100).toFixed(0)}+${((s.crit - 1.0)*100).toFixed(1)})</span>` : `${(s.critDmg * 100).toFixed(0)}%`}</b></div>
       </div>
       <div class="stat-card defense">
         <div class="stat-card-title">防禦組</div>
