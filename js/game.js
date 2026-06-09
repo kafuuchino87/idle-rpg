@@ -1580,7 +1580,7 @@ function renderEquipDetail(instId) {
     if (urStage >= maxStage) {
       actionHtml = `<div style="color:var(--gold);font-size:12px;text-align:center;padding:8px">★ 已達神器階（10 / 10）</div>`;
     } else {
-      const cost = GAME_DATA.getUrGrowthCost(urStage + 1);
+      const cost = GAME_DATA.getUrGrowthCost(urStage + 1, def);
       const bag = _activeBag();
       const goldOk = GAME_STATE.state.gold >= cost.gold;
       const matsHtml = Object.entries(cost.mats).map(([n, q]) => {

@@ -1474,11 +1474,11 @@ function growUrWeapon(instId) {
   const inst = bag.equipment[instId];
   if (!inst) return { ok: false, reason: '找不到裝備' };
   const def = GAME_DATA.findEquipment(inst.itemId);
-  if (!GAME_DATA.isUrGrowable(def)) return { ok: false, reason: '此武器無法成長（限星淵·噬月矛 / 星龍·夢淵鏡）' };
+  if (!GAME_DATA.isUrGrowable(def)) return { ok: false, reason: '此武器無法成長（限 UR2 / UR3 武器系列）' };
   const cur = inst.urStage || 0;
   if (cur >= GAME_DATA.UR_GROWTH_MAX_STAGE) return { ok: false, reason: '已達最高成長階段 (10/10)' };
   const nextStage = cur + 1;
-  const cost = GAME_DATA.getUrGrowthCost(nextStage);
+  const cost = GAME_DATA.getUrGrowthCost(nextStage, def);
   if (!cost) return { ok: false, reason: '成本資料缺失' };
   // 檢查資源
   if (STATE.gold < cost.gold) return { ok: false, reason: `金幣不足（需 ${cost.gold.toLocaleString()}）` };

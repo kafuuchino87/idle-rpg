@@ -1039,13 +1039,18 @@ const REGIONS = [
             },
           },
         ],
-        guaranteedMats: { '神鋼': [15, 25], '永晶': [5, 10] },
+        guaranteedMats: { '神鋼': [15, 25], '永晶': [5, 10], '罪薔之心': [1, 3] },  // 罪薔之心改為必掉 1~3（用於 ur3 武器成長 + 強化 15~18）
         bonusMats: [
-          { name: '罪薔之心', chance: 0.10, qty: [1, 1] },  // 10% 機率掉新材料（預留供後續用）
+          { name: '罪薔之心', chance: 0.50, qty: [1, 2] },  // 額外 50% 機率多 1~2 顆
         ],
         bonusEquipment: [
           // 首通必掉 1 枚、之後 8% 機率
           { items: ['eq-ring-ur-bloodscythe'], chance: 0.08, guaranteedFirstClear: true, label: 'UR 戒指「緋月血契」' },
+          // 10% 機率掉 UR3 武器或裝備（4 武器 + 4 防具隨機 1 件）
+          { items: [
+            'eq-weap-ur3', 'eq-mirror-ur3', 'eq-bow-ur3', 'eq-cannon-ur3',
+            'eq-head-bloodscythe', 'eq-top-bloodscythe', 'eq-bot-bloodscythe', 'eq-feet-bloodscythe',
+          ], chance: 0.10, label: 'UR 武器或裝備（隨機 1 件）' },
         ],
         lore: [
           '千年前，有位深愛人類英雄的少女。',
@@ -1060,8 +1065,9 @@ const REGIONS = [
           { label: '金幣',   value: '130,000', color: 'var(--gold)' },
           { label: '神鋼',   value: '必掉 ×15~25', color: 'var(--shard)' },
           { label: '永晶',   value: '必掉 ×5~10', color: 'var(--shard)' },
-          { label: '✿ 罪薔之心', value: '10% 機率（罪薔薇系材料）', color: 'var(--hp-enemy)' },
+          { label: '✿ 罪薔之心', value: '必掉 ×1~3 + 50% 額外 ×1~2（UR3 武器成長 + 強化 15~18 材料）', color: 'var(--hp-enemy)' },
           { label: '★★ UR 戒指', value: '首通必掉「緋月血契」、之後 8% 機率（處決效果）', color: 'var(--hp-enemy)' },
+          { label: '★★★ UR3 武器/裝備', value: '10% 機率掉「緋月」系列 1 件（4 武器 + 4 防具隨機，比 UR2 / 蝕痕鎧神更強）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-bloodscythe-art.png',
         enemies: [],
@@ -1638,6 +1644,51 @@ const ITEMS = {
         effect: { atk: 'forge:400+40', crit: 0.20, critDmg: 0.90, vsBoss: 'forge:0.40+0.025', skillDmg: 'forge:0.40+0.025', dmgReduce: 0.10, defPierce: 0.20, atkPct: 0.15 },
       },
     },
+
+    // ===== 緋月姬 UR3 武器（罪薔薇祭壇專屬掉落，tier 6，比 ur2 強 30~50%）=====
+    { id: 'eq-weap-ur3', slot: 'weapon', owner: 'tsukirin', name: '緋月·噬血凶矛', rarity: 'UR', tier: 6,
+      stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
+      fixed: {
+        label: '噬血凶矛：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+      },
+    },
+    { id: 'eq-mirror-ur3', slot: 'weapon', owner: 'eve', name: '緋月·薔薇真鏡', rarity: 'UR', tier: 6,
+      stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
+      fixed: {
+        label: '薔薇真鏡：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+      },
+    },
+    { id: 'eq-bow-ur3', slot: 'weapon', owner: 'rean', name: '緋月·血薇神羽弓', rarity: 'UR', tier: 6,
+      stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
+      fixed: {
+        label: '血薇神羽：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+      },
+    },
+    { id: 'eq-cannon-ur3', slot: 'weapon', owner: 'mira', name: '緋月·罪薔光子砲', rarity: 'UR', tier: 6,
+      stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
+      fixed: {
+        label: '罪薔光子：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+      },
+    },
+
+    // ===== 緋月姬 UR3 套裝「緋月·血薔薇」（罪薔薇祭壇專屬掉落，tier 6，比蝕痕鎧神強）=====
+    { id: 'eq-head-bloodscythe', slot: 'head', name: '緋月·血薔冠', rarity: 'UR', tier: 6, setId: 'set-bloodscythe',
+      stats: { hp: 3000, crit: 0.20, atk: 180, critDmg: 0.30 },
+      fixed: { label: '血薔冠冕：對 BOSS +(35%+強化×2%)、暴擊傷害 +35%', effect: { vsBoss: 'forge:0.35+0.02', critDmg: 0.35 } } },
+    { id: 'eq-top-bloodscythe', slot: 'top', name: '緋月·血薔胸甲', rarity: 'UR', tier: 6, setId: 'set-bloodscythe',
+      stats: { def: 330, hp: 3600, crit: 0.08 },
+      fixed: { label: '血薔守護：減傷 +(25%+強化×1.5%)、生命 +1200、技能傷害 +18%', effect: { dmgReduce: 'forge:0.25+0.015', hp: 1200, skillDmg: 0.18 } } },
+    { id: 'eq-bot-bloodscythe', slot: 'bottom', name: '緋月·血薔裙', rarity: 'UR', tier: 6, setId: 'set-bloodscythe',
+      stats: { def: 220, spd: 0.65, hp: 1500 },
+      fixed: { label: '血薔疾律：CD 縮減 +(25%+強化×1.5%)、技能傷害 +18%、速度 +20%', effect: { cdReduce: 'forge:0.25+0.015', skillDmg: 0.18, spd: 0.20 } } },
+    { id: 'eq-feet-bloodscythe', slot: 'feet', name: '緋月·血薔靴', rarity: 'UR', tier: 6, setId: 'set-bloodscythe',
+      stats: { spd: 0.85, hp: 1500, crit: 0.18, atk: 80 },
+      fixed: { label: '血薔疾光：速度 +(40%+強化×2.5%)、技能傷害 +15%、暴擊 +8%', effect: { spd: 'forge:0.40+0.025', skillDmg: 0.15, crit: 0.08 } } },
+
     // ===== 戒指（純詞綴，無 stats / 無 fixed / 無 owner，N~SSR 製作取得，可用重抽券洗詞綴）=====
     { id: 'eq-ring-n',    slot: 'ring', name: '練習戒指', rarity: 'N',   tier: 0, stats: {} },
     { id: 'eq-ring-r',    slot: 'ring', name: '寒鐵戒指', rarity: 'R',   tier: 1, stats: {} },
@@ -1729,6 +1780,17 @@ const SETS = {
       }, passive: { maxMp: 200 } },
     ],
   },
+  // 緋月血薔薇套（罪薔薇祭壇掉落・畢業後最終護持）
+  'set-bloodscythe': {
+    name: '緋月血薔',
+    color: '#ff3060',
+    tagline: '罪薔薇祭壇千年血薔的化身——每多一件，緋月之力就再覺醒一分。',
+    coreSet: true, armorOnly: true,
+    bonuses: [
+      { pieces: 2, label: '血薔·二件套：對 BOSS +25%、暴擊傷害 +25%、暴擊 +10%', effect: { vsBoss: 0.25, critDmg: 0.25, crit: 0.10 } },
+      { pieces: 4, label: '★血薔·四件套：所有屬性 +30%、技能傷害 +35%、減傷 +15%、5% 吸血（千年血咒覺醒）', effect: { allMul: 0.30, skillDmg: 0.35, dmgReduce: 0.15, lifesteal: 0.05 } },
+    ],
+  },
   // 終焉套（無盡塔製作・畢業終極）
   'set-ruination': {
     name: '蝕痕鎧神',
@@ -1786,12 +1848,30 @@ const UR_GROWTH_COSTS = [
   { stage: 10, gold: 20_000_000, mats: { '星淵碎片': 100, '星龍鱗片': 75, '永恆星辰': 5 } },
 ];
 const UR_GROWTH_MAX_STAGE = 10;
+// 緋月姬 ur3 武器成長費（用罪薔之心，比 ur2 略多但材料單一）
+const UR3_GROWTH_COSTS = [
+  { stage: 1,  gold: 150_000,    mats: { '罪薔之心': 5 } },
+  { stage: 2,  gold: 300_000,    mats: { '罪薔之心': 8 } },
+  { stage: 3,  gold: 600_000,    mats: { '罪薔之心': 12 } },
+  { stage: 4,  gold: 1_200_000,  mats: { '罪薔之心': 18 } },
+  { stage: 5,  gold: 2_000_000,  mats: { '罪薔之心': 25 } },
+  { stage: 6,  gold: 4_000_000,  mats: { '罪薔之心': 35 } },
+  { stage: 7,  gold: 7_000_000,  mats: { '罪薔之心': 50 } },
+  { stage: 8,  gold: 10_000_000, mats: { '罪薔之心': 70 } },
+  { stage: 9,  gold: 15_000_000, mats: { '罪薔之心': 95 } },
+  { stage: 10, gold: 25_000_000, mats: { '罪薔之心': 130 } },
+];
 // 判斷裝備是否可用 UR 武器成長
 function isUrGrowable(def) {
-  return def && (def.id === 'eq-weap-ur2' || def.id === 'eq-mirror-ur2' || def.id === 'eq-bow-ur2' || def.id === 'eq-cannon-ur2');
+  if (!def) return false;
+  return ['eq-weap-ur2', 'eq-mirror-ur2', 'eq-bow-ur2', 'eq-cannon-ur2',
+          'eq-weap-ur3', 'eq-mirror-ur3', 'eq-bow-ur3', 'eq-cannon-ur3'].includes(def.id);
 }
-function getUrGrowthCost(stage) {
-  return UR_GROWTH_COSTS.find(c => c.stage === stage);
+// ur3 用罪薔之心、ur2 用星淵碎片
+function getUrGrowthCost(stage, def) {
+  const isUr3 = def && ['eq-weap-ur3', 'eq-mirror-ur3', 'eq-bow-ur3', 'eq-cannon-ur3'].includes(def.id);
+  const table = isUr3 ? UR3_GROWTH_COSTS : UR_GROWTH_COSTS;
+  return table.find(c => c.stage === stage);
 }
 function getUrGrowthUnlocked(stage) {
   return UR_GROWTH.filter(e => e.stage <= stage);
@@ -1940,9 +2020,9 @@ function forgeCost(level) {
     12: { gold: 1_200_000, mats: [{ name: '蝕痕碎片', qty: 80 }, { name: '蝕痕神核', qty: 5 }] },
     13: { gold: 1_800_000, mats: [{ name: '蝕痕碎片', qty: 100 }, { name: '蝕痕神核', qty: 10 }] },
     14: { gold: 2_500_000, mats: [{ name: '蝕痕神核', qty: 15 }, { name: '終焉印石', qty: 3 }] },
-    15: { gold: 3_500_000, mats: [{ name: '蝕痕神核', qty: 25 }, { name: '終焉印石', qty: 5 }] },
-    16: { gold: 5_000_000, mats: [{ name: '終焉印石', qty: 10 }, { name: '異界之鎚', qty: 2 }] },
-    17: { gold: 7_000_000, mats: [{ name: '終焉印石', qty: 20 }, { name: '異界之鎚', qty: 5 }] },
+    15: { gold: 3_500_000, mats: [{ name: '蝕痕神核', qty: 25 }, { name: '終焉印石', qty: 5 }, { name: '罪薔之心', qty: 1 }] },
+    16: { gold: 5_000_000, mats: [{ name: '終焉印石', qty: 10 }, { name: '異界之鎚', qty: 2 }, { name: '罪薔之心', qty: 2 }] },
+    17: { gold: 7_000_000, mats: [{ name: '終焉印石', qty: 20 }, { name: '異界之鎚', qty: 5 }, { name: '罪薔之心', qty: 3 }] },
   };
   const recipe = RECIPES[level] || RECIPES[17];
   return {
