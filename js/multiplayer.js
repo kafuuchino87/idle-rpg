@@ -593,6 +593,23 @@ function handleMessage(fromPeerId, data) {
       if (typeof window.bossDeathStart === 'function') window.bossDeathStart();
     }
   }
+  // 緋月姬：BOSS 死亡動畫進場（7 秒 + 3 段對白）— guest 同步
+  if (data.type === 'crimson-dying' && MP.role === 'guest') {
+    const b = window.BATTLE;
+    if (b && b.running) {
+      if (b.enemy) b.enemy.hp = 1;
+      b.bossDying = true;
+      b.bossDyingTimer = 7.0;
+      b.crimsonDeathLines = (data.payload && data.payload.lines) ? data.payload.lines.map(l => ({ ...l, fired: false })) : null;
+      if (b.crimsonBoss) b.crimsonBoss.active = null;
+      if (b.enemy) { b.enemy.shield = 0; b.enemy.shieldMax = 0; }
+      b.buffs = (b.buffs || []).filter(buf => !buf.vsBossExpose);
+      if (typeof window.logLine === 'function') {
+        window.logLine(`<span class="lg-clear">★ ${b.enemy ? b.enemy.name : '緋月姬'} 搖搖欲墜——千年之夢即將消散</span>`, '');
+      }
+      if (typeof window.bossDeathStart === 'function') window.bossDeathStart();
+    }
+  }
   // 鏡夢縛魂：開場拔刀斬 — guest 收到後同步扣血 + 播動畫
   if (data.type === 'boss-slash' && MP.role === 'guest') {
     const b = window.BATTLE;

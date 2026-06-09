@@ -478,11 +478,21 @@ function tickBattle(dt) {
   // 凍結倒數
   if (BATTLE.freezes > 0) BATTLE.freezes -= dtSec;
 
-  // 鏡夢縛魂 BOSS 死亡動畫倒數
+  // 鏡夢縛魂 / 緋月姬 BOSS 死亡動畫倒數
   if (BATTLE.bossDying) {
     BATTLE.bossDyingTimer -= dtSec;
+    // 緋月姬：依時間軸觸發 3 段死亡對白
+    if (BATTLE.crimsonDeathLines) {
+      for (const line of BATTLE.crimsonDeathLines) {
+        if (!line.fired && BATTLE.bossDyingTimer <= line.at) {
+          line.fired = true;
+          fireBossSpeak(line.text, 2.0);
+        }
+      }
+    }
     if (BATTLE.bossDyingTimer <= 0) {
       BATTLE.bossDying = false;
+      BATTLE.crimsonDeathLines = null;
       if (BATTLE._mpMode !== 'guest') {
         if (BATTLE.enemy) BATTLE.enemy.hp = 0;
         if (typeof onEnemyDown === 'function') onEnemyDown();
@@ -1199,6 +1209,30 @@ function applyBossRageTransition() {
   logLine(`<span class="lg-clear">★ ${BATTLE.enemy.name} 覺醒！血量回滿至 ${(pt.newHp/1e8).toFixed(0)}億，攻擊力上升！</span>`, '');
 }
 
+// 血鐮緋月姬：BOSS 死亡動畫進場（7 秒、3 段悲劇對白）
+// 與 mirror 共用 bossDying 框架，但拉長 timer 並走台詞排程
+function enterCrimsonBossDying() {
+  if (!BATTLE.enemy || BATTLE.bossDying) return;
+  BATTLE.enemy.hp = 1;
+  BATTLE.bossDying = true;
+  BATTLE.bossDyingTimer = 7.0;
+  // 死亡台詞時間軸（at 是「剩餘秒數」觸發點）
+  BATTLE.crimsonDeathLines = [
+    { at: 6.5, text: '啊……血……終於停止流動了……', fired: false },
+    { at: 4.5, text: '千年的等待……終於……結束了嗎……', fired: false },
+    { at: 2.5, text: '若你……能見到他……請告訴他……我等過……', fired: false },
+  ];
+  // 清掉執行中的招式 / 護盾 / buff
+  if (BATTLE.crimsonBoss) BATTLE.crimsonBoss.active = null;
+  if (BATTLE.enemy.shield) { BATTLE.enemy.shield = 0; BATTLE.enemy.shieldMax = 0; }
+  BATTLE.buffs = (BATTLE.buffs || []).filter(b => !b.vsBossExpose);
+  logLine(`<span class="lg-clear">★ ${BATTLE.enemy.name} 搖搖欲墜——千年之夢即將消散</span>`, '');
+  if (typeof window.bossDeathStart === 'function') window.bossDeathStart();
+  if (BATTLE._mpMode === 'host' && window.MP_API) {
+    MP_API.broadcast('crimson-dying', { dungeonId: BATTLE.dungeonId, lines: BATTLE.crimsonDeathLines });
+  }
+}
+
 // 鏡夢縛魂：BOSS 死亡動畫進場
 // HP 鎖在 1，暫停所有技能、玩家攻擊、BOSS 攻擊
 // 3 秒後 hp → 0、onEnemyDown → onDungeonClear
@@ -1542,10 +1576,14 @@ function tickDots(dt) {
         }
         trackDamage(dmg, d.sourceId, false);
         if (window.floatDamage) floatDamage('🔥 ' + dmg, 'dot');
-        // 鏡夢縛魂：DoT 把 HP 打到 0 也要進入死亡動畫
+        // 鏡夢縛魂 / 緋月姬：DoT 把 HP 打到 0 也要進入死亡動畫
         if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) {
           if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest' && !BATTLE.bossDying) {
             enterMirrorBossDying();
+            return false;
+          }
+          if (BATTLE.enemy.bossSkillTag === 'crimson' && BATTLE._mpMode !== 'guest' && !BATTLE.bossDying) {
+            enterCrimsonBossDying();
             return false;
           }
           if (!BATTLE.bossDying) { onEnemyDown(); return false; }
@@ -1662,10 +1700,14 @@ function tickSummons(dt) {
         }
         trackDamage(dmg, s.sourceId, isCrit);
         if (window.floatDamage) floatDamage('🦊 ' + (isCrit ? 'CRIT! ' : '') + dmg, isCrit ? 'crit' : 'summon');
-        // 鏡夢縛魂：召喚物把 HP 打到 0 也要進入死亡動畫
+        // 鏡夢縛魂 / 緋月姬：召喚物把 HP 打到 0 也要進入死亡動畫
         if (!BATTLE._endlessMode && BATTLE.enemy.hp <= 0) {
           if (BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest' && !BATTLE.bossDying) {
             enterMirrorBossDying();
+            return s.dur > 0;
+          }
+          if (BATTLE.enemy.bossSkillTag === 'crimson' && BATTLE._mpMode !== 'guest' && !BATTLE.bossDying) {
+            enterCrimsonBossDying();
             return s.dur > 0;
           }
           if (!BATTLE.bossDying) { onEnemyDown(); return s.dur > 0; }
@@ -2018,6 +2060,12 @@ function applyDamage(dmg, isCrit) {
     enterMirrorBossDying();
     return;
   }
+  // 緋月姬：HP 跌破 0 時鎖在 1 進入 7 秒死亡動畫（含 3 段對白）
+  if (BATTLE.enemy.bossSkillTag === 'crimson' && BATTLE._mpMode !== 'guest'
+      && !BATTLE.bossDying && BATTLE.enemy.hp <= 0) {
+    enterCrimsonBossDying();
+    return;
+  }
   if (BATTLE.enemy.hp <= 0 && !BATTLE.bossDying) onEnemyDown();
 }
 
@@ -2092,11 +2140,16 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
   }
   BATTLE._activeSkillName = null;
 
-  // 鏡夢縛魂：AOE 把 BOSS 打到 0 也鎖在 1 進入死亡動畫
+  // 鏡夢縛魂 / 緋月姬：AOE 把 BOSS 打到 0 也鎖在 1 進入死亡動畫
   for (const e of BATTLE.currentWave) {
     if (e.bossSkillTag === 'mirror' && BATTLE._mpMode !== 'guest'
         && !BATTLE.bossDying && e.hp <= 0) {
       enterMirrorBossDying();
+      return totalDmg;
+    }
+    if (e.bossSkillTag === 'crimson' && BATTLE._mpMode !== 'guest'
+        && !BATTLE.bossDying && e.hp <= 0) {
+      enterCrimsonBossDying();
       return totalDmg;
     }
   }
