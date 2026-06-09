@@ -2618,6 +2618,7 @@ window.updateEndlessTier = updateEndlessTier;
 window.trackDamage = trackDamage;
 window.spawnNextWave = spawnNextWave;
 window.mirrorBossDamageHook = mirrorBossDamageHook;  // 鏡夢縛魂 host 端 MP 傷害攔截用
+window.crimsonBossDamageHook = crimsonBossDamageHook;  // 緋月姬 host 端 MP 傷害打斷計數用
 window.onDungeonClear = onDungeonClear;
 window.onBattleFail = onBattleFail;
 window.onEndlessTimeUp = onEndlessTimeUp;

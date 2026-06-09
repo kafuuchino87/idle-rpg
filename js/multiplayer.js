@@ -646,7 +646,7 @@ function handleMessage(fromPeerId, data) {
     if (b && b.running && b.enemy && data.payload && data.payload.pt) {
       const pt = data.payload.pt;
       b.bossRaging = true;
-      b.bossRagingTimer = 3.0;
+      b.bossRagingTimer = 4.0;  // 與 host 同步（之前是 3.0 會差 1 秒造成 Phase 2 套用時機不同步）
       b.bossRagingPending = pt;
       b.enemy.hp = pt.atHp;
       if (typeof window.bossRageStart === 'function') window.bossRageStart({ pending: pt });
@@ -703,6 +703,10 @@ function handleMessage(fromPeerId, data) {
           // ★ 鏡夢縛魂：guest 送的傷害也走 mirror hook（分身吸傷、鏡牢吸傷、打斷計數）
           if (e.bossSkillTag === 'mirror' && typeof window.mirrorBossDamageHook === 'function') {
             dmg = window.mirrorBossDamageHook(dmg);
+          }
+          // ★ 緋月姬：guest 送的傷害也走 crimson hook（蓄力技打斷計數）
+          if (e.bossSkillTag === 'crimson' && typeof window.crimsonBossDamageHook === 'function') {
+            dmg = window.crimsonBossDamageHook(dmg);
           }
           if (dmg <= 0) {
             // 全被分身/鏡牢吸收，不扣 BOSS hp
