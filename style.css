@@ -2296,6 +2296,157 @@ button.primary:hover { filter: brightness(1.1); }
   text-shadow: 0 0 6px rgba(0,0,0,0.6);
 }
 
+/* ============================================================ */
+/* 血鐮 · 罪薔薇祭壇 cutscene 主題（替代鏡夢的白霧紫）         */
+/* ============================================================ */
+
+/* 整體 overlay 改成黑→深紅漸層（哥德祭壇氛圍） */
+.cutscene-overlay.cutscene-bloodscythe.show {
+  background: radial-gradient(ellipse at 50% 70%,
+    rgba(94, 14, 30, 1) 0%,
+    rgba(46, 6, 14, 1) 45%,
+    rgba(12, 2, 6, 1) 100%);
+  transition: opacity 0.7s ease, background 1.8s ease;
+}
+
+/* 血幕：上方滲下一層血液暈染 */
+.cutscene-bloodscythe .cutscene-blood-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 30% at 50% 0%, rgba(180, 20, 50, 0.55), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 30% 20%, rgba(140, 10, 35, 0.4), transparent 70%),
+    radial-gradient(ellipse 50% 35% at 75% 15%, rgba(160, 15, 40, 0.4), transparent 70%);
+  filter: blur(15px);
+  opacity: 0;
+  pointer-events: none;
+  animation: bloodVeilIn 2.5s ease 0.3s forwards, bloodVeilPulse 6s ease-in-out 3s infinite;
+}
+@keyframes bloodVeilIn { to { opacity: 0.9; } }
+@keyframes bloodVeilPulse {
+  0%, 100% { opacity: 0.9; }
+  50%      { opacity: 0.65; }
+}
+
+/* 底部五芒星：旋轉光環、淡入、緩慢轉 */
+.cutscene-bloodscythe .cutscene-pentagram {
+  position: absolute;
+  left: 50%;
+  bottom: -15vh;
+  width: 60vh;
+  height: 60vh;
+  transform: translateX(-50%);
+  background:
+    /* 中心五芒星（用 conic-gradient 模擬光芒線條） */
+    radial-gradient(circle at 50% 50%, rgba(255, 60, 100, 0.5) 0%, transparent 35%),
+    radial-gradient(circle at 50% 50%, transparent 30%, rgba(180, 20, 50, 0.4) 32%, transparent 35%),
+    radial-gradient(circle at 50% 50%, transparent 44%, rgba(220, 30, 70, 0.7) 46%, transparent 50%);
+  border-radius: 50%;
+  opacity: 0;
+  filter: blur(2px) drop-shadow(0 0 60px rgba(220, 30, 70, 0.7));
+  animation: pentagramIn 3.5s ease 0.5s forwards, pentagramRotate 40s linear infinite;
+}
+.cutscene-bloodscythe .cutscene-pentagram::before {
+  /* 中央五芒星線條（用 SVG-as-data-uri，純紅色五芒星輪廓） */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,5 61,38 95,38 67,58 78,92 50,72 22,92 33,58 5,38 39,38' fill='none' stroke='rgb(255,80,120)' stroke-width='0.6' opacity='0.9'/><circle cx='50' cy='50' r='48' fill='none' stroke='rgb(220,40,80)' stroke-width='0.4' opacity='0.7'/><circle cx='50' cy='50' r='40' fill='none' stroke='rgb(220,40,80)' stroke-width='0.3' opacity='0.5'/></svg>") center / contain no-repeat;
+  filter: drop-shadow(0 0 20px rgba(255, 80, 120, 0.9));
+  animation: pentagramInnerRotate 30s linear infinite reverse;
+}
+@keyframes pentagramIn { to { opacity: 0.85; } }
+@keyframes pentagramRotate { to { transform: translateX(-50%) rotate(360deg); } }
+@keyframes pentagramInnerRotate { to { transform: rotate(360deg); } }
+
+/* 飄落薔薇花瓣：從上往下旋轉墜落 */
+.cutscene-bloodscythe .cutscene-petals {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cutscene-bloodscythe .cutscene-petal {
+  position: absolute;
+  top: -30px;
+  background: radial-gradient(ellipse 60% 100% at 50% 30%, #ff4068 0%, #b81940 60%, #6a0820 100%);
+  border-radius: 65% 35% 70% 30%;
+  filter: drop-shadow(0 0 8px rgba(255, 60, 100, 0.6));
+  opacity: 0.85;
+  transform: rotate(var(--start-rot, 0deg));
+  animation: petalFall var(--fall-dur, 8s) linear infinite;
+}
+@keyframes petalFall {
+  0%   { transform: translateY(0) translateX(0) rotate(var(--start-rot, 0deg)); opacity: 0; }
+  5%   { opacity: 0.85; }
+  50%  { transform: translateY(50vh) translateX(-30px) rotate(calc(var(--start-rot, 0deg) + 180deg)); }
+  95%  { opacity: 0.85; }
+  100% { transform: translateY(110vh) translateX(20px) rotate(calc(var(--start-rot, 0deg) + 540deg)); opacity: 0; }
+}
+
+/* 鐮刀斬擊弧線：從右上劃到左下（最後一句觸發） */
+.cutscene-bloodscythe .cutscene-slash {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 7;
+  opacity: 0;
+}
+.cutscene-bloodscythe .cutscene-slash::before {
+  /* 弧形斬擊：用大 box-shadow 模擬光弧 */
+  content: '';
+  position: absolute;
+  width: 140vw;
+  height: 140vw;
+  top: -20vw; left: -20vw;
+  border: 8px solid transparent;
+  border-top-color: rgba(255, 70, 120, 0.95);
+  border-right-color: rgba(255, 70, 120, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 0 60px 12px rgba(255, 80, 130, 0.8),
+              inset 0 0 30px rgba(255, 100, 150, 0.6);
+  clip-path: polygon(100% 0, 50% 50%, 100% 50%);
+  transform: rotate(-15deg) translate(20%, -10%) scale(0);
+  filter: blur(1px);
+}
+.cutscene-bloodscythe .cutscene-slash.strike {
+  animation: slashFlash 0.9s ease-out forwards;
+}
+.cutscene-bloodscythe .cutscene-slash.strike::before {
+  animation: slashSweep 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+@keyframes slashFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes slashSweep {
+  0%   { transform: rotate(-30deg) translate(40%, -30%) scale(0.3); filter: blur(3px); }
+  40%  { transform: rotate(-15deg) translate(20%, -10%) scale(1); filter: blur(1px); }
+  100% { transform: rotate(10deg) translate(-30%, 30%) scale(1.4); filter: blur(8px); }
+}
+
+/* 主題化對話框：紫色框 → 紅色框 */
+.cutscene-bloodscythe .cutscene-textbox {
+  background: linear-gradient(180deg, rgba(40, 10, 18, 0.85), rgba(20, 4, 10, 0.92));
+  border-color: rgba(220, 60, 90, 0.65);
+  box-shadow: 0 0 50px rgba(220, 40, 70, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.cutscene-bloodscythe .cutscene-speaker {
+  color: #ff5078;
+  text-shadow: 0 0 12px rgba(255, 80, 120, 0.8);
+}
+.cutscene-bloodscythe .cutscene-line {
+  color: #ffe0e6;
+}
+
+/* BOSS 立繪 emerge：保留動畫但 drop-shadow 改紅 */
+.cutscene-bloodscythe .cutscene-portrait img {
+  filter: drop-shadow(0 0 80px rgba(255, 60, 100, 0.75))
+          drop-shadow(0 0 30px rgba(255, 100, 130, 0.55));
+}
+
 .overlay-card {
   background: var(--bg2);
   border: 1px solid var(--line);

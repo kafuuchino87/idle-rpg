@@ -1010,7 +1010,8 @@ const REGIONS = [
         skipMobs: true,             // 不出小怪
         equipDropChance: 0,         // 不隨機掉裝備，只走 bonusEquipment
         cutscene: {
-          portrait: 'assets/portraits/raid-rosedance.png',
+          style: 'bloodscythe',  // 觸發專屬主題：紅幕 + 五芒星 + 飄落薔薇花瓣 + 鐮刀斬
+          portrait: 'assets/portraits/raid-bloodscythe-art.png',  // 帶背景原始藝術品
           lines: [
             { speaker: '？？？',     text: '……血的味道……溫熱、甜美……是你回來了嗎？' },
             { speaker: '緋月姬',    text: '啊……不是你。可是相似的氣息……足以喚醒我了。' },

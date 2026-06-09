@@ -1907,12 +1907,32 @@ function showRaidCutscene(cutscene, onComplete) {
   const existing = document.getElementById('cutsceneOverlay');
   if (existing) existing.remove();
 
+  const styleClass = cutscene.style ? ` cutscene-${cutscene.style}` : '';
   const overlay = document.createElement('div');
   overlay.id = 'cutsceneOverlay';
-  overlay.className = 'cutscene-overlay auto';
+  overlay.className = 'cutscene-overlay auto' + styleClass;
+  // 主題化粒子層：bloodscythe 用薔薇花瓣 + 五芒星 + 鐮刀斬擊
+  // 預設（mirror 等）用兩層白霧
+  let themeLayers = '<div class="cutscene-mist"></div><div class="cutscene-mist cutscene-mist-2"></div>';
+  if (cutscene.style === 'bloodscythe') {
+    // 18 片飄落花瓣（不同位置、延遲、旋轉）
+    const petals = Array.from({ length: 18 }, (_, i) => {
+      const leftPct = (i * 5.5 + (i % 3) * 7) % 100;
+      const delay = (i * 0.4) % 8;
+      const dur = 6 + (i % 4) * 1.5;
+      const size = 14 + (i % 3) * 6;
+      const rot = (i * 47) % 360;
+      return `<div class="cutscene-petal" style="left:${leftPct}%;animation-delay:${delay}s;animation-duration:${dur}s;width:${size}px;height:${size}px;--start-rot:${rot}deg"></div>`;
+    }).join('');
+    themeLayers = `
+      <div class="cutscene-blood-veil"></div>
+      <div class="cutscene-pentagram"></div>
+      <div class="cutscene-petals">${petals}</div>
+      <div class="cutscene-slash"></div>
+    `;
+  }
   overlay.innerHTML = `
-    <div class="cutscene-mist"></div>
-    <div class="cutscene-mist cutscene-mist-2"></div>
+    ${themeLayers}
     <div class="cutscene-portrait hidden">
       <img src="${cutscene.portrait}" alt="BOSS" />
     </div>
@@ -1972,6 +1992,11 @@ function showRaidCutscene(cutscene, onComplete) {
     if (idx === cutscene.lines.length - 1) {
       portraitEl.classList.remove('hidden');
       portraitEl.classList.add('emerge');
+      // 主題化：bloodscythe 同時觸發鐮刀斬擊弧
+      if (cutscene.style === 'bloodscythe') {
+        const slashEl = overlay.querySelector('.cutscene-slash');
+        if (slashEl) slashEl.classList.add('strike');
+      }
     }
     typeLine(line.text, () => {
       setTimeout(() => runLine(idx + 1), POST_LINE_PAUSE);
