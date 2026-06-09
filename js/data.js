@@ -1002,8 +1002,7 @@ const REGIONS = [
       // Phase 2：血咒覺醒 — 「千年血契」護盾即死機制
       // 掉落：低機率 UR 戒指「緋月血契」（處決效果） + 罪薔之心材料
       { id: 'raid-bloodscythe', name: '血鐮 · 罪薔薇祭壇', cp: 750000, unlock: 'raid-mirror', requiredLv: 99,
-        minCpOverride: 0,  // ⚠️ 測試中：暫時關閉 CP 入場門檻（正式上線改回 450000）
-        testNoKill: true,  // ⚠️ 測試中：玩家 HP < 1 自動 clamp 回 1，永遠死不了（正式上線刪除此欄）
+        minCpOverride: 450000,  // 入場門檻 45 萬 CP
         isRaid: true, baseTime: 90, expBase: 80000, goldBase: 130000,
         difficultyMul: 55,
         atkCoefOverride: 0.012,    // BOSS atk
