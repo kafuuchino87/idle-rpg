@@ -493,6 +493,14 @@ function tickBattle(dt) {
     }
     return;  // 爆走期間暫停一切
   }
+  // 緋月姬爆走判定（host / solo 都檢查 — 不依賴 applyDamage 流程
+  // host 死後 guest 攻擊 BOSS 走 dmg-dealt 廣播扣血、那條路沒檢查 phaseTransition
+  // 這裡在 tick 層獨立輪詢，guest 持續攻擊也能正確觸發爆走）
+  if (BATTLE.enemy && BATTLE.enemy.phaseTransition && !BATTLE.enemy._transitioned && BATTLE._mpMode !== 'guest') {
+    if (BATTLE.enemy.hp <= BATTLE.enemy.phaseTransition.atHp) {
+      enterBossRageTransition(BATTLE.enemy.phaseTransition);
+    }
+  }
   // 緋月姬技能排程
   tickCrimsonBoss(dtSec);
   // BOSS 護盾即死機制（雙影獵討的 shieldConfig）
