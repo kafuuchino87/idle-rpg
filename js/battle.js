@@ -1436,13 +1436,13 @@ function castCurseRain() {
   fireBossSkillAnim('curseRain', { duration: 6.0 });
 }
 
-// === P2 #4 緋月終焉：5s 蓄力 → 95% maxHP；打斷需 10 億傷害（必殺技）===
+// === P2 #4 緋月終焉：5s 蓄力 → 95% maxHP；打斷需 18 億傷害（必殺技）===
 function castMoonFinale() {
   BATTLE.crimsonBoss.active = {
     id: 'moonFinale', timer: 5.0, name: '緋月終焉',
-    failDmgPct: 0.95, dmgThreshold: 1_000_000_000, dmgDealt: 0,
+    failDmgPct: 0.95, dmgThreshold: 1_800_000_000, dmgDealt: 0,
   };
-  logLine(`<span class="lg-fail">✦【緋月終焉】緋月姬凝聚千年怨念！5 秒內造成 10 億傷害可打斷，否則扣 95% 生命！</span>`, '');
+  logLine(`<span class="lg-fail">✦【緋月終焉】緋月姬凝聚千年怨念！5 秒內造成 18 億傷害可打斷，否則扣 95% 生命！</span>`, '');
   fireBossSkillAnim('moonFinale', { duration: 5.0 });
 }
 
