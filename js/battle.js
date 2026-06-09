@@ -465,6 +465,10 @@ function tickBattle(dt) {
     }
   }
 
+  // NaN 保險（任何操作把 hp / mp 弄成 NaN 都會在這裡復原，避免戰鬥卡死）
+  if (!Number.isFinite(BATTLE.player.hp)) BATTLE.player.hp = 0;
+  if (!Number.isFinite(BATTLE.player.mp)) BATTLE.player.mp = 0;
+  if (BATTLE.enemy && !Number.isFinite(BATTLE.enemy.hp)) BATTLE.enemy.hp = 0;
   // 凍結倒數
   if (BATTLE.freezes > 0) BATTLE.freezes -= dtSec;
 
@@ -1386,9 +1390,22 @@ function castMoonFinale() {
 }
 
 // === tick：執行中招式倒數 / 結算 ===
+// 共用受傷工具：clamp 到 0、玩家已死就跳過後續招式邏輯
+function crimsonDealPlayerDmg(dmg) {
+  if (!Number.isFinite(dmg) || dmg <= 0) return;
+  if (BATTLE._dead) return;
+  BATTLE.player.hp = Math.max(0, BATTLE.player.hp - dmg);
+  if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
+}
+
 function tickCrimsonActive(dt) {
   const a = BATTLE.crimsonBoss.active;
   if (!a) return;
+  // 玩家已死 → 中止當前招式，跳過後續傷害
+  if (BATTLE._dead) {
+    BATTLE.crimsonBoss.active = null;
+    return;
+  }
   a.timer -= dt;
   // 對白蓄力結束 → 真正施法
   if (a.id === 'preCast' && a.timer <= 0) {
@@ -1401,13 +1418,12 @@ function tickCrimsonActive(dt) {
   if ((a.id === 'roseDance' || a.id === 'curseSpiral') && a.hitsLeft > 0) {
     a.hitCD -= dt;
     if (a.hitCD <= 0) {
-      const dmg = Math.floor(BATTLE.player.maxHp * a.dmgPerHit);
-      BATTLE.player.hp -= dmg;
+      const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.dmgPerHit);
+      crimsonDealPlayerDmg(dmg);
       logLine(`<span class="lg-fail">${a.name} 第 ${a.hits - a.hitsLeft + 1}/${a.hits} 段：${dmg} 傷害</span>`, '');
       fireBossSkillAnim(a.id + 'Hit', { hitIdx: a.hits - a.hitsLeft + 1 });
       a.hitsLeft--;
       a.hitCD = a.hitInterval;
-      if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
     }
     if (a.hitsLeft <= 0 && a.timer <= 0.1) {
       BATTLE.crimsonBoss.active = null;
@@ -1418,12 +1434,11 @@ function tickCrimsonActive(dt) {
   if (a.id === 'scytheFrenzy' || a.id === 'curseRain') {
     a.dotCD -= dt;
     if (a.dotCD <= 0) {
-      const dmg = Math.floor(BATTLE.player.maxHp * a.dotPct);
-      BATTLE.player.hp -= dmg;
+      const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.dotPct);
+      crimsonDealPlayerDmg(dmg);
       logLine(`<span class="lg-fail">${a.name}：${dmg} 傷害</span>`, '');
       fireBossSkillAnim(a.id + 'Tick', {});
       a.dotCD = a.dotInterval;
-      if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
     }
     if (a.timer <= 0) {
       BATTLE.crimsonBoss.active = null;
@@ -1443,11 +1458,10 @@ function tickCrimsonActive(dt) {
         logLine(`<span class="lg-clear">✦ 薔薇祭壇破裂！緋月姬 8 秒內受傷 +25%！</span>`, '');
       }
     } else {
-      const dmg = Math.floor(BATTLE.player.maxHp * a.failDmgPct);
-      BATTLE.player.hp -= dmg;
+      const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.failDmgPct);
+      crimsonDealPlayerDmg(dmg);
       logLine(`<span class="lg-fail">✗ 未及時打斷！${a.name} 造成 ${dmg} 傷害（${Math.round(a.failDmgPct*100)}%）</span>`, '');
       fireBossSkillAnim(a.id + 'End', { broken: false });
-      if (BATTLE.player.hp <= 0) handleMirrorPlayerDead();
     }
     BATTLE.crimsonBoss.active = null;
   }

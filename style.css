@@ -1505,6 +1505,300 @@ button.primary:hover { filter: brightness(1.1); }
   70%  { transform: scale(1.02); }
   100% { transform: scale(1); box-shadow: 0 0 0 transparent; filter: brightness(1); }
 }
+
+/* === 10. 緋月姬待機呼吸燈（無招式時 BOSS 卡持續紅光脈動）=== */
+.enemy-card.crimson-idle {
+  animation: crimsonIdleBreath 3.2s ease-in-out infinite;
+}
+.enemy-card.crimson-idle .card-frame {
+  border-color: rgba(255, 60, 100, 0.6) !important;
+  animation: crimsonIdleFrameBreath 3.2s ease-in-out infinite;
+}
+.enemy-card.crimson-idle .portrait img {
+  animation: crimsonIdleImgBreath 3.2s ease-in-out infinite;
+}
+@keyframes crimsonIdleBreath {
+  0%, 100% { box-shadow: 0 0 25px rgba(255, 30, 80, 0.35); }
+  50%      { box-shadow: 0 0 55px rgba(255, 70, 120, 0.75), 0 0 90px rgba(255, 30, 80, 0.4); }
+}
+@keyframes crimsonIdleFrameBreath {
+  0%, 100% { border-color: rgba(255, 60, 100, 0.5) !important; }
+  50%      { border-color: rgba(255, 100, 140, 0.95) !important; box-shadow: 0 0 20px rgba(255, 30, 80, 0.5); }
+}
+@keyframes crimsonIdleImgBreath {
+  0%, 100% { filter: brightness(1) saturate(1) drop-shadow(0 0 12px rgba(255, 60, 100, 0.4)); }
+  50%      { filter: brightness(1.08) saturate(1.2) drop-shadow(0 0 24px rgba(255, 80, 130, 0.85)); }
+}
+
+/* === 11. 緋月斬巨型鐮：標籤位置避免遮主視覺 === */
+.crimson-big-scythe .crimson-charge-label {
+  /* 改放在大鐮下方，文字加紅黑背景塊 */
+  bottom: -48px;
+  font-size: 16px;
+  padding: 4px 16px;
+  background: linear-gradient(180deg, rgba(40, 6, 14, 0.92), rgba(20, 2, 6, 0.95));
+  border: 1px solid rgba(255, 80, 120, 0.7);
+  border-radius: 4px;
+  box-shadow: 0 0 14px rgba(255, 40, 80, 0.6);
+}
+
+/* === 12. 緋月終焉：標籤改靠卡片底邊 + 紅黑底色 + 縮小不擋月 === */
+.crimson-finale-label {
+  bottom: 4% !important;
+  font-size: 22px !important;
+  letter-spacing: 12px !important;
+  padding: 6px 22px;
+  background: linear-gradient(180deg, rgba(40, 6, 14, 0.92), rgba(20, 2, 6, 0.95));
+  border: 1.5px solid rgba(255, 70, 120, 0.85);
+  border-radius: 4px;
+  box-shadow: 0 0 28px rgba(255, 30, 70, 0.7);
+}
+/* 紅月縮小避免遮鐮 + 上移 */
+.crimson-finale-moon {
+  width: 220px !important; height: 220px !important;
+  top: -30px !important;
+}
+
+/* === 13. 連續斬擊強化：花瓣噴撒、紅光擴張環、殘影軌跡 === */
+
+/* 從 BOSS 卡噴出的花瓣 */
+.crimson-petal-burst {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 14px; height: 14px;
+  background: radial-gradient(ellipse 60% 100% at 50% 30%, #ff4068 0%, #b81940 60%, #6a0820 100%);
+  border-radius: 65% 35% 70% 30%;
+  filter: drop-shadow(0 0 8px rgba(255, 60, 100, 0.9));
+  pointer-events: none;
+  z-index: 25;
+  animation: crimsonPetalBurst 1.1s ease-out forwards;
+}
+@keyframes crimsonPetalBurst {
+  0%   { transform: translate(-50%, -50%) rotate(var(--burst-angle, 0deg)) translateX(0) rotate(0); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--burst-angle, 0deg)) translateX(var(--burst-distance, 150px)) rotate(720deg); opacity: 0; }
+}
+
+/* 紅光擴張環：從中央往外噴 */
+.crimson-burst-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 80px; height: 80px;
+  border: 4px solid rgba(255, 60, 100, 0.95);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 22;
+  box-shadow: 0 0 30px rgba(255, 40, 80, 0.85), inset 0 0 20px rgba(255, 80, 120, 0.6);
+  animation: crimsonBurstRing 0.8s ease-out forwards;
+}
+.crimson-burst-ring.p2 {
+  border-color: rgba(255, 30, 70, 1);
+  box-shadow: 0 0 50px rgba(255, 0, 40, 1), inset 0 0 30px rgba(255, 60, 100, 0.8);
+}
+@keyframes crimsonBurstRing {
+  0%   { width: 80px; height: 80px; opacity: 1; border-width: 6px; }
+  100% { width: 80vw; height: 80vw; opacity: 0; border-width: 1px; }
+}
+
+/* 鐮殘影（淡一點、後出） */
+.crimson-arc.ghost {
+  opacity: 0.6;
+  filter: drop-shadow(0 0 16px #ff5080) blur(1px);
+  width: 200px; height: 200px;
+}
+
+/* 玩家身上斬擊切痕 */
+.crimson-slash-mark {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: linear-gradient(var(--mark-angle, 30deg),
+    transparent 47%,
+    rgba(255, 30, 80, 0.95) 49%,
+    rgba(255, 100, 140, 1) 50%,
+    rgba(255, 30, 80, 0.95) 51%,
+    transparent 53%);
+  pointer-events: none;
+  z-index: 8;
+  animation: crimsonSlashMark 0.6s ease-out forwards;
+  filter: drop-shadow(0 0 12px rgba(255, 60, 100, 0.95));
+}
+@keyframes crimsonSlashMark {
+  0%   { opacity: 0; transform: scale(0.3); }
+  20%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* === 14. 千鐮亂舞強化：BOSS 卡紅色光環 + 卡片內紅暈 === */
+.enemy-card .crimson-orbit {
+  /* 軌道周圍加 BOSS 卡紅光環 */
+}
+.enemy-card:has(.crimson-orbit) {
+  animation: crimsonOrbitCardGlow 5s ease-in-out;
+}
+.enemy-card:has(.crimson-orbit) .card-frame {
+  border-color: rgba(255, 40, 80, 0.95) !important;
+  box-shadow: 0 0 60px rgba(255, 40, 80, 0.8), inset 0 0 80px rgba(120, 0, 30, 0.4) !important;
+}
+@keyframes crimsonOrbitCardGlow {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.15) saturate(1.3); }
+}
+
+/* === 15. 五芒星魔法陣（玩家身上版本，更震撼）=== */
+.player-side .fighter-card .crimson-pentagram,
+.player-card .crimson-pentagram {
+  position: absolute;
+  inset: -20px;  /* 蓋住整張卡 + 一點外延 */
+  pointer-events: none;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.player-side .fighter-card .crimson-pentagram.big,
+.player-card .crimson-pentagram.big {
+  inset: -40px;
+}
+
+/* 外層紅色光暈背景 */
+.crimson-pentagram-aura {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255, 40, 80, 0.45) 0%,
+    rgba(180, 20, 50, 0.3) 40%,
+    transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: crimsonPentaAuraPulse 1.4s ease-in-out infinite;
+}
+@keyframes crimsonPentaAuraPulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+/* 主 SVG 五芒星 */
+.crimson-pentagram-svg {
+  width: 100%; height: 100%;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 0 16px #ff3060) drop-shadow(0 0 30px rgba(255, 60, 100, 0.7));
+  animation: crimsonPentaSvgIn 0.7s ease-out forwards, crimsonPentaSvgRotate 12s linear infinite 0.7s;
+}
+.crimson-pentagram.big .crimson-pentagram-svg {
+  animation: crimsonPentaSvgIn 0.9s ease-out forwards, crimsonPentaSvgRotate 8s linear infinite 0.9s;
+}
+@keyframes crimsonPentaSvgIn {
+  0%   { transform: scale(0.2); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes crimsonPentaSvgRotate {
+  to { transform: rotate(360deg); }
+}
+
+/* 外環旋轉光帶（反向）*/
+.crimson-pentagram-ring {
+  position: absolute;
+  inset: 8%;
+  border: 2px solid rgba(255, 100, 140, 0.85);
+  border-radius: 50%;
+  border-style: dashed;
+  filter: drop-shadow(0 0 8px #ff4070);
+  animation: crimsonPentaRingRotate 6s linear infinite reverse;
+  pointer-events: none;
+}
+@keyframes crimsonPentaRingRotate { to { transform: rotate(-360deg); } }
+
+/* 倒數時間軸（橫條從滿到空）*/
+.crimson-pentagram-timer {
+  position: absolute;
+  bottom: 8%; left: 12%; width: 76%;
+  height: 4px;
+  background: rgba(40, 6, 14, 0.7);
+  border: 1px solid rgba(255, 60, 100, 0.7);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.crimson-pentagram-timer-bar {
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, #ff3060, #ff80a8);
+  box-shadow: 0 0 8px #ff3060;
+  animation: crimsonPentaTimerDrain var(--charge-dur, 4s) linear forwards;
+}
+@keyframes crimsonPentaTimerDrain { to { width: 0%; } }
+
+/* 標籤：放在五芒星中央上方 */
+.crimson-pentagram-label {
+  position: absolute;
+  top: 38%; left: 50%; transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 17px; font-weight: 800; letter-spacing: 6px;
+  text-shadow: 0 0 12px #ff0030, 0 0 24px rgba(255, 60, 100, 1);
+  padding: 6px 16px;
+  background: linear-gradient(180deg, rgba(80, 8, 24, 0.85), rgba(40, 4, 12, 0.95));
+  border: 1px solid rgba(255, 80, 120, 0.95);
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 3;
+  animation: crimsonPentaLabelIn 0.6s ease-out forwards;
+}
+.crimson-pentagram.big .crimson-pentagram-label {
+  font-size: 20px;
+  letter-spacing: 8px;
+}
+@keyframes crimsonPentaLabelIn {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 結束狀態：成功打斷 → 縮小消散；失敗 → 爆裂 */
+.crimson-pentagram.broken { animation: crimsonPentaBroken 0.9s ease forwards !important; }
+.crimson-pentagram.fired  { animation: crimsonPentaFired  0.9s ease forwards !important; }
+.crimson-pentagram.broken .crimson-pentagram-svg,
+.crimson-pentagram.fired .crimson-pentagram-svg { animation: none !important; }
+@keyframes crimsonPentaBroken {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.4) rotate(180deg); filter: brightness(0.3); }
+}
+@keyframes crimsonPentaFired {
+  0%   { opacity: 1; transform: scale(1); }
+  40%  { opacity: 1; transform: scale(1.8); filter: brightness(3); }
+  100% { opacity: 0; transform: scale(2.5); }
+}
+
+/* 玩家被封印感：卡片紅化 + 邊框紅化 */
+.player-side .fighter-card.crimson-sealed,
+.player-card.crimson-sealed {
+  animation: crimsonSealedShake 0.4s ease-in-out infinite;
+  filter: brightness(0.85) saturate(1.3) drop-shadow(0 0 16px #ff3060);
+}
+.player-side .fighter-card.crimson-sealed .card-frame,
+.player-card.crimson-sealed .card-frame {
+  border-color: rgba(255, 40, 80, 1) !important;
+  box-shadow: 0 0 40px rgba(255, 40, 80, 0.85) !important;
+}
+@keyframes crimsonSealedShake {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(2px); }
+}
+
+/* 失敗爆裂粒子環 */
+.crimson-pentagram-burst {
+  position: absolute;
+  inset: -50%;
+  border: 4px solid rgba(255, 30, 70, 1);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 15;
+  box-shadow: 0 0 60px rgba(255, 0, 30, 1), inset 0 0 40px rgba(255, 80, 120, 0.8);
+  animation: crimsonPentaBurst 0.8s ease-out forwards;
+}
+@keyframes crimsonPentaBurst {
+  0%   { transform: scale(0.3); opacity: 1; }
+  100% { transform: scale(2.5); opacity: 0; border-width: 1px; }
+}
 .screen-shake-hard {
   animation: screenShakeHard 0.8s ease;
 }

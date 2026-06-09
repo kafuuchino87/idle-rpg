@@ -2305,36 +2305,70 @@ function mirrorAnim_awakening(data) {
 // ============================================================================
 const CRIMSON_SCYTHE_IMG = 'assets/portraits/raid-scythe-icon.png';
 
-// 連續斬擊弧（roseDance / curseSpiral）：一把鐮從上方斬下，每段刷新一次
-function crimsonAnim_scytheArc(data, _id) {
+// 連續斬擊弧（roseDance / curseSpiral）：一把鐮從上方斬下 + 花瓣噴撒 + 紅光環擴張
+function crimsonAnim_scytheArc(data, id) {
   const stage = _getBattleStage(); if (!stage) return;
-  stage.querySelectorAll('.crimson-arc').forEach(el => el.remove());
-  // 預備：bossCard 紅光震動
+  stage.querySelectorAll('.crimson-arc, .crimson-burst-ring').forEach(el => el.remove());
+  // 預備：bossCard 紅光震動 + 噴出花瓣
   const card = _getBossCard();
   if (card) {
     card.classList.add('crimson-charging');
     setTimeout(() => card.classList.remove('crimson-charging'), 600);
+    // 從 BOSS 卡噴出 12 片花瓣（撒花前奏）
+    for (let i = 0; i < 12; i++) {
+      const petal = document.createElement('div');
+      petal.className = 'crimson-petal-burst';
+      const angle = (i * 30) + Math.random() * 15;
+      const distance = 120 + Math.random() * 80;
+      petal.style.setProperty('--burst-angle', angle + 'deg');
+      petal.style.setProperty('--burst-distance', distance + 'px');
+      petal.style.animationDelay = (i * 0.03) + 's';
+      card.appendChild(petal);
+      setTimeout(() => { try { petal.remove(); } catch (e) {} }, 1200);
+    }
   }
+  // 紅光擴張環（一個從 BOSS 卡噴出的光環）
+  const ring = document.createElement('div');
+  ring.className = 'crimson-burst-ring' + (id === 'curseSpiral' ? ' p2' : '');
+  stage.appendChild(ring);
+  setTimeout(() => { try { ring.remove(); } catch (e) {} }, 800);
 }
 
 function crimsonAnim_arcHit(data) {
   const stage = _getBattleStage(); if (!stage) return;
+  // 主鐮
   const arc = document.createElement('div');
   arc.className = 'crimson-arc';
   arc.innerHTML = `<img src="${CRIMSON_SCYTHE_IMG}" alt="scythe">`;
-  // 隨機位置與角度做出「不同方向斬擊」感
   const angle = -45 + Math.random() * 90;
   arc.style.setProperty('--arc-angle', angle + 'deg');
   arc.style.left = (15 + Math.random() * 60) + '%';
   stage.appendChild(arc);
   setTimeout(() => { try { arc.remove(); } catch (e) {} }, 700);
-  // 玩家方紅閃
+  // 軌跡殘影 — 同方向 2 個更小、延遲噴出
+  for (let k = 1; k <= 2; k++) {
+    const ghost = document.createElement('div');
+    ghost.className = 'crimson-arc ghost';
+    ghost.innerHTML = `<img src="${CRIMSON_SCYTHE_IMG}" alt="scythe">`;
+    ghost.style.setProperty('--arc-angle', (angle + (k * 8)) + 'deg');
+    ghost.style.left = (15 + Math.random() * 60) + '%';
+    ghost.style.animationDelay = (k * 0.08) + 's';
+    stage.appendChild(ghost);
+    setTimeout(() => { try { ghost.remove(); } catch (e) {} }, 900);
+  }
+  // 玩家方紅閃 + 軌跡切痕
   const pcard = _getPlayerCard();
   if (pcard) {
     pcard.classList.remove('crimson-slash-hit');
     void pcard.offsetWidth;
     pcard.classList.add('crimson-slash-hit');
     setTimeout(() => pcard.classList.remove('crimson-slash-hit'), 400);
+    // 在玩家卡上加一個紅色斬擊切痕
+    const slash = document.createElement('div');
+    slash.className = 'crimson-slash-mark';
+    slash.style.setProperty('--mark-angle', (-30 + Math.random() * 60) + 'deg');
+    pcard.appendChild(slash);
+    setTimeout(() => { try { slash.remove(); } catch (e) {} }, 600);
   }
 }
 
@@ -2406,33 +2440,55 @@ function crimsonAnim_orbitEnd(data) {
   });
 }
 
-// 薔薇結界 / 千年血契：地面浮現五芒星魔法陣（紅光環）
+// 薔薇結界 / 千年血契：玩家身上浮現五芒星魔法陣（紅光環 + 火焰邊 + 倒數時間軸）
 function crimsonAnim_pentagram(data, label, big) {
-  const stage = _getBattleStage(); if (!stage) return;
-  stage.querySelectorAll('.crimson-pentagram').forEach(el => el.remove());
+  const pcard = _getPlayerCard(); if (!pcard) return;
+  pcard.querySelectorAll('.crimson-pentagram').forEach(el => el.remove());
   const p = document.createElement('div');
   p.className = 'crimson-pentagram' + (big ? ' big' : '');
   p.style.setProperty('--charge-dur', (data.duration || 4) + 's');
+  // SVG 五芒星 + 雙圓 + 內部符文
   p.innerHTML = `
-    <svg viewBox="0 0 100 100">
-      <polygon points="50,8 62,38 94,38 67,58 78,92 50,72 22,92 33,58 6,38 38,38"
-        fill="none" stroke="rgba(255,80,120,0.95)" stroke-width="1.3"/>
-      <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(220,40,80,0.8)" stroke-width="0.6"/>
-      <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(220,40,80,0.5)" stroke-width="0.4"/>
+    <div class="crimson-pentagram-aura"></div>
+    <svg viewBox="0 0 120 120" class="crimson-pentagram-svg">
+      <defs>
+        <radialGradient id="penta-glow-${big ? 'big' : 'small'}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stop-color="rgba(255,100,140,0.6)"/>
+          <stop offset="100%" stop-color="rgba(120,0,30,0)"/>
+        </radialGradient>
+      </defs>
+      <circle cx="60" cy="60" r="58" fill="url(#penta-glow-${big ? 'big' : 'small'})"/>
+      <circle cx="60" cy="60" r="55" fill="none" stroke="rgba(255,60,100,0.95)" stroke-width="0.8"/>
+      <circle cx="60" cy="60" r="48" fill="none" stroke="rgba(220,40,80,0.7)" stroke-width="0.5" stroke-dasharray="2,3"/>
+      <polygon points="60,8 73,46 113,46 80,68 92,108 60,84 28,108 40,68 7,46 47,46"
+        fill="none" stroke="rgba(255,80,120,1)" stroke-width="1.6"
+        style="filter:drop-shadow(0 0 6px #ff3060)"/>
+      <circle cx="60" cy="60" r="36" fill="none" stroke="rgba(220,40,80,0.6)" stroke-width="0.4"/>
+      <circle cx="60" cy="60" r="28" fill="none" stroke="rgba(220,40,80,0.4)" stroke-width="0.3"/>
     </svg>
+    <div class="crimson-pentagram-ring"></div>
     <div class="crimson-pentagram-label">${label}</div>
+    <div class="crimson-pentagram-timer"><div class="crimson-pentagram-timer-bar"></div></div>
   `;
-  stage.appendChild(p);
+  pcard.appendChild(p);
+  // 玩家卡片加 sealed class（被結界封印感）
+  pcard.classList.add('crimson-sealed');
 }
 
 function crimsonAnim_pentagramEnd(data) {
-  const stage = _getBattleStage(); if (!stage) return;
-  stage.querySelectorAll('.crimson-pentagram').forEach(el => {
+  const pcard = _getPlayerCard(); if (!pcard) return;
+  pcard.classList.remove('crimson-sealed');
+  pcard.querySelectorAll('.crimson-pentagram').forEach(el => {
     el.classList.add(data && data.broken ? 'broken' : 'fired');
-    setTimeout(() => { try { el.remove(); } catch (e) {} }, 800);
+    setTimeout(() => { try { el.remove(); } catch (e) {} }, 900);
   });
   if (data && !data.broken) {
-    flashFullscreen('rgba(220, 20, 50, 0.55)', 700);
+    flashFullscreen('rgba(220, 20, 50, 0.6)', 800);
+    // 爆裂粒子（從玩家身上散開的紅光環）
+    const burst = document.createElement('div');
+    burst.className = 'crimson-pentagram-burst';
+    pcard.appendChild(burst);
+    setTimeout(() => { try { burst.remove(); } catch (e) {} }, 900);
   }
 }
 
@@ -2965,7 +3021,8 @@ function renderEnemyCards() {
       const isTall = !!e.portraitTall;  // 直幅立繪用 3:4 卡片
       card.className = 'fighter-card enemy-card'
         + (useBigCard ? ' endless-boss-card' : '')
-        + (isTall ? ' tall-portrait' : '');
+        + (isTall ? ' tall-portrait' : '')
+        + (e.bossSkillTag === 'crimson' ? ' crimson-idle' : '');
       card.dataset.idx = i;
       // 立繪優先順序：BOSS 個別 portrait > 無盡塔 dungeon.bossPortrait > 像素 portrait
       const dungeon = GAME_DATA.getDungeon(BATTLE.dungeonId);
