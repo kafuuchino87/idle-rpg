@@ -996,6 +996,67 @@ const REGIONS = [
         bossPortrait: 'assets/portraits/raid-mirror.png',
         enemies: [],
         boss: '幻夢之主' },
+      // ===== 血鐮 · 罪薔薇祭壇（雙階 BOSS RAID + 過場 + 處決戒指）=====
+      // 緋月姬：千年前墮魔追隨人類戀人的少女，永恆 18 歲被囚禁於祭壇
+      // Phase 1：戀舞之鐮 — 充滿力量的舞踏（純血戰）
+      // Phase 2：血咒覺醒 — 「千年血契」護盾即死機制
+      // 掉落：低機率 UR 戒指「緋月血契」（處決效果） + 罪薔之心材料
+      { id: 'raid-bloodscythe', name: '血鐮 · 罪薔薇祭壇', cp: 750000, unlock: 'raid-mirror', requiredLv: 99,
+        minCpOverride: 450000,
+        isRaid: true, baseTime: 90, expBase: 80000, goldBase: 130000,
+        difficultyMul: 55,
+        atkCoefOverride: 0.012,    // BOSS atk
+        defScaleOverride: 2.0,
+        skipMobs: true,             // 不出小怪
+        equipDropChance: 0,         // 不隨機掉裝備，只走 bonusEquipment
+        cutscene: {
+          portrait: 'assets/portraits/raid-rosedance.png',
+          lines: [
+            { speaker: '？？？',     text: '……血的味道……溫熱、甜美……是你回來了嗎？' },
+            { speaker: '緋月姬',    text: '啊……不是你。可是相似的氣息……足以喚醒我了。' },
+            { speaker: '緋月姬',    text: '千年了。我的鐮——還記得如何為他奪取勝利。' },
+            { speaker: '緋月姬',    text: '來吧，旅人——讓我以最後的薔薇之名，獻你一支離別之舞。' },
+          ],
+        },
+        bosses: [
+          // Phase 1 — 戀舞之鐮：純血戰熱身，無 shield 機制
+          { name: '戀舞 · 緋月姬', portrait: 'assets/portraits/raid-rosedance.png',
+            portraitTall: true,
+            hpOverride: 8_000_000_000,   // 80 億 HP
+          },
+          // Phase 2 — 血咒覺醒：千年血契護盾即死（10 秒內不破則全隊扣 60% maxHP）
+          { name: '血咒 · 緋月姬', portrait: 'assets/portraits/raid-bloodcurse.png',
+            portraitTall: true,
+            hpMul: 1.5, atkMul: 1.3,
+            shield: { firstAt: 5, interval: 35, hpFixed: 20_000_000, breakTime: 10 } },
+        ],
+        guaranteedMats: { '神鋼': [15, 25], '永晶': [5, 10] },
+        bonusMats: [
+          { name: '罪薔之心', chance: 0.10, qty: [1, 1] },  // 10% 機率掉新材料（預留供後續用）
+        ],
+        bonusEquipment: [
+          // 首通必掉 1 枚、之後 8% 機率
+          { items: ['eq-ring-ur-bloodscythe'], chance: 0.08, guaranteedFirstClear: true, label: 'UR 戒指「緋月血契」' },
+        ],
+        lore: [
+          '千年前，有位深愛人類英雄的少女。',
+          '為了追隨戀人，她不惜墮入魔界、簽下血契。',
+          '英雄早已逝去，少女永恆 18 歲，被詛咒囚禁在祭壇。',
+          '每當薔薇花瓣飄落，她便會迎接闖入者——以為那是她等待的人歸來。',
+          '她不認得你，但你的血液，讓她想起了那位再也不會回來的人。',
+        ],
+        warning: '此為雙階 BOSS 副本（戀舞 → 血咒）。Phase 2 啟動「千年血契」護盾，10 秒內不破則全隊扣 60% maxHP。建議三人團 + 補師。',
+        rewards: [
+          { label: '經驗值', value: '80,000', color: 'var(--exp)' },
+          { label: '金幣',   value: '130,000', color: 'var(--gold)' },
+          { label: '神鋼',   value: '必掉 ×15~25', color: 'var(--shard)' },
+          { label: '永晶',   value: '必掉 ×5~10', color: 'var(--shard)' },
+          { label: '✿ 罪薔之心', value: '10% 機率（罪薔薇系材料）', color: 'var(--hp-enemy)' },
+          { label: '★★ UR 戒指', value: '首通必掉「緋月血契」、之後 8% 機率（處決效果）', color: 'var(--hp-enemy)' },
+        ],
+        bossPortrait: 'assets/portraits/raid-rosedance.png',
+        enemies: [],
+        boss: '緋月姬' },
     ],
   },
 ];
@@ -1414,6 +1475,8 @@ const ITEMS = {
     '星淵碎片': { tag: '星淵', rarity: 'UR', icon: '★' },
     '星龍鱗片': { tag: '星淵', rarity: 'UR', icon: '★' },
     '永恆星辰': { tag: '星淵', rarity: 'UR', icon: '☆' },
+    // 罪薔薇祭壇材料（緋月姬 RAID 專屬，預留供後續系統使用）
+    '罪薔之心': { tag: '罪薔', rarity: 'UR', icon: '✿' },
   },
   // 5 部位 × 5 階品質
   equipment: [
@@ -1580,6 +1643,11 @@ const ITEMS = {
       procId: 'skill-stack-atk',
       proc: { skillStackAtk: { value: 0.05, maxStacks: 10 } },
       fixed: { label: '蝕念匯流：釋放技能時獲得 1 層「蝕念」（攻擊 +5%），最多 10 層，戰鬥結束重置' } },
+    // ===== UR 戒指（緋月姬 RAID 低機率掉，處決系）=====
+    { id: 'eq-ring-ur-bloodscythe', slot: 'ring', name: '緋月血契', rarity: 'UR', tier: 4, stats: {},
+      procId: 'execute',
+      proc: { execute: { threshold: 0.30, bonus: 0.60 } },
+      fixed: { label: '緋月處決：對 HP 低於 30% 的敵人造成 +60% 傷害' } },
   ],
 };
 

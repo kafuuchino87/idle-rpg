@@ -160,7 +160,7 @@ function startBattle(dungeonId, charId) {
   BATTLE.bossDyingTimer = 0;
   // 快取已裝戒指的觸發效果（procId / proc 來自戒指 def）
   BATTLE.ringProcs = (() => {
-    const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0 };
+    const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0, executeThreshold: 0, executeBonus: 0 };
     if (!cs.equip || !cs.bag || !cs.bag.equipment) return p;
     for (const slot of ['ring1', 'ring2']) {
       const id = cs.equip[slot];
@@ -173,6 +173,11 @@ function startBattle(dungeonId, charId) {
       if (def.proc.skillStackAtk) {
         p.skillStackAtkValue = def.proc.skillStackAtk.value;
         p.skillStackAtkMax = def.proc.skillStackAtk.maxStacks;
+      }
+      // 緋月血契：處決效果（敵 HP 低於 threshold 時 dmg ×(1 + bonus)）
+      if (def.proc.execute) {
+        p.executeThreshold = Math.max(p.executeThreshold, def.proc.execute.threshold);
+        p.executeBonus = Math.max(p.executeBonus, def.proc.execute.bonus);
       }
     }
     return p;
@@ -1563,6 +1568,13 @@ function applyDamage(dmg, isCrit) {
   if (!BATTLE.enemy) return;
   const rawDmg = dmg;
   let actualDmg = dmg;
+  // 緋月血契處決：敵 HP 低於 threshold 時，傷害 ×(1 + bonus)
+  if (BATTLE.ringProcs && BATTLE.ringProcs.executeBonus > 0 && BATTLE.enemy.maxHp > 0) {
+    const ratio = BATTLE.enemy.hp / BATTLE.enemy.maxHp;
+    if (ratio < BATTLE.ringProcs.executeThreshold) {
+      actualDmg = Math.floor(actualDmg * (1 + BATTLE.ringProcs.executeBonus));
+    }
+  }
   // 鏡夢縛魂技能攔截：分身吸傷 / 鏡牢吸傷 / 治療打斷計數 / 紅絲掙脫計數
   // ★ 多人：只有 host / solo 套用 hook（權威端）；guest 送 raw 給 host 重算
   const isMirrorGuest = BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode === 'guest';
