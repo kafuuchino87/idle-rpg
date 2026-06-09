@@ -945,6 +945,7 @@ const REGIONS = [
         atkCoefOverride: 0.005,    // BOSS 平 A 倍率
         defScaleOverride: 2.5,
         skipMobs: true,  // 不出小怪，直接 BOSS
+        equipDropChance: 0,  // 不隨機掉裝備（含弓/砲等他角色武器），UR 戒指走 bonusEquipment
         cutscene: {
           portrait: 'assets/portraits/raid-mirror.png',
           lines: [

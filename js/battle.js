@@ -1868,6 +1868,8 @@ function onDungeonClear() {
   else if (d.special === 'mat') { expMul = 0.3; matMul = 6; equipDropChance = 0.008; specialSSROnly = true; }
   else if (d.special === 'imbue') { expMul = 1.0; goldMul = 1.0; equipDropChance = 0; matMul = 0; }  // 魔力試煉境：只走魔力石 + 寶箱
   if (d.isRaid) { equipDropChance = 0.03; goldMul = 1.5; expMul = 1.5; }
+  // 副本層級可覆寫 equipDropChance（鏡夢縛魂 = 0，只走 bonusEquipment 給 UR 戒指）
+  if (typeof d.equipDropChance === 'number') equipDropChance = d.equipDropChance;
 
   // 全域 buff 加成（卷軸）
   const expBuff = GAME_STATE.getGlobalBuffMod('expMul');
