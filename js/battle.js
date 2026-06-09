@@ -1392,13 +1392,13 @@ function castBloodPact() {
   fireBossSkillAnim('bloodPact', { duration: 3.5 });
 }
 
-// === P2 #3 薔薇詛咒雨：6 秒持續，每秒 14% maxHP + 5% maxMP（不可打斷）===
+// === P2 #3 薔薇詛咒雨：6 秒持續，每秒 14% maxHP + 10% maxMP（不可打斷）===
 function castCurseRain() {
   BATTLE.crimsonBoss.active = {
     id: 'curseRain', timer: 6.0, name: '薔薇詛咒雨',
-    dotInterval: 1.0, dotCD: 1.0, dotPct: 0.14, mpDrainPct: 0.05,
+    dotInterval: 1.0, dotCD: 1.0, dotPct: 0.14, mpDrainPct: 0.10,
   };
-  logLine(`<span class="lg-fail">✦【薔薇詛咒雨】血薔薇花瓣降下 — 持續 6 秒，每秒扣 14% 生命 + 5% MP！</span>`, '');
+  logLine(`<span class="lg-fail">✦【薔薇詛咒雨】血薔薇花瓣降下 — 持續 6 秒，每秒扣 14% 生命 + 10% MP！</span>`, '');
   fireBossSkillAnim('curseRain', { duration: 6.0 });
 }
 
@@ -1470,12 +1470,13 @@ function tickCrimsonActive(dt) {
       const dmg = Math.floor((BATTLE.player.maxHp || 0) * a.dotPct);
       crimsonDealPlayerDmg(dmg);
       crimsonBroadcastTick(a.id, a.dotPct);  // 廣播給 guest（每 tick）
-      // 薔薇詛咒雨：每段額外扣 5% maxMP（廣播旗標讓 guest 也扣）
+      // 薔薇詛咒雨：每段額外扣 maxMP（廣播旗標讓 guest 也扣）
       if (a.id === 'curseRain' && a.mpDrainPct) {
         const mpLoss = Math.floor((BATTLE.player.maxMp || 0) * a.mpDrainPct);
         BATTLE.player.mp = Math.max(0, (BATTLE.player.mp || 0) - mpLoss);
         crimsonBroadcastTick(a.id + 'Mp', a.mpDrainPct);
         logLine(`<span class="lg-fail">${a.name}：MP -${mpLoss}</span>`, '');
+        if (typeof window.floatDamage === 'function') window.floatDamage('💧 MP -' + mpLoss, 'mp');
       }
       logLine(`<span class="lg-fail">${a.name}：${dmg} 傷害</span>`, '');
       fireBossSkillAnim(a.id + 'Tick', {});
