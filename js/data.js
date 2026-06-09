@@ -1044,8 +1044,8 @@ const REGIONS = [
           { name: '罪薔之心', chance: 0.50, qty: [1, 2] },  // 額外 50% 機率多 1~2 顆
         ],
         bonusEquipment: [
-          // 首通必掉 1 枚、之後 8% 機率
-          { items: ['eq-ring-ur-bloodscythe'], chance: 0.08, guaranteedFirstClear: true, label: 'UR 戒指「緋月血契」' },
+          // 8% 機率（移除首通必掉，避免新角色入場直接拿到）
+          { items: ['eq-ring-ur-bloodscythe'], chance: 0.08, label: 'UR 戒指「緋月血契」' },
           // 10% 機率掉 UR3 武器或裝備（4 武器 + 4 防具隨機 1 件）
           { items: [
             'eq-weap-ur3', 'eq-mirror-ur3', 'eq-bow-ur3', 'eq-cannon-ur3',
@@ -1066,7 +1066,7 @@ const REGIONS = [
           { label: '神鋼',   value: '必掉 ×15~25', color: 'var(--shard)' },
           { label: '永晶',   value: '必掉 ×5~10', color: 'var(--shard)' },
           { label: '✿ 罪薔之心', value: '必掉 ×1~3 + 50% 額外 ×1~2（UR3 武器成長 + 強化 15~18 材料）', color: 'var(--hp-enemy)' },
-          { label: '★★ UR 戒指', value: '首通必掉「緋月血契」、之後 8% 機率（處決效果）', color: 'var(--hp-enemy)' },
+          { label: '★★ UR 戒指', value: '「緋月血契」8% 機率掉落（處決效果 — 對 HP < 30% 的敵人 +60% 傷害）', color: 'var(--hp-enemy)' },
           { label: '★★★ UR3 武器/裝備', value: '10% 機率掉「緋月」系列 1 件（4 武器 + 4 防具隨機，比 UR2 / 蝕痕鎧神更強）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-bloodscythe-art.png',
