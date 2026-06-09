@@ -1967,7 +1967,15 @@ function computeDamage(rawAtk, isCrit) {
   const realLowHp = BATTLE.player.maxHp > 0 && BATTLE.player.hp / BATTLE.player.maxHp < 0.4;
   if (BATTLE.player.lastStand && (forceLowHp || realLowHp)) {
     mod += 0.5;
-    critBonus = 0.3;
+    critBonus += 0.3;
+  }
+  // 暴擊溢出轉暴傷：超過 100% 的暴擊率按 1:1 轉換成暴擊傷害
+  // 例：crit 1.5 → 多出來的 50% 變成 +50% critDmg
+  if (isCrit) {
+    const effCrit = (BATTLE.player.crit || 0) + getBuffMod('crit');
+    if (effCrit > 1.0) {
+      critBonus += (effCrit - 1.0);
+    }
   }
   const enemy = BATTLE.enemy;
   if (!enemy) return 0;
