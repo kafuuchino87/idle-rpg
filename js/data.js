@@ -582,7 +582,7 @@ const SKILLS = {
   // ─ B 路線：神格昇華 ─
   'sacred-light': {
     name: '聖光治癒', tag: '治療+AOE', kind: 'arcane', path: 'B', requireTier: 1,
-    desc: '聖光綻放：對全體 300% AOE + 自身與隊友各回復 15% 最大 HP。CD 8s。',
+    desc: '光子聖光降臨：對全體 300% AOE + 自身與隊友各回復 15% 最大 HP。CD 8s。',
     mult: 3.0, aoe: true, heal: 0.15, healAlly: true, cd: 8, mpCost: 180, costTier: 'medium',
   },
   'halo-shelter': {
