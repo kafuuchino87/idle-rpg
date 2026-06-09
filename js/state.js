@@ -922,7 +922,7 @@ function effectiveStats(charId) {
     }
     // 鍛造效果（終焉套裝：每件依 smithStage 累加已解鎖效果）
     if (GAME_DATA.isSmithEligible(def) && inst.smithStage > 0) {
-      const unlocked = GAME_DATA.getSmithUnlockedEffects(inst.smithStage);
+      const unlocked = GAME_DATA.getSmithUnlockedEffects(inst.smithStage, def);
       for (const eff of unlocked) {
         for (const [k, v] of Object.entries(eff.effect)) {
           s[k] = (s[k] || 0) + v;

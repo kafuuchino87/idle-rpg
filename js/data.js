@@ -1819,6 +1819,19 @@ const SMITH_EFFECTS = [
   { stage: 27, label: '無視防禦 +5%',  effect: { defPierce: 0.05 } },
   { stage: 30, label: '★攻擊力 +3%',   effect: { atkPct: 0.03 } },
 ];
+// 緋月血薔薇套專屬鍛造效果（比蝕痕鎧神強 60-70%）
+const SMITH_EFFECTS_BLOODSCYTHE = [
+  { stage: 3,  label: '暴擊傷害 +8%',   effect: { critDmg: 0.08 } },
+  { stage: 6,  label: '技能傷害 +8%',   effect: { skillDmg: 0.08 } },
+  { stage: 9,  label: '對 BOSS +8%',    effect: { vsBoss: 0.08 } },
+  { stage: 12, label: '減傷 +5%',       effect: { dmgReduce: 0.05 } },
+  { stage: 15, label: 'HP 上限 +500',   effect: { hp: 500 } },
+  { stage: 18, label: 'MP 上限 +50',    effect: { maxMp: 50 } },
+  { stage: 21, label: '速度 +5%',       effect: { spd: 0.05 } },
+  { stage: 24, label: 'CD 縮減 +5%',    effect: { cdReduce: 0.05 } },
+  { stage: 27, label: '無視防禦 +8%',   effect: { defPierce: 0.08 } },
+  { stage: 30, label: '★攻擊力 +5%、3% 吸血', effect: { atkPct: 0.05, lifesteal: 0.03 } },
+];
 const SMITH_MAX_STAGE = 30;
 
 // ===== UR 武器成長系統（雙影獵討 ur2 系列專屬，獨立於鍛造）=====
@@ -1890,10 +1903,15 @@ function smithHitsToCap(stage) {
 }
 
 function isSmithEligible(def) {
-  return def && def.setId === 'set-ruination';
+  if (!def) return false;
+  return def.setId === 'set-ruination' || def.setId === 'set-bloodscythe';
 }
-function getSmithUnlockedEffects(stage) {
-  return SMITH_EFFECTS.filter(e => e.stage <= stage);
+// 取得該裝備對應的鍛造效果表（緋月血薔薇用強化版、其他用原版）
+function getSmithEffectsTable(def) {
+  return (def && def.setId === 'set-bloodscythe') ? SMITH_EFFECTS_BLOODSCYTHE : SMITH_EFFECTS;
+}
+function getSmithUnlockedEffects(stage, def) {
+  return getSmithEffectsTable(def).filter(e => e.stage <= stage);
 }
 
 // 計算角色身上各套裝穿戴件數（每角色獨立背包：用 cs.bag）
@@ -2114,7 +2132,8 @@ window.GAME_DATA = {
   rollAffixes, findEquipment, resolveFixedValue,
   findRecipe, findMaterialRecipe, findGem, socketsForRarity,
   findSet, countSetPieces,
-  SMITH_EFFECTS, SMITH_MAX_STAGE, SMITH_GOLD_COST, SMITH_INITIAL_HITS, SMITH_HITS_PER_HAMMER, SMITH_JUMP_CHANCE,
+  SMITH_EFFECTS, SMITH_EFFECTS_BLOODSCYTHE, SMITH_MAX_STAGE, SMITH_GOLD_COST, SMITH_INITIAL_HITS, SMITH_HITS_PER_HAMMER, SMITH_JUMP_CHANCE,
+  getSmithEffectsTable,
   UR_GROWTH, UR_GROWTH_COSTS, UR_GROWTH_MAX_STAGE, isUrGrowable, getUrGrowthCost, getUrGrowthUnlocked,
   smithHitsToCap, isSmithEligible, getSmithUnlockedEffects,
   findPotion, findChest, rollChestRewards, findShardExchange,

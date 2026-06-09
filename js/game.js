@@ -3609,8 +3609,11 @@ function renderSmith() {
     const maxStage = GAME_DATA.SMITH_MAX_STAGE;
     const progress = inst.smithProgress || 0;
     const hitsLeft = (inst.smithHitsLeft == null ? GAME_DATA.SMITH_INITIAL_HITS : inst.smithHitsLeft);
-    const next = GAME_DATA.SMITH_EFFECTS.find(e => e.stage > stage);
-    const effectsList = GAME_DATA.SMITH_EFFECTS.map(e => {
+    const smithTable = (typeof GAME_DATA.getSmithEffectsTable === 'function')
+      ? GAME_DATA.getSmithEffectsTable(def)
+      : GAME_DATA.SMITH_EFFECTS;
+    const next = smithTable.find(e => e.stage > stage);
+    const effectsList = smithTable.map(e => {
       const got = stage >= e.stage;
       return `<span style="color:${got ? 'var(--hp-self)' : 'var(--muted)'};font-size:11px;display:inline-block;margin:2px 6px 2px 0">${got ? '✓' : '–'} 階${e.stage}：${e.label}</span>`;
     }).join('');
