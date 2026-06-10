@@ -544,7 +544,12 @@ function bindGlobalEvents() {
   // ☁ 雲端恢復碼：先上傳當前存檔到雲端、再取碼顯示
   document.getElementById('btnCloudCode').onclick = async () => {
     if (!window.API) return toast('API 未載入', 'error');
-    GAME_STATE.saveState();  // 確保 LocalStorage 是最新
+    // 1. 強制同步存檔（含同步寫入 LocalStorage、清掉 scheduled timer）
+    GAME_STATE.saveState();
+    // 2. 立刻讀回剛存的 LocalStorage 確認沒踩到 race condition
+    const localRaw = localStorage.getItem('veilreach.save.v4');
+    let localGold = '?';
+    try { localGold = JSON.parse(localRaw).gold.toLocaleString(); } catch (e) {}
     toast('正在上傳雲端 ...', 'gold');
     const up = await window.API.uploadSave();
     if (!up.ok) {
@@ -556,7 +561,7 @@ function bindGlobalEvents() {
     const code = r.data.recovery_code;
     openIoModal({
       title: '☁ 雲端恢復碼',
-      hint: `記下這串碼，換瀏覽器 / 換裝置時用「☁ 從碼還原」輸入即可拿回進度。\n\n存檔大小：${(up.data.size/1024).toFixed(1)} KB`,
+      hint: `已將當前進度（金幣 ${localGold}）上傳到雲端。\n換瀏覽器 / 換裝置時用「☁ 從碼還原」輸入下方這串碼即可拿回。\n\n存檔大小：${(up.data.size/1024).toFixed(1)} KB`,
       value: code,
       readonly: true,
       confirmText: '完成',
@@ -581,10 +586,28 @@ function bindGlobalEvents() {
           if (r.error === 'http_404') return toast('找不到這組恢復碼', 'error');
           return toast('還原失敗：' + (r.error || ''), 'error');
         }
-        if (!confirm('成功取得雲端存檔，將覆蓋當前本地進度，確定？')) return;
-        window.API.writeLocalSave(r.data.save_json);
+        const incoming = r.data.save_json;
+        // 解析雲端存檔做摘要 — 讓玩家確認金幣 / 角色數 / 上次存檔時間 對得上
+        let summary = '無法解析存檔';
+        try {
+          const j = JSON.parse(incoming);
+          const goldStr = (j.gold || 0).toLocaleString();
+          const shardStr = (j.shard || 0).toLocaleString();
+          const charCount = j.characters ? Object.keys(j.characters).length : 0;
+          const savedAt = j.lastSaved ? new Date(j.lastSaved).toLocaleString() : 'N/A';
+          summary = `金幣 ${goldStr} / 魂晶 ${shardStr} / 角色數 ${charCount} / 雲端存檔時間 ${savedAt}`;
+        } catch (e) {}
+        if (!confirm(`即將還原雲端存檔：\n\n${summary}\n\n這會「覆蓋」當前本地進度。確定？`)) return;
+        // 寫入 LocalStorage
+        window.API.writeLocalSave(incoming);
+        // 驗證真的寫進去了
+        const verify = localStorage.getItem('veilreach.save.v4');
+        if (verify !== incoming) {
+          alert('寫入驗證失敗：LocalStorage 內容跟雲端不一致！\n（可能是瀏覽器存取受限 / 私密模式 / quota 滿）');
+          return;
+        }
         closeIoModal();
-        toast('還原完成，重新載入中 ...', 'gold');
+        toast('還原成功！重新載入中 ...', 'gold');
         setTimeout(() => location.reload(), 800);
       },
     });
