@@ -344,7 +344,7 @@ function showCreationOverlay(isAdditional) {
 // ============================================================================
 function bindGlobalEvents() {
   // 浮動視窗：按鈕開關
-  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom', smith: 'winSmith', imbue: 'winImbue' };
+  const winMap = { char: 'winChar', dungeon: 'winDungeon', forge: 'winForge', bag: 'winBag', skills: 'winSkills', report: 'winReport', equip: 'winEquip', resonance: 'winResonance', craft: 'winCraft', shop: 'winShop', potionConfig: 'winPotionConfig', raidPreview: 'winRaidPreview', craftPreview: 'winCraftPreview', mpRoom: 'winMpRoom', smith: 'winSmith', imbue: 'winImbue', leaderboard: 'winLeaderboard' };
   document.querySelectorAll('.dock-toggle, .cs-detail-btn').forEach(btn => {
     btn.onclick = () => {
       const key = btn.dataset.win;
@@ -367,6 +367,7 @@ function bindGlobalEvents() {
         if (key === 'mpRoom') renderMpRoom();
         if (key === 'smith') renderSmith();
         if (key === 'imbue') renderImbue();
+        if (key === 'leaderboard') renderLeaderboard();
       }
     };
   });
@@ -3470,6 +3471,115 @@ function renderImbue() {
       renderImbue(); renderHud(); renderCharDetail();
     };
   });
+}
+
+// ============================================================
+// 🏆 戰力排行榜
+// ============================================================
+let _lbLastFetch = 0;
+async function renderLeaderboard() {
+  const root = document.getElementById('tabLeaderboard');
+  if (!root) return;
+  root.innerHTML = `
+    <div style="padding:10px 14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="color:var(--muted);font-size:12px">戰力即時排行 — 每次開啟自動同步當前角色</div>
+        <button id="btnLbRefresh" class="ghost small">🔄 重整</button>
+      </div>
+      <div id="lbStatus" style="color:var(--muted);font-size:11px;margin-bottom:8px">載入中…</div>
+      <div id="lbTable"></div>
+    </div>
+  `;
+  root.querySelector('#btnLbRefresh').onclick = () => loadLeaderboard();
+  loadLeaderboard();
+}
+
+async function loadLeaderboard() {
+  const statusEl = document.getElementById('lbStatus');
+  const tableEl = document.getElementById('lbTable');
+  if (!statusEl || !tableEl) return;
+  statusEl.textContent = '同步中…';
+  tableEl.innerHTML = '';
+
+  if (!window.API || !window.API_ENABLED) {
+    statusEl.innerHTML = '<span style="color:var(--hp-enemy)">⚠ API 未啟用（js/config.js 已設 API_ENABLED = false）</span>';
+    return;
+  }
+
+  // 先同步自己當前資料，再取列表
+  const syncRes = await API.syncCurrentPlayer();
+  if (!syncRes.ok) {
+    if (syncRes.offline) {
+      statusEl.innerHTML = `<span style="color:var(--hp-enemy)">⚠ 排行榜服務離線中（${(syncRes.error || '').slice(0, 40)}）</span>
+        <div style="color:var(--muted);font-size:10px;margin-top:4px">後端伺服器未啟動或網路無法連線。本機開發請跑 <code>cd server && npm start</code></div>`;
+    } else {
+      statusEl.innerHTML = `<span style="color:var(--hp-enemy)">⚠ 同步失敗：${syncRes.error}</span>`;
+    }
+    return;
+  }
+
+  const lbRes = await API.getLeaderboard(100);
+  if (!lbRes.ok) {
+    statusEl.innerHTML = `<span style="color:var(--hp-enemy)">⚠ 排行榜載入失敗：${lbRes.error || 'unknown'}</span>`;
+    return;
+  }
+
+  const myId = API.getUuid();
+  const myRank = syncRes.data.rank;
+  const total = lbRes.data.total;
+  statusEl.innerHTML = `共 <b style="color:var(--gold)">${total}</b> 位玩家 · 你目前排名 <b style="color:var(--accent)">#${myRank}</b>`;
+
+  if (!lbRes.data.list || lbRes.data.list.length === 0) {
+    tableEl.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">尚無玩家紀錄</div>';
+    return;
+  }
+
+  // 表格
+  const rows = lbRes.data.list.map((p, idx) => {
+    const rank = idx + 1;
+    const isMe = p.id === myId;
+    const rankColor = rank === 1 ? 'color:#ffcf3c;font-weight:700'
+                    : rank === 2 ? 'color:#d8d8e0;font-weight:700'
+                    : rank === 3 ? 'color:#cd7f32;font-weight:700' : 'color:var(--muted)';
+    const rowBg = isMe ? 'background:linear-gradient(90deg,rgba(160,108,213,0.18),transparent);border-left:3px solid var(--accent)' : '';
+    const ago = formatAgo(Date.now() - (p.updated_at || 0));
+    return `
+      <div class="lb-row" style="display:grid;grid-template-columns:50px 1fr 110px 100px 60px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);${rowBg}">
+        <div style="font-size:14px;${rankColor}">#${rank}</div>
+        <div>
+          <div style="font-weight:600">${escapeHtml(p.nickname || '無名')}${isMe ? ' <span style="color:var(--accent);font-size:10px">(你)</span>' : ''}</div>
+          <div style="color:var(--muted);font-size:10px">${escapeHtml(p.character_name || p.character_id || '?')}${p.job_path ? ' · ' + p.job_path : ''} · Lv ${p.level || '?'}</div>
+        </div>
+        <div style="color:var(--gold);font-weight:700;font-size:14px">${(p.cp || 0).toLocaleString()}</div>
+        <div style="color:var(--muted);font-size:10px">${ago}</div>
+        <div></div>
+      </div>
+    `;
+  }).join('');
+
+  tableEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:50px 1fr 110px 100px 60px;gap:8px;padding:8px 10px;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--line)">
+      <div>排名</div><div>玩家 / 職業</div><div>戰力</div><div>更新</div><div></div>
+    </div>
+    <div style="max-height:60vh;overflow-y:auto">${rows}</div>
+  `;
+}
+
+function formatAgo(ms) {
+  if (!ms || ms < 0) return '剛剛';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's 前';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + ' 分前';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' 小時前';
+  const d = Math.floor(h / 24);
+  return d + ' 天前';
+}
+
+function escapeHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
 function renderForge() {

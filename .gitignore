@@ -3,3 +3,11 @@
 *.tmp
 # 開發測試工具（一鍵畢業帳號 cheat）— 不推上 GitHub Pages
 cheat*.html
+
+# 後端 server — node_modules 不傳，DB 不傳
+server/node_modules/
+server/data.db
+server/data.db-shm
+server/data.db-wal
+server/*.log
+server/.env
