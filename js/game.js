@@ -598,17 +598,38 @@ function bindGlobalEvents() {
           summary = `金幣 ${goldStr} / 魂晶 ${shardStr} / 角色數 ${charCount} / 雲端存檔時間 ${savedAt}`;
         } catch (e) {}
         if (!confirm(`即將還原雲端存檔：\n\n${summary}\n\n這會「覆蓋」當前本地進度。確定？`)) return;
-        // 寫入 LocalStorage
-        window.API.writeLocalSave(incoming);
-        // 驗證真的寫進去了
-        const verify = localStorage.getItem('veilreach.save.v4');
-        if (verify !== incoming) {
-          alert('寫入驗證失敗：LocalStorage 內容跟雲端不一致！\n（可能是瀏覽器存取受限 / 私密模式 / quota 滿）');
+        // ★ 跟匯入一樣的三重保險，避免 reload 前 scheduleSave timer 把舊 STATE 寫回 LocalStorage：
+        // (1) 停 BATTLE 避免後續 tick 觸發 scheduleSave
+        if (window.BATTLE) { BATTLE.running = false; BATTLE.paused = true; }
+        // (2) 把記憶體 STATE 整個換成雲端版（即使 scheduleSave 真的 fire，寫的也是「新」STATE）
+        let parsedIncoming;
+        try { parsedIncoming = JSON.parse(incoming); } catch (e) {
+          alert('雲端存檔解析失敗：' + e.message);
           return;
         }
+        if (window.GAME_STATE && GAME_STATE.replaceState) {
+          GAME_STATE.replaceState(parsedIncoming);
+        }
+        // (3) 寫入 LocalStorage
+        const realSetItem = localStorage.setItem.bind(localStorage);
+        try { realSetItem('veilreach.save.v4', incoming); }
+        catch (e) { alert('寫入 localStorage 失敗：' + e.message); return; }
+        // 驗證
+        if (localStorage.getItem('veilreach.save.v4') !== incoming) {
+          alert('寫入驗證失敗：LocalStorage 內容跟雲端不一致！');
+          return;
+        }
+        // (4) 攔截後續 setItem 直到 reload — 不讓任何 race condition 覆蓋
+        localStorage.setItem = function (key, value) {
+          if (key === 'veilreach.save.v4' || key === 'veilreach.nickname') {
+            console.warn('[cloud restore] blocked setItem during reload:', key);
+            return;
+          }
+          return realSetItem(key, value);
+        };
         closeIoModal();
-        toast('還原成功！重新載入中 ...', 'gold');
-        setTimeout(() => location.reload(), 800);
+        // 立即 reload（不延遲、避免 timer fire）
+        location.reload();
       },
     });
   };
