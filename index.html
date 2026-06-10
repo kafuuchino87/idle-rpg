@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
-<link rel="stylesheet" href="style.css?v=327">
+<link rel="stylesheet" href="style.css?v=328">
 </head>
 <body>
 <div id="app">
@@ -43,14 +43,13 @@
 
       <div id="chatPanel">
         <div class="chat-tabs">
-          <button class="chat-tab active" data-ch="team">隊伍</button>
-          <button class="chat-tab disabled" data-ch="world" title="需中央伺服器，未開放">世界 🔒</button>
-          <span class="chat-online" id="chatOnline">在線 1</span>
+          <button class="chat-tab active" data-ch="world">🌐 世界</button>
+          <span class="chat-online" id="chatOnline">後端未連</span>
         </div>
         <div class="chat-log" id="chatLog"></div>
         <div class="chat-input-row">
-          <input id="chatInputMain" type="text" placeholder="未連線時無法傳訊" maxlength="200" disabled>
-          <button id="chatSendMain" class="primary small" disabled>發</button>
+          <input id="chatInputMain" type="text" placeholder="輸入訊息（Enter 送出）" maxlength="200">
+          <button id="chatSendMain" class="primary small">發</button>
         </div>
       </div>
     </section>
@@ -276,14 +275,14 @@
   </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="js/config.js?v=327"></script>
-<script src="js/api.js?v=327"></script>
-<script src="js/data.js?v=327"></script>
-<script src="js/state.js?v=327"></script>
-<script src="js/pixel.js?v=327"></script>
-<script src="js/procedural.js?v=327"></script>
-<script src="js/battle.js?v=327"></script>
-<script src="js/multiplayer.js?v=327"></script>
-<script src="js/game.js?v=327"></script>
+<script src="js/config.js?v=328"></script>
+<script src="js/api.js?v=328"></script>
+<script src="js/data.js?v=328"></script>
+<script src="js/state.js?v=328"></script>
+<script src="js/pixel.js?v=328"></script>
+<script src="js/procedural.js?v=328"></script>
+<script src="js/battle.js?v=328"></script>
+<script src="js/multiplayer.js?v=328"></script>
+<script src="js/game.js?v=328"></script>
 </body>
 </html>

@@ -192,6 +192,44 @@
     return true;
   }
 
+  // ===== 世界聊天 =====
+
+  async function sendChatMessage(text) {
+    if (!text || !text.trim()) return { ok: false, error: 'empty' };
+    const nickname = (window.GAME_STATE && GAME_STATE.state && GAME_STATE.state.playerNickname) || '無名旅人';
+    return apiPost('/api/chat/send', {
+      uuid: getOrCreateUuid(),
+      nickname,
+      text: text.trim().slice(0, 200),
+    });
+  }
+
+  async function getRecentChats(since) {
+    return apiGet('/api/chat/recent?since=' + (since || 0));
+  }
+
+  // 聊天輪詢：每 4 秒拉新訊息、callback 收到新訊息
+  let _chatPollTimer = null;
+  let _chatLastSeen = 0;
+  function startChatPolling(onNewMessages, intervalMs) {
+    if (_chatPollTimer) clearInterval(_chatPollTimer);
+    intervalMs = intervalMs || 4000;
+    const tick = async () => {
+      const r = await getRecentChats(_chatLastSeen);
+      if (!r.ok) return;  // 離線靜默
+      const list = (r.data && r.data.list) || [];
+      if (list.length > 0) {
+        _chatLastSeen = list[list.length - 1].created_at;
+        if (typeof onNewMessages === 'function') onNewMessages(list);
+      }
+    };
+    tick();  // 立刻拉一次
+    _chatPollTimer = setInterval(tick, intervalMs);
+  }
+  function stopChatPolling() {
+    if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
+  }
+
   // ===== 暴露 =====
   window.API = {
     getUuid: getOrCreateUuid,
@@ -209,5 +247,10 @@
     checkCloudFreshness,
     readLocalSave,
     writeLocalSave,
+    // world chat
+    sendChatMessage,
+    getRecentChats,
+    startChatPolling,
+    stopChatPolling,
   };
 })();

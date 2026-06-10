@@ -40,6 +40,8 @@ function init() {
       setTimeout(() => window.API.checkCloudFreshness(), 1500);
     }
   }
+  // 世界聊天輪詢
+  _startWorldChatPolling();
 }
 
 // 接收 api.js 的雲端較新提示 — 跳 confirm 對話框讓玩家決定要不要拉雲端版
@@ -4905,84 +4907,92 @@ function formatAffix(a) {
 }
 
 // ============================================================================
-// 左欄聊天框（隊伍頻道 + 在線人數）
+// 左欄聊天框（世界頻道，走 backend / SQLite）
 // ============================================================================
-function renderLeftChat() {
+const _worldChatLog = [];   // 世界訊息陣列（cap 100）
+const _seenChatIds = new Set();  // 防重複（輪詢 + 自己 echo）
+
+function _renderWorldChatLog() {
   const log = document.getElementById('chatLog');
-  const onlineEl = document.getElementById('chatOnline');
-  const input = document.getElementById('chatInputMain');
-  const sendBtn = document.getElementById('chatSendMain');
   if (!log) return;
-
-  const connected = window.MP_API && MP_API.isConnected();
-  const playerCount = connected ? (Object.keys(MP_API.getPlayers()).length + 1) : 1;
-
-  // 在線人數標記
-  if (onlineEl) {
-    onlineEl.textContent = connected ? `在線 ${playerCount}` : '未連線';
-    onlineEl.classList.toggle('off', !connected);
-  }
-
-  // 輸入框啟用狀態
-  if (input) {
-    input.disabled = !connected;
-    input.placeholder = connected ? '輸入訊息（Enter 送出）' : '未連線時無法傳訊';
-  }
-  if (sendBtn) sendBtn.disabled = !connected;
-
-  // 訊息列表（用 structKey 避免閃爍）
-  const sig = _mpChatLog.length + (connected ? ':on' : ':off');
-  if (log._sig !== sig) {
-    log._sig = sig;
-    log.innerHTML = _mpChatLog.length === 0
-      ? `<div class="chat-msg sys">${connected ? '隊伍頻道 — 開始聊天' : '尚未連線，建房 / 加房後可聊天'}</div>`
-      : _mpChatLog.map(m => `
-        <div class="chat-msg ${m.sys ? 'sys' : (m.self ? 'self' : '')}">
-          ${m.sys ? '' : `<span class="chat-from">${m.who}:</span>`}
-          ${m.text}
-        </div>
-      `).join('');
-    // 自動滾到底
-    log.scrollTop = log.scrollHeight;
-  }
+  const sig = _worldChatLog.length;
+  if (log._sig === sig) return;
+  log._sig = sig;
+  log.innerHTML = _worldChatLog.length === 0
+    ? `<div class="chat-msg sys">🌐 世界頻道 — 開始聊天</div>`
+    : _worldChatLog.map(m => `
+      <div class="chat-msg ${m.sys ? 'sys' : (m.self ? 'self' : '')}">
+        ${m.sys ? '' : `<span class="chat-from">${escapeChatHtml(m.who)}:</span>`}
+        ${escapeChatHtml(m.text)}
+      </div>
+    `).join('');
+  log.scrollTop = log.scrollHeight;
+}
+function escapeChatHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// 對外：加一則系統訊息（如「智乃 加入房間」）
-window.addSystemChat = function(text) {
-  _mpChatLog.push({ sys: true, text });
-  if (_mpChatLog.length > 100) _mpChatLog.shift();
-  renderLeftChat();
+function _pushChatMessage(msg) {
+  if (msg.id != null) {
+    if (_seenChatIds.has(msg.id)) return;
+    _seenChatIds.add(msg.id);
+  }
+  _worldChatLog.push(msg);
+  if (_worldChatLog.length > 100) _worldChatLog.shift();
+  _renderWorldChatLog();
+}
+
+function renderLeftChat() {
+  const onlineEl = document.getElementById('chatOnline');
+  const apiOnline = !!(window.API && window.__lastApiOk !== false);
+  if (onlineEl) {
+    onlineEl.textContent = apiOnline ? '🌐 連線中' : '後端未連';
+    onlineEl.classList.toggle('off', !apiOnline);
+  }
+  _renderWorldChatLog();
+}
+
+// 對外：加一則系統訊息
+window.addSystemChat = function (text) {
+  _pushChatMessage({ sys: true, text });
 };
 
 function bindLeftChat() {
   const input = document.getElementById('chatInputMain');
   const sendBtn = document.getElementById('chatSendMain');
   if (!input || !sendBtn) return;
-  const send = () => {
-    if (!MP_API || !MP_API.isConnected()) return;
+  const send = async () => {
     const text = input.value.trim();
     if (!text) return;
-    const myName = GAME_STATE.getPlayerNickname() || '我';
-    MP_API.broadcast('chat', { from: myName, text });
-    _mpChatLog.push({ who: myName, text, self: true });
-    if (_mpChatLog.length > 100) _mpChatLog.shift();
+    if (!window.API) return toast('API 未載入', 'error');
+    sendBtn.disabled = true;
+    const r = await window.API.sendChatMessage(text);
+    sendBtn.disabled = false;
+    if (!r.ok) {
+      if (r.offline) return toast('後端離線、無法傳訊', 'error');
+      if (r.error === 'http_429') return toast('傳得太快，等 1.5 秒', 'error');
+      if (r.error === 'http_413') return toast('訊息太長', 'error');
+      return toast('傳訊失敗：' + (r.error || ''), 'error');
+    }
+    // 本地立即顯示（id 帶上避免輪詢回來重複）
+    const myName = (GAME_STATE.state && GAME_STATE.state.playerNickname) || '無名旅人';
+    _pushChatMessage({ id: r.data.id, who: myName, text, self: true });
     input.value = '';
-    renderLeftChat();
   };
   sendBtn.onclick = send;
   input.onkeydown = (e) => { if (e.key === 'Enter') send(); };
+}
 
-  // tab 切換（世界鎖住，只能 click team）
-  document.querySelectorAll('.chat-tab').forEach(btn => {
-    btn.onclick = () => {
-      if (btn.classList.contains('disabled')) {
-        toast('世界頻道需要中央伺服器，未開放', 'error');
-        return;
-      }
-      document.querySelectorAll('.chat-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    };
-  });
+// 開遊戲時啟動聊天輪詢（每 4 秒）
+function _startWorldChatPolling() {
+  if (!window.API || typeof window.API.startChatPolling !== 'function') return;
+  window.API.startChatPolling((newMessages) => {
+    for (const m of newMessages) {
+      // 自己剛送的訊息會從輪詢回來（id 已記）→ _seenChatIds 攔截不會重複
+      _pushChatMessage({ id: m.id, who: m.nickname, text: m.text, self: false });
+    }
+  }, 4000);
 }
 
 // ============================================================================

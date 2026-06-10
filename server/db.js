@@ -39,6 +39,16 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_cloud_saves_code ON cloud_saves(recovery_code);
+
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT NOT NULL,                     -- 發訊者 uuid（用來限制 rate / 封鎖）
+    nickname TEXT NOT NULL,                 -- 顯示暱稱
+    text TEXT NOT NULL,                     -- 訊息內容
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at DESC);
 `);
 
 // ===== Helpers =====
@@ -194,6 +204,38 @@ function getCloudSaveCount() {
   return { count: row?.n || 0, totalBytes: row?.total || 0 };
 }
 
+// ===== 世界聊天 =====
+const CHAT_MAX_KEEP = 200;       // 最多保留 200 則訊息（超過就刪舊的）
+const CHAT_MAX_TEXT_LEN = 200;   // 單訊息上限
+
+function insertChatMessage(uuid, nickname, text) {
+  const now = Date.now();
+  const safeText = String(text).slice(0, CHAT_MAX_TEXT_LEN);
+  const safeNick = String(nickname || '無名').slice(0, 32);
+  const r = db.prepare(`
+    INSERT INTO chat_messages (uuid, nickname, text, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(uuid, safeNick, safeText, now);
+  // 順手清舊訊息（保留最新 200 則）
+  db.prepare(`
+    DELETE FROM chat_messages
+    WHERE id NOT IN (SELECT id FROM chat_messages ORDER BY id DESC LIMIT ?)
+  `).run(CHAT_MAX_KEEP);
+  return { id: r.lastInsertRowid, created_at: now };
+}
+
+function getRecentChats(since) {
+  // since = 上次取訊息的 timestamp（0 = 全部撈）
+  const stmt = db.prepare(`
+    SELECT id, uuid, nickname, text, created_at
+    FROM chat_messages
+    WHERE created_at > ?
+    ORDER BY id ASC
+    LIMIT ?
+  `);
+  return stmt.all(since || 0, CHAT_MAX_KEEP);
+}
+
 module.exports = {
   db,
   upsertPlayer,
@@ -207,4 +249,8 @@ module.exports = {
   getOrCreateRecoveryCode,
   getSaveByCode,
   getCloudSaveCount,
+  // world chat
+  insertChatMessage,
+  getRecentChats,
+  CHAT_MAX_TEXT_LEN,
 };

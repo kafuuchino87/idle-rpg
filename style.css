@@ -590,7 +590,14 @@ button.primary:hover { filter: brightness(1.1); }
 }
 
 /* Character list (left) */
-#charList { display: flex; flex-direction: column; gap: 8px; }
+#charList {
+  display: flex; flex-direction: column; gap: 8px;
+  /* 角色多時用內部捲軸，避免聊天框被擠出畫面 */
+  max-height: 38vh;
+  overflow-y: auto;
+  flex-shrink: 1;
+}
+#chatPanel { flex-shrink: 0; }  /* 聊天框堅持不被壓縮 */
 .char-card {
   display: flex;
   align-items: center;

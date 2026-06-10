@@ -166,6 +166,39 @@ app.post('/api/saves/restore-by-code', (req, res) => {
   }
 });
 
+// ===== 世界聊天：發訊 =====
+// rate limit: 每個 uuid 每 1.5 秒最多 1 則
+const _chatRateMap = new Map();
+app.post('/api/chat/send', (req, res) => {
+  try {
+    const { uuid, nickname, text } = req.body || {};
+    if (!uuid || typeof uuid !== 'string') return res.status(400).json({ error: 'invalid_uuid' });
+    if (!text || typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'empty_text' });
+    if (text.length > db.CHAT_MAX_TEXT_LEN) return res.status(413).json({ error: 'too_long' });
+    const now = Date.now();
+    const last = _chatRateMap.get(uuid) || 0;
+    if (now - last < 1500) return res.status(429).json({ error: 'rate_limited' });
+    _chatRateMap.set(uuid, now);
+    const r = db.insertChatMessage(uuid, nickname, text.trim());
+    res.json({ ok: true, id: r.id, created_at: r.created_at });
+  } catch (err) {
+    console.error('[chat send]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// ===== 世界聊天：取近期訊息（前端輪詢用）=====
+app.get('/api/chat/recent', (req, res) => {
+  try {
+    const since = parseInt(req.query.since) || 0;
+    const list = db.getRecentChats(since);
+    res.json({ ok: true, ts: Date.now(), list });
+  } catch (err) {
+    console.error('[chat recent]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // ===== 取得單一玩家（含當前排名）=====
 app.get('/api/players/:id', (req, res) => {
   try {
@@ -196,6 +229,8 @@ app.listen(PORT, () => {
   console.log(`    GET  /api/saves/by-uuid/:uuid    — 同瀏覽器還原`);
   console.log(`    POST /api/saves/recovery-code    — 生成 / 取得恢復碼`);
   console.log(`    POST /api/saves/restore-by-code  — 跨裝置還原（用恢復碼）`);
+  console.log(`    POST /api/chat/send              — 世界聊天發訊`);
+  console.log(`    GET  /api/chat/recent?since=ts   — 世界聊天輪詢`);
   const cs = db.getCloudSaveCount();
   console.log(`  雲端存檔：${cs.count} 筆、${Math.round(cs.totalBytes/1024)} KB`);
 });
