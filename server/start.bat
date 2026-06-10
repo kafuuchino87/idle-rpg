@@ -1,11 +1,15 @@
 @echo off
-REM 幻域編年史後端啟動腳本
-REM 雙擊執行即可
+chcp 65001 >nul
+title Veilreach Server (port 8766)
 cd /d "%~dp0"
-title 幻域編年史後端 (localhost:8766)
+
 echo ==========================================
 echo  Veilreach Server (Node + SQLite)
+echo  Port 8766
 echo ==========================================
 echo.
+
 node server.js
+echo.
+echo Server stopped.
 pause
