@@ -110,6 +110,33 @@
     return apiGet('/api/health');
   }
 
+  // 開遊戲時檢查雲端是否有更新版本
+  // 流程：取本地 lastSaved → 取雲端 updated_at → 雲端較新就觸發 prompt
+  // 不會直接覆蓋，玩家確認後才執行 applyCloudSave（在 game.js 處理）
+  const FRESHNESS_THRESHOLD_MS = 30 * 1000;  // 30 秒（避免時鐘小誤差誤判）
+  async function checkCloudFreshness() {
+    const localRaw = readLocalSave();
+    if (!localRaw) return { ok: false, reason: 'no_local' };
+    let localLastSaved = 0;
+    try { localLastSaved = JSON.parse(localRaw).lastSaved || 0; } catch (e) {}
+    const cloud = await downloadSaveByUuid();
+    if (!cloud.ok) return { ok: false, reason: cloud.offline ? 'offline' : 'no_cloud' };
+    const cloudUpdatedAt = cloud.data.updated_at || 0;
+    const cloudNewerBy = cloudUpdatedAt - localLastSaved;
+    if (cloudNewerBy > FRESHNESS_THRESHOLD_MS) {
+      // 雲端比本地新很多 → 提示玩家拉過來
+      if (typeof window.showCloudFreshnessPrompt === 'function') {
+        window.showCloudFreshnessPrompt({
+          localLastSaved,
+          cloudUpdatedAt,
+          cloudSaveJson: cloud.data.save_json,
+        });
+      }
+      return { ok: true, prompted: true };
+    }
+    return { ok: true, prompted: false };
+  }
+
   // ===== 雲端存檔 =====
 
   // 從 LocalStorage 抓整包存檔 JSON（沿用既有的 SAVE_KEY）
@@ -158,9 +185,17 @@
     }, intervalMs);
   }
 
+  // 把 LocalStorage 的 UUID 換成另一個（恢復碼還原時用、共用同一個雲端槽位）
+  function adoptUuid(uuid) {
+    if (!uuid || typeof uuid !== 'string') return false;
+    localStorage.setItem(PLAYER_UUID_KEY, uuid);
+    return true;
+  }
+
   // ===== 暴露 =====
   window.API = {
     getUuid: getOrCreateUuid,
+    adoptUuid,
     syncCurrentPlayer,
     getLeaderboard,
     getMyRank,
@@ -171,6 +206,7 @@
     getRecoveryCode,
     restoreByCode,
     startAutoSync,
+    checkCloudFreshness,
     readLocalSave,
     writeLocalSave,
   };

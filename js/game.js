@@ -35,7 +35,73 @@ function init() {
   // 雲端存檔自動同步：每 5 分鐘把 LocalStorage 上傳到後端做備份
   if (window.API && typeof window.API.startAutoSync === 'function') {
     window.API.startAutoSync();  // 預設 5 分鐘
+    // 開遊戲時檢查雲端是否有更新版本（跨裝置同步觸發點）
+    if (GAME_STATE.state.hasCharacter && typeof window.API.checkCloudFreshness === 'function') {
+      setTimeout(() => window.API.checkCloudFreshness(), 1500);
+    }
   }
+}
+
+// 接收 api.js 的雲端較新提示 — 跳 confirm 對話框讓玩家決定要不要拉雲端版
+window.showCloudFreshnessPrompt = function (info) {
+  if (!info || !info.cloudSaveJson) return;
+  let cloudSummary = '無法解析雲端存檔';
+  try {
+    const j = JSON.parse(info.cloudSaveJson);
+    const goldStr = (j.gold || 0).toLocaleString();
+    const charCount = j.characters ? Object.keys(j.characters).length : 0;
+    cloudSummary = `金幣 ${goldStr} / 角色數 ${charCount}`;
+  } catch (e) {}
+  const cloudTime = new Date(info.cloudUpdatedAt).toLocaleString();
+  const localTime = info.localLastSaved ? new Date(info.localLastSaved).toLocaleString() : '從未存檔';
+  if (confirm(
+    '☁ 偵測到雲端有更新版本的存檔（可能是別的裝置打的進度）：\n\n' +
+    '雲端版本：' + cloudTime + '\n' + cloudSummary + '\n\n' +
+    '本機版本：' + localTime + '\n\n' +
+    '要拉雲端版過來覆蓋本地嗎？\n' +
+    '（如果你剛剛切角色 / 載入測試 / 在此裝置上做了實驗，按取消即可）'
+  )) {
+    applyCloudSaveAndReload(info.cloudSaveJson, null /* freshness 不採用 UUID（已經是同個 UUID）*/);
+  }
+};
+
+// 共用：把雲端存檔套用到本地、reload。同時被「從碼還原」和「freshness prompt」呼叫
+function applyCloudSaveAndReload(saveJson, adoptedUuid) {
+  // ★ 四重保險（同匯入流程）：
+  // (1) 停 BATTLE 避免 tick 觸發 scheduleSave
+  if (window.BATTLE) { BATTLE.running = false; BATTLE.paused = true; }
+  // (2) 換掉記憶體 STATE（即使 scheduleSave fire，寫的也是「新」STATE）
+  let parsed;
+  try { parsed = JSON.parse(saveJson); }
+  catch (e) { alert('雲端存檔解析失敗：' + e.message); return; }
+  if (window.GAME_STATE && GAME_STATE.replaceState) {
+    GAME_STATE.replaceState(parsed);
+  }
+  // (3) 寫入 LocalStorage + 採用對方 UUID（讓兩裝置以後共用同個雲端槽位）
+  const realSetItem = localStorage.setItem.bind(localStorage);
+  try {
+    realSetItem('veilreach.save.v4', saveJson);
+    if (adoptedUuid && window.API && typeof window.API.adoptUuid === 'function') {
+      // 直接用 realSetItem 避開待會的 monkey-patch
+      realSetItem('veilreach.player.uuid', adoptedUuid);
+    }
+  } catch (e) { alert('寫入 localStorage 失敗：' + e.message); return; }
+  // 驗證
+  if (localStorage.getItem('veilreach.save.v4') !== saveJson) {
+    alert('寫入驗證失敗：LocalStorage 內容跟雲端不一致！');
+    return;
+  }
+  // (4) 攔截後續 setItem 直到 reload — 防止任何 race
+  localStorage.setItem = function (key, value) {
+    if (key === 'veilreach.save.v4' || key === 'veilreach.player.uuid' || key === 'veilreach.nickname') {
+      console.warn('[cloud apply] blocked setItem during reload:', key);
+      return;
+    }
+    return realSetItem(key, value);
+  };
+  // 立即 reload
+  closeIoModal();
+  location.reload();
 }
 
 function enterGame() {
@@ -597,39 +663,8 @@ function bindGlobalEvents() {
           const savedAt = j.lastSaved ? new Date(j.lastSaved).toLocaleString() : 'N/A';
           summary = `金幣 ${goldStr} / 魂晶 ${shardStr} / 角色數 ${charCount} / 雲端存檔時間 ${savedAt}`;
         } catch (e) {}
-        if (!confirm(`即將還原雲端存檔：\n\n${summary}\n\n這會「覆蓋」當前本地進度。確定？`)) return;
-        // ★ 跟匯入一樣的三重保險，避免 reload 前 scheduleSave timer 把舊 STATE 寫回 LocalStorage：
-        // (1) 停 BATTLE 避免後續 tick 觸發 scheduleSave
-        if (window.BATTLE) { BATTLE.running = false; BATTLE.paused = true; }
-        // (2) 把記憶體 STATE 整個換成雲端版（即使 scheduleSave 真的 fire，寫的也是「新」STATE）
-        let parsedIncoming;
-        try { parsedIncoming = JSON.parse(incoming); } catch (e) {
-          alert('雲端存檔解析失敗：' + e.message);
-          return;
-        }
-        if (window.GAME_STATE && GAME_STATE.replaceState) {
-          GAME_STATE.replaceState(parsedIncoming);
-        }
-        // (3) 寫入 LocalStorage
-        const realSetItem = localStorage.setItem.bind(localStorage);
-        try { realSetItem('veilreach.save.v4', incoming); }
-        catch (e) { alert('寫入 localStorage 失敗：' + e.message); return; }
-        // 驗證
-        if (localStorage.getItem('veilreach.save.v4') !== incoming) {
-          alert('寫入驗證失敗：LocalStorage 內容跟雲端不一致！');
-          return;
-        }
-        // (4) 攔截後續 setItem 直到 reload — 不讓任何 race condition 覆蓋
-        localStorage.setItem = function (key, value) {
-          if (key === 'veilreach.save.v4' || key === 'veilreach.nickname') {
-            console.warn('[cloud restore] blocked setItem during reload:', key);
-            return;
-          }
-          return realSetItem(key, value);
-        };
-        closeIoModal();
-        // 立即 reload（不延遲、避免 timer fire）
-        location.reload();
+        if (!confirm(`即將還原雲端存檔：\n\n${summary}\n\n這會「覆蓋」當前本地進度，並把本機 ID 接到雲端帳號（之後跨裝置自動同步、不會排行榜重複）。確定？`)) return;
+        applyCloudSaveAndReload(incoming, r.data.original_uuid);
       },
     });
   };
