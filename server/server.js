@@ -39,12 +39,32 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));    // 存檔可能 30-200KB，給 1MB 上限
 
+// ===== 在線人數追蹤（presence）=====
+// 每次玩家 API hit（自帶 uuid）就更新 lastSeenAt
+// 5 分鐘內有 hit → 算「在線」
+const _presence = new Map();  // uuid -> lastSeenAt
+const PRESENCE_TTL_MS = 5 * 60 * 1000;
+function markSeen(uuid) {
+  if (!uuid || typeof uuid !== 'string' || uuid.length > 64) return;
+  _presence.set(uuid, Date.now());
+}
+function getOnlineCount() {
+  const cutoff = Date.now() - PRESENCE_TTL_MS;
+  let count = 0;
+  for (const [uuid, ts] of _presence) {
+    if (ts > cutoff) count++;
+    else _presence.delete(uuid);   // 順手清舊
+  }
+  return count;
+}
+
 // ===== 健康檢查 =====
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     ts: Date.now(),
     playerCount: db.getPlayerCount(),
+    online: getOnlineCount(),
   });
 });
 
@@ -63,6 +83,7 @@ app.post('/api/players/sync', (req, res) => {
     if (p.nickname && p.nickname.length > 32) p.nickname = p.nickname.slice(0, 32);
 
     db.upsertPlayer(p);
+    markSeen(p.id);
     const rank = db.getPlayerRank(p.id);
     const total = db.getPlayerCount();
     res.json({ ok: true, rank, total });
@@ -179,6 +200,7 @@ app.post('/api/chat/send', (req, res) => {
     const last = _chatRateMap.get(uuid) || 0;
     if (now - last < 1500) return res.status(429).json({ error: 'rate_limited' });
     _chatRateMap.set(uuid, now);
+    markSeen(uuid);
     const r = db.insertChatMessage(uuid, nickname, text.trim());
     res.json({ ok: true, id: r.id, created_at: r.created_at });
   } catch (err) {
@@ -188,11 +210,13 @@ app.post('/api/chat/send', (req, res) => {
 });
 
 // ===== 世界聊天：取近期訊息（前端輪詢用）=====
+// 順手登記在線（chat 是固定 4 秒一次的活動心跳）
 app.get('/api/chat/recent', (req, res) => {
   try {
     const since = parseInt(req.query.since) || 0;
+    if (req.query.uuid) markSeen(req.query.uuid);
     const list = db.getRecentChats(since);
-    res.json({ ok: true, ts: Date.now(), list });
+    res.json({ ok: true, ts: Date.now(), list, online: getOnlineCount() });
   } catch (err) {
     console.error('[chat recent]', err.message);
     res.status(500).json({ error: 'server_error' });

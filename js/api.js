@@ -205,23 +205,27 @@
   }
 
   async function getRecentChats(since) {
-    return apiGet('/api/chat/recent?since=' + (since || 0));
+    // 帶 uuid 讓後端把自己也算進在線人數
+    return apiGet('/api/chat/recent?since=' + (since || 0) + '&uuid=' + encodeURIComponent(getOrCreateUuid()));
   }
 
-  // 聊天輪詢：每 4 秒拉新訊息、callback 收到新訊息
+  // 聊天輪詢：每 4 秒拉新訊息 + 在線人數
+  // callback(list, meta)：meta.online = 在線人數
   let _chatPollTimer = null;
   let _chatLastSeen = 0;
-  function startChatPolling(onNewMessages, intervalMs) {
+  function startChatPolling(onPoll, intervalMs) {
     if (_chatPollTimer) clearInterval(_chatPollTimer);
     intervalMs = intervalMs || 4000;
     const tick = async () => {
       const r = await getRecentChats(_chatLastSeen);
-      if (!r.ok) return;  // 離線靜默
-      const list = (r.data && r.data.list) || [];
-      if (list.length > 0) {
-        _chatLastSeen = list[list.length - 1].created_at;
-        if (typeof onNewMessages === 'function') onNewMessages(list);
+      if (!r.ok) {
+        if (typeof onPoll === 'function') onPoll([], { online: null, offline: true });
+        return;
       }
+      const data = r.data || {};
+      const list = data.list || [];
+      if (list.length > 0) _chatLastSeen = list[list.length - 1].created_at;
+      if (typeof onPoll === 'function') onPoll(list, { online: data.online, offline: false });
     };
     tick();  // 立刻拉一次
     _chatPollTimer = setInterval(tick, intervalMs);

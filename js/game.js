@@ -4987,7 +4987,18 @@ function bindLeftChat() {
 // 開遊戲時啟動聊天輪詢（每 4 秒）
 function _startWorldChatPolling() {
   if (!window.API || typeof window.API.startChatPolling !== 'function') return;
-  window.API.startChatPolling((newMessages) => {
+  window.API.startChatPolling((newMessages, meta) => {
+    // 更新在線人數
+    const onlineEl = document.getElementById('chatOnline');
+    if (onlineEl) {
+      if (meta && meta.offline) {
+        onlineEl.textContent = '後端未連';
+        onlineEl.classList.add('off');
+      } else if (meta && typeof meta.online === 'number') {
+        onlineEl.textContent = `🌐 在線 ${meta.online}`;
+        onlineEl.classList.remove('off');
+      }
+    }
     for (const m of newMessages) {
       // 自己剛送的訊息會從輪詢回來（id 已記）→ _seenChatIds 攔截不會重複
       _pushChatMessage({ id: m.id, who: m.nickname, text: m.text, self: false });
