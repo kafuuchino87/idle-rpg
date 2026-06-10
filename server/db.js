@@ -28,6 +28,17 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_players_cp ON players(cp DESC);
   CREATE INDEX IF NOT EXISTS idx_players_updated ON players(updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS cloud_saves (
+    uuid TEXT PRIMARY KEY,                  -- 同瀏覽器自動還原用
+    recovery_code TEXT UNIQUE,              -- 跨裝置還原用（NULL = 還沒生成過）
+    save_json TEXT NOT NULL,                -- 整包 LocalStorage JSON
+    size_bytes INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_cloud_saves_code ON cloud_saves(recovery_code);
 `);
 
 // ===== Helpers =====
@@ -106,6 +117,83 @@ function getPlayer(playerId) {
   return db.prepare('SELECT * FROM players WHERE id = ?').get(playerId);
 }
 
+// ===== 雲端存檔 helpers =====
+
+const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';  // 32 字符，去掉易混淆的 0/O/1/I
+function generateRecoveryCode() {
+  // 格式：VR-XXXX-XXXX-XXXX（4 組 4 字符 = 16 字符）
+  let code = 'VR';
+  for (let g = 0; g < 3; g++) {
+    code += '-';
+    for (let i = 0; i < 4; i++) {
+      code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    }
+  }
+  return code;
+}
+
+/**
+ * 上傳存檔（自動同步用）— upsert by uuid
+ */
+function upsertSave(uuid, saveJson) {
+  const now = Date.now();
+  const size = Buffer.byteLength(saveJson, 'utf8');
+  const stmt = db.prepare(`
+    INSERT INTO cloud_saves (uuid, save_json, size_bytes, created_at, updated_at)
+    VALUES (@uuid, @save_json, @size, @now, @now)
+    ON CONFLICT(uuid) DO UPDATE SET
+      save_json = excluded.save_json,
+      size_bytes = excluded.size_bytes,
+      updated_at = excluded.updated_at
+  `);
+  stmt.run({ uuid, save_json: saveJson, size, now });
+  return { size, updated_at: now };
+}
+
+/**
+ * 依 UUID 取存檔（自動還原用）
+ */
+function getSaveByUuid(uuid) {
+  const stmt = db.prepare('SELECT save_json, recovery_code, size_bytes, updated_at FROM cloud_saves WHERE uuid = ?');
+  return stmt.get(uuid);
+}
+
+/**
+ * 生成 / 取得當前 UUID 的恢復碼（已存在就回原本的、不重新生成）
+ */
+function getOrCreateRecoveryCode(uuid) {
+  const row = db.prepare('SELECT recovery_code FROM cloud_saves WHERE uuid = ?').get(uuid);
+  if (!row) return null;  // 沒存過檔
+  if (row.recovery_code) return row.recovery_code;
+
+  // 還沒生成過 → 生成一個唯一碼
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = generateRecoveryCode();
+    const existing = db.prepare('SELECT 1 FROM cloud_saves WHERE recovery_code = ?').get(code);
+    if (!existing) {
+      db.prepare('UPDATE cloud_saves SET recovery_code = ? WHERE uuid = ?').run(code, uuid);
+      return code;
+    }
+  }
+  throw new Error('failed to generate unique code');
+}
+
+/**
+ * 依恢復碼取存檔（跨裝置還原用）
+ */
+function getSaveByCode(code) {
+  const stmt = db.prepare('SELECT uuid, save_json, size_bytes, updated_at FROM cloud_saves WHERE recovery_code = ?');
+  return stmt.get(code);
+}
+
+/**
+ * 雲端存檔總筆數（管理 / 統計用）
+ */
+function getCloudSaveCount() {
+  const row = db.prepare('SELECT COUNT(*) as n, SUM(size_bytes) as total FROM cloud_saves').get();
+  return { count: row?.n || 0, totalBytes: row?.total || 0 };
+}
+
 module.exports = {
   db,
   upsertPlayer,
@@ -113,4 +201,10 @@ module.exports = {
   getPlayerRank,
   getPlayerCount,
   getPlayer,
+  // cloud save
+  upsertSave,
+  getSaveByUuid,
+  getOrCreateRecoveryCode,
+  getSaveByCode,
+  getCloudSaveCount,
 };

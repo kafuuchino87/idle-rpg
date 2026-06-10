@@ -37,7 +37,7 @@ app.use(cors({
   credentials: false,
 }));
 
-app.use(express.json({ limit: '32kb' }));   // payload 限制 32KB 防濫送
+app.use(express.json({ limit: '1mb' }));    // 存檔可能 30-200KB，給 1MB 上限
 
 // ===== 健康檢查 =====
 app.get('/api/health', (req, res) => {
@@ -89,6 +89,83 @@ app.get('/api/leaderboard', (req, res) => {
   }
 });
 
+// ===== 雲端存檔：上傳（自動同步 + 手動觸發） =====
+app.post('/api/saves/upload', (req, res) => {
+  try {
+    const { uuid, save_json } = req.body || {};
+    if (!uuid || typeof uuid !== 'string' || uuid.length > 64) {
+      return res.status(400).json({ error: 'invalid_uuid' });
+    }
+    if (!save_json || typeof save_json !== 'string') {
+      return res.status(400).json({ error: 'invalid_save' });
+    }
+    if (save_json.length > 800_000) {  // 800KB 上限
+      return res.status(413).json({ error: 'save_too_large' });
+    }
+    // 簡單 JSON 合理性檢查（避免亂送）
+    try { JSON.parse(save_json); } catch { return res.status(400).json({ error: 'malformed_json' }); }
+
+    const { size, updated_at } = db.upsertSave(uuid, save_json);
+    res.json({ ok: true, size, updated_at });
+  } catch (err) {
+    console.error('[save upload]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// ===== 雲端存檔：依 UUID 取回（同瀏覽器自動還原） =====
+app.get('/api/saves/by-uuid/:uuid', (req, res) => {
+  try {
+    const row = db.getSaveByUuid(req.params.uuid);
+    if (!row) return res.status(404).json({ error: 'not_found' });
+    res.json({
+      ok: true,
+      save_json: row.save_json,
+      size_bytes: row.size_bytes,
+      updated_at: row.updated_at,
+      has_recovery_code: !!row.recovery_code,
+    });
+  } catch (err) {
+    console.error('[save get-by-uuid]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// ===== 雲端存檔：生成 / 取得恢復碼 =====
+app.post('/api/saves/recovery-code', (req, res) => {
+  try {
+    const { uuid } = req.body || {};
+    if (!uuid || typeof uuid !== 'string') return res.status(400).json({ error: 'invalid_uuid' });
+    const code = db.getOrCreateRecoveryCode(uuid);
+    if (!code) return res.status(404).json({ error: 'no_save_yet' });
+    res.json({ ok: true, recovery_code: code });
+  } catch (err) {
+    console.error('[recovery-code]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// ===== 雲端存檔：依恢復碼取回（跨裝置還原） =====
+app.post('/api/saves/restore-by-code', (req, res) => {
+  try {
+    const { code } = req.body || {};
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'invalid_code' });
+    const normalized = code.trim().toUpperCase();
+    const row = db.getSaveByCode(normalized);
+    if (!row) return res.status(404).json({ error: 'code_not_found' });
+    res.json({
+      ok: true,
+      save_json: row.save_json,
+      original_uuid: row.uuid,
+      size_bytes: row.size_bytes,
+      updated_at: row.updated_at,
+    });
+  } catch (err) {
+    console.error('[restore-by-code]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // ===== 取得單一玩家（含當前排名）=====
 app.get('/api/players/:id', (req, res) => {
   try {
@@ -115,4 +192,10 @@ app.listen(PORT, () => {
   console.log(`    POST /api/players/sync           — 玩家資料 upsert`);
   console.log(`    GET  /api/leaderboard?limit=100  — 戰力排行榜`);
   console.log(`    GET  /api/players/:id            — 單一玩家 + 排名`);
+  console.log(`    POST /api/saves/upload           — 上傳雲端存檔`);
+  console.log(`    GET  /api/saves/by-uuid/:uuid    — 同瀏覽器還原`);
+  console.log(`    POST /api/saves/recovery-code    — 生成 / 取得恢復碼`);
+  console.log(`    POST /api/saves/restore-by-code  — 跨裝置還原（用恢復碼）`);
+  const cs = db.getCloudSaveCount();
+  console.log(`  雲端存檔：${cs.count} 筆、${Math.round(cs.totalBytes/1024)} KB`);
 });

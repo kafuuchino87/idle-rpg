@@ -110,6 +110,54 @@
     return apiGet('/api/health');
   }
 
+  // ===== 雲端存檔 =====
+
+  // 從 LocalStorage 抓整包存檔 JSON（沿用既有的 SAVE_KEY）
+  const SAVE_KEY = 'veilreach.save.v4';
+  function readLocalSave() {
+    return localStorage.getItem(SAVE_KEY);
+  }
+  function writeLocalSave(jsonStr) {
+    localStorage.setItem(SAVE_KEY, jsonStr);
+  }
+
+  async function uploadSave() {
+    const save = readLocalSave();
+    if (!save) return { ok: false, error: 'no_local_save' };
+    return apiPost('/api/saves/upload', { uuid: getOrCreateUuid(), save_json: save });
+  }
+
+  async function downloadSaveByUuid() {
+    return apiGet('/api/saves/by-uuid/' + getOrCreateUuid());
+  }
+
+  async function getRecoveryCode() {
+    return apiPost('/api/saves/recovery-code', { uuid: getOrCreateUuid() });
+  }
+
+  async function restoreByCode(code) {
+    if (!code || typeof code !== 'string') return { ok: false, error: 'invalid_code' };
+    return apiPost('/api/saves/restore-by-code', { code: code.trim().toUpperCase() });
+  }
+
+  // 自動同步：每 5 分鐘上傳一次（若 LocalStorage 有變動）
+  let lastSyncSig = '';
+  function startAutoSync(intervalMs) {
+    intervalMs = intervalMs || 5 * 60 * 1000;
+    setInterval(async () => {
+      const save = readLocalSave();
+      if (!save) return;
+      // 簡單 sig：長度 + 末 50 字（避免每次都送）
+      const sig = save.length + ':' + save.slice(-50);
+      if (sig === lastSyncSig) return;
+      const r = await uploadSave();
+      if (r.ok) {
+        lastSyncSig = sig;
+        window.__cloudSaveLastSync = Date.now();
+      }
+    }, intervalMs);
+  }
+
   // ===== 暴露 =====
   window.API = {
     getUuid: getOrCreateUuid,
@@ -117,5 +165,13 @@
     getLeaderboard,
     getMyRank,
     pingServer,
+    // cloud save
+    uploadSave,
+    downloadSaveByUuid,
+    getRecoveryCode,
+    restoreByCode,
+    startAutoSync,
+    readLocalSave,
+    writeLocalSave,
   };
 })();

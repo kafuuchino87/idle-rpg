@@ -31,6 +31,11 @@ function init() {
   }
 
   bindGlobalEvents();
+
+  // 雲端存檔自動同步：每 5 分鐘把 LocalStorage 上傳到後端做備份
+  if (window.API && typeof window.API.startAutoSync === 'function') {
+    window.API.startAutoSync();  // 預設 5 分鐘
+  }
 }
 
 function enterGame() {
@@ -535,6 +540,54 @@ function bindGlobalEvents() {
       GAME_STATE.resetState();
       location.reload();
     }
+  };
+  // ☁ 雲端恢復碼：先上傳當前存檔到雲端、再取碼顯示
+  document.getElementById('btnCloudCode').onclick = async () => {
+    if (!window.API) return toast('API 未載入', 'error');
+    GAME_STATE.saveState();  // 確保 LocalStorage 是最新
+    toast('正在上傳雲端 ...', 'gold');
+    const up = await window.API.uploadSave();
+    if (!up.ok) {
+      if (up.offline) return toast('後端離線、無法同步', 'error');
+      return toast('上傳失敗：' + (up.error || ''), 'error');
+    }
+    const r = await window.API.getRecoveryCode();
+    if (!r.ok) return toast('取碼失敗：' + (r.error || ''), 'error');
+    const code = r.data.recovery_code;
+    openIoModal({
+      title: '☁ 雲端恢復碼',
+      hint: `記下這串碼，換瀏覽器 / 換裝置時用「☁ 從碼還原」輸入即可拿回進度。\n\n存檔大小：${(up.data.size/1024).toFixed(1)} KB`,
+      value: code,
+      readonly: true,
+      confirmText: '完成',
+      onConfirm: () => { closeIoModal(); toast('已關閉，記得保存恢復碼', 'gold'); },
+    });
+  };
+  // ☁ 從恢復碼還原存檔
+  document.getElementById('btnCloudRestore').onclick = () => {
+    if (!window.API) return toast('API 未載入', 'error');
+    openIoModal({
+      title: '☁ 從恢復碼還原',
+      hint: '輸入你之前「☁ 恢復碼」拿到的碼（格式 VR-XXXX-XXXX-XXXX），按還原會覆蓋當前進度。',
+      value: '',
+      readonly: false,
+      confirmText: '還原',
+      onConfirm: async () => {
+        const raw = document.getElementById('ioTextarea').value.trim();
+        if (!raw) return toast('請先輸入恢復碼', 'error');
+        const r = await window.API.restoreByCode(raw);
+        if (!r.ok) {
+          if (r.offline) return toast('後端離線', 'error');
+          if (r.error === 'http_404') return toast('找不到這組恢復碼', 'error');
+          return toast('還原失敗：' + (r.error || ''), 'error');
+        }
+        if (!confirm('成功取得雲端存檔，將覆蓋當前本地進度，確定？')) return;
+        window.API.writeLocalSave(r.data.save_json);
+        closeIoModal();
+        toast('還原完成，重新載入中 ...', 'gold');
+        setTimeout(() => location.reload(), 800);
+      },
+    });
   };
   document.getElementById('btnUnlockOk').onclick = () => {
     document.getElementById('unlockOverlay').classList.add('hidden');
