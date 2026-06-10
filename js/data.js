@@ -2002,7 +2002,7 @@ function findEquipment(id) { return ITEMS.equipment.find(e => e.id === id); }
 // Lv 10~17：用無盡塔材料、有降級機率（等級越高降級越大、成功越小），不能掉破 10
 const FORGE_MAX = 18;
 const FORGE_SAFE_LEVEL = 10;  // < 10 是「安全強化」，不會降級
-function forgeCost(level) {
+function forgeCost(level, def) {
   // ===== Lv 0~9：普通強化（保留原邏輯） =====
   if (level < FORGE_SAFE_LEVEL) {
     const goldCost = Math.floor(40 * Math.pow(1.55, level));
@@ -2042,9 +2042,13 @@ function forgeCost(level) {
     17: { gold: 7_000_000, mats: [{ name: '終焉印石', qty: 20 }, { name: '異界之鎚', qty: 5 }, { name: '罪薔之心', qty: 3 }] },
   };
   const recipe = RECIPES[level] || RECIPES[17];
+  // 罪薔之心：只有 UR3 / 緋月血薔薇套（tier 6 含上）才需要
+  // 其他 UR2 / 蝕痕鎧神等 tier ≤ 5 強化不要求罪薔之心
+  const isUr3 = def && (def.tier || 0) >= 6;
+  const mats = isUr3 ? recipe.mats : recipe.mats.filter(m => m.name !== '罪薔之心');
   return {
     goldCost: recipe.gold,
-    mats: recipe.mats,
+    mats,
     successRate: t.s,
     downgradeRate: t.d,
     failRate: 1 - t.s - t.d,

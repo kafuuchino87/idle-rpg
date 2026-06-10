@@ -3507,7 +3507,7 @@ function renderForge() {
     if (lvl >= maxLvl) {
       bottom = `<div style="color:var(--gold);font-size:11px">★ 已達上限</div>`;
     } else {
-      const cost = GAME_DATA.forgeCost(lvl);
+      const cost = GAME_DATA.forgeCost(lvl, def);
       const goldOk = GAME_STATE.state.gold >= cost.goldCost;
       const bag = _activeBag().materials || {};
       const matChecks = cost.mats.map(m => ({ ...m, ok: (bag[m.name] || 0) >= m.qty }));
@@ -3697,8 +3697,9 @@ function statLabel(k, v, forge) {
 function doForge(instId, useProtect) {
   const inst = _activeBag().equipment[instId];
   if (!inst) return;
+  const def = GAME_DATA.findEquipment(inst.itemId);
   const curLv = inst.forge || 0;
-  const cost = GAME_DATA.forgeCost(curLv);
+  const cost = GAME_DATA.forgeCost(curLv, def);
   // 檢查資源（金 + 所有材料）
   if (GAME_STATE.state.gold < cost.goldCost) return toast('金幣不足', 'error');
   const bag = _activeBag().materials || {};
