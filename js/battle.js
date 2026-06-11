@@ -1997,6 +1997,14 @@ function applyDamage(dmg, isCrit) {
       actualDmg = Math.floor(actualDmg * (1 + BATTLE.ringProcs.executeBonus));
     }
   }
+  // 低血增傷（lowHpDmg）：對 HP < 80% 的敵人增傷（裝備/套裝/鍛造）
+  const lhd = BATTLE.player.lowHpDmg || 0;
+  if (lhd > 0 && BATTLE.enemy.maxHp > 0) {
+    const ratio = BATTLE.enemy.hp / BATTLE.enemy.maxHp;
+    if (ratio < 0.80) {
+      actualDmg = Math.floor(actualDmg * (1 + lhd));
+    }
+  }
   // 鏡夢縛魂技能攔截：分身吸傷 / 鏡牢吸傷 / 治療打斷計數 / 紅絲掙脫計數
   // ★ 多人：只有 host / solo 套用 hook（權威端）；guest 送 raw 給 host 重算
   const isMirrorGuest = BATTLE.enemy.bossSkillTag === 'mirror' && BATTLE._mpMode === 'guest';
@@ -2095,6 +2103,11 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
     if (e.isBoss) {
       if (sk.vsBossBonus) dmg = Math.floor(dmg * (1 + sk.vsBossBonus));
       if (BATTLE.player.vsBoss) dmg = Math.floor(dmg * (1 + BATTLE.player.vsBoss));
+    }
+    // 低血增傷（lowHpDmg）：對 HP < 80% 的敵人增傷
+    const lhdAoe = BATTLE.player.lowHpDmg || 0;
+    if (lhdAoe > 0 && e.maxHp > 0 && (e.hp / e.maxHp) < 0.80) {
+      dmg = Math.floor(dmg * (1 + lhdAoe));
     }
     // 鏡夢縛魂技能攔截（同 applyDamage：只在 host / solo 套用 hook）
     const aoeRawDmg = dmg;

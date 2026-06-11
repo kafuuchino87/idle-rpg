@@ -513,7 +513,7 @@ const SKILLS = {
   },
   'oracle-arrow': {
     name: '神諭斷罪', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 15% 吸血。CD 25s。',
+    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 1對 HP<80% 敵 +5%。CD 25s。',
     mult: 15.0, vsBossBonus: 1.0, alwaysCrit: true, lifesteal: 0.15,
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
@@ -1065,7 +1065,7 @@ const REGIONS = [
           { label: '神鋼',   value: '必掉 ×15~25', color: 'var(--shard)' },
           { label: '永晶',   value: '必掉 ×5~10', color: 'var(--shard)' },
           { label: '✿ 罪薔之心', value: '必掉 ×1~3 + 50% 額外 ×1~2（UR3 武器成長 + 強化 15~18 材料）', color: 'var(--hp-enemy)' },
-          { label: '★★ UR 戒指', value: '「緋月血契」8% 機率掉落（處決效果 — 對 HP < 30% 的敵人 +60% 傷害）', color: 'var(--hp-enemy)' },
+          { label: '★★ UR 戒指', value: '「緋月血契」8% 機率掉落（對 HP < 80% 的敵人 +30% 傷害）', color: 'var(--hp-enemy)' },
           { label: '★★★ UR3 武器/裝備', value: '10% 機率掉「緋月」系列 1 件（4 武器 + 4 防具隨機，比 UR2 / 蝕痕鎧神更強）', color: 'var(--hp-enemy)' },
         ],
         bossPortrait: 'assets/portraits/raid-bloodscythe-art.png',
@@ -1648,29 +1648,29 @@ const ITEMS = {
     { id: 'eq-weap-ur3', slot: 'weapon', owner: 'tsukirin', name: '緋月·噬血凶矛', rarity: 'UR', tier: 6,
       stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
       fixed: {
-        label: '噬血凶矛：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
-        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+        label: '噬血凶矛：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、對 HP<80% 敵 +5%',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lowHpDmg: 0.05 },
       },
     },
     { id: 'eq-mirror-ur3', slot: 'weapon', owner: 'eve', name: '緋月·薔薇真鏡', rarity: 'UR', tier: 6,
       stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
       fixed: {
-        label: '薔薇真鏡：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
-        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+        label: '薔薇真鏡：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、對 HP<80% 敵 +5%',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lowHpDmg: 0.05 },
       },
     },
     { id: 'eq-bow-ur3', slot: 'weapon', owner: 'rean', name: '緋月·血薇神羽弓', rarity: 'UR', tier: 6,
       stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
       fixed: {
-        label: '血薇神羽：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
-        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+        label: '血薇神羽：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、對 HP<80% 敵 +5%',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lowHpDmg: 0.05 },
       },
     },
     { id: 'eq-cannon-ur3', slot: 'weapon', owner: 'mira', name: '緋月·罪薔光子砲', rarity: 'UR', tier: 6,
       stats: { atk: 2200, crit: 0.45, critDmg: 1.50 },
       fixed: {
-        label: '罪薔光子：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、5% 吸血',
-        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lifesteal: 0.05 },
+        label: '罪薔光子：攻擊 +(600+強化×60)、暴擊 +25%、暴傷 +120%、對王 +(50%+強化×3%)、技能傷害 +(50%+強化×3%)、減傷 +15%、無視防禦 +25%、攻擊力 +20%、對 HP<80% 敵 +5%',
+        effect: { atk: 'forge:600+60', crit: 0.25, critDmg: 1.20, vsBoss: 'forge:0.50+0.030', skillDmg: 'forge:0.50+0.030', dmgReduce: 0.15, defPierce: 0.25, atkPct: 0.20, lowHpDmg: 0.05 },
       },
     },
 
@@ -1705,8 +1705,8 @@ const ITEMS = {
     // ===== UR 戒指（緋月姬 RAID 低機率掉，處決系）=====
     { id: 'eq-ring-ur-bloodscythe', slot: 'ring', name: '緋月血契', rarity: 'UR', tier: 4, stats: {},
       procId: 'execute',
-      proc: { execute: { threshold: 0.30, bonus: 0.60 } },
-      fixed: { label: '緋月處決：對 HP 低於 30% 的敵人造成 +60% 傷害' } },
+      proc: { execute: { threshold: 0.80, bonus: 0.30 } },
+      fixed: { label: '緋月血契：對 HP 低於 80% 的敵人造成 +30% 傷害' } },
   ],
 };
 
@@ -1787,7 +1787,7 @@ const SETS = {
     coreSet: true, armorOnly: true,
     bonuses: [
       { pieces: 2, label: '血薔·二件套：對 BOSS +25%、暴擊傷害 +25%、暴擊 +10%', effect: { vsBoss: 0.25, critDmg: 0.25, crit: 0.10 } },
-      { pieces: 4, label: '★血薔·四件套：所有屬性 +30%、技能傷害 +35%、減傷 +15%、5% 吸血（千年血咒覺醒）', effect: { allMul: 0.30, skillDmg: 0.35, dmgReduce: 0.15, lifesteal: 0.05 } },
+      { pieces: 4, label: '★血薔·四件套：所有屬性 +30%、技能傷害 +35%、減傷 +15%、對 HP<80% 敵 +5%（千年血咒覺醒）', effect: { allMul: 0.30, skillDmg: 0.35, dmgReduce: 0.15, lowHpDmg: 0.05 } },
     ],
   },
   // 終焉套（無盡塔製作・畢業終極）
@@ -1829,7 +1829,7 @@ const SMITH_EFFECTS_BLOODSCYTHE = [
   { stage: 21, label: '速度 +5%',       effect: { spd: 0.05 } },
   { stage: 24, label: 'CD 縮減 +5%',    effect: { cdReduce: 0.05 } },
   { stage: 27, label: '無視防禦 +8%',   effect: { defPierce: 0.08 } },
-  { stage: 30, label: '★攻擊力 +5%、3% 吸血', effect: { atkPct: 0.05, lifesteal: 0.03 } },
+  { stage: 30, label: '★攻擊力 +5%、對 HP<80% 敵 +3%', effect: { atkPct: 0.05, lowHpDmg: 0.03 } },
 ];
 const SMITH_MAX_STAGE = 30;
 

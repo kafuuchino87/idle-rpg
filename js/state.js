@@ -1032,6 +1032,7 @@ function effectiveStats(charId) {
     vsBoss: s.vsBoss,
     skillDmg: s.skillDmg || 0,
     defPierce: s.defPierce || 0,
+    lowHpDmg: s.lowHpDmg || 0,
     maxMp: Math.floor(s.maxMp),
     mpRegen: Math.round(s.mpRegen * 10) / 10,
     mpPerHit: Math.floor(s.mpPerHit),
