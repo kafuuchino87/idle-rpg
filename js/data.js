@@ -874,14 +874,14 @@ const REGIONS = [
     dungeons: [
       { id: 'raid-calamity', name: '災厄·虛影鏡之主宰', cp: 80000, unlock: 'abyss-mirror', requiredLv: 99,
         isRaid: true, baseTime: 90, expBase: 30000, goldBase: 50000,
-        difficultyMul: 7.8,  // BOSS HP ~400 萬，atk 仍 cap 2.0 不秒殺玩家
+        difficultyMul: 4.0,  // 下修：BOSS HP 從 ~400 萬 → ~205 萬，貼近 ×3.5 警告體感
         lore: [
           '反射迴廊的最深處，倒影深淵的盡頭。',
           '鏡之主宰的本體在虛影封印破裂之夜降臨。',
           '鏡片中映出無數扭曲的面孔，每一面都是他吞噬過的英魂。',
           '走到他面前，你會看見——自己。',
         ],
-        warning: '此為畢業後挑戰副本，難度倍率 ×3.5。建議備齊大型藥水、鬥志藥水、加倍卷軸方可一試。',
+        warning: '此為畢業後挑戰副本，難度倍率 ×4.0。建議備齊大型藥水、鬥志藥水、加倍卷軸方可一試。',
         rewards: [
           { label: '經驗值', value: '30,000', color: 'var(--exp)' },
           { label: '金幣',   value: '50,000', color: 'var(--gold)' },
