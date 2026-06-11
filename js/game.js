@@ -5167,20 +5167,23 @@ window.showResultModal = function(lc) {
     if (cd) cd.remove();
   };
 
-  // RAID 通關 + autoRun → 啟動 3 秒倒數自動再戰（單人 / 多人 host 都會直接開戰，guest 等房主廣播）
+  // RAID / 無盡塔通關 + autoRun → 啟動 3 秒倒數自動再戰
+  // 單人 / 多人 host 都會直接開戰，guest 等房主廣播
+  // 無盡塔需要扣 1 張通行證才能重打（與手動入場一致）
   const _mpApi = window.MP_API;
   const _isMp = _mpApi && typeof _mpApi.isConnected === 'function' && _mpApi.isConnected();
   const _isHost = _isMp && typeof _mpApi.isHost === 'function' && _mpApi.isHost();
   const _isGuest = _isMp && !_isHost;
-  const _shouldAutoRestart = lc.isRaid && !lc.failed && !lc.isEndless && GAME_STATE.state.autoRun;
+  const _shouldAutoRestart = (lc.isRaid || lc.isEndless) && !lc.failed && GAME_STATE.state.autoRun;
   if (_shouldAutoRestart) {
     let remaining = 3;
     const countdown = document.createElement('div');
     countdown.id = 'resultCountdown';
     countdown.style.cssText = 'text-align:center;color:var(--gold);font-size:13px;margin-top:8px;';
+    const _kind = lc.isEndless ? '無盡塔' : 'RAID';
     const labelByRole = _isGuest
       ? (n) => `${n} 秒後等候房主自動再戰`
-      : (n) => `${n} 秒後自動再戰 RAID`;
+      : (n) => `${n} 秒後自動再戰 ${_kind}`;
     const render = () => {
       countdown.innerHTML = `${labelByRole(remaining)} <span id="resultCancelAuto" style="color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">[取消]</span>`;
       const cancel = document.getElementById('resultCancelAuto');
@@ -5208,12 +5211,23 @@ window.showResultModal = function(lc) {
           toast('等待房主開戰...', 'gold');
           return;
         }
+        // 無盡塔需扣通行證（host / solo 都要扣自己的）
+        const d = GAME_DATA.getDungeon(lc.dungeonId);
+        if (d && d.isEndless) {
+          const passId = d.passId || 'pass-endless';
+          const passOk = GAME_STATE.consumePass(passId, 1);
+          if (!passOk) {
+            const passDef = GAME_DATA.findPass ? GAME_DATA.findPass(passId) : null;
+            toast(`${(passDef && passDef.name) || '入場券'}不足，無法自動再戰`, 'error');
+            return;
+          }
+        }
         // 房主多人房：先廣播再開戰，跟玩家手動點 [進入戰鬥] 一致
         if (_isHost && typeof _mpApi.broadcastRaidLaunch === 'function') {
           _mpApi.broadcastRaidLaunch(lc.dungeonId);
         }
-        const ok = startBattle(lc.dungeonId, GAME_STATE.state.activeCharId);
-        if (!ok) toast('自動再戰失敗（戰力/等級不足）', 'error');
+        const startedOk = startBattle(lc.dungeonId, GAME_STATE.state.activeCharId);
+        if (!startedOk) toast('自動再戰失敗（戰力/等級不足）', 'error');
       }
     }, 1000);
   }
