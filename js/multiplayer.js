@@ -241,6 +241,7 @@ function broadcastBattleState() {
     mp: b.player ? Math.floor(b.player.mp || 0) : 0,
     maxMp: b.player ? Math.floor(b.player.maxMp || 0) : 0,
     dungeonId: b.dungeonId,
+    battleStartTs: b.startTime || 0,  // 每場 startBattle 都會刷新 → 用來判斷「同一場 vs 新一場」
     inBattle: true,
     paused: !!b.paused,
     dead: !!b._dead,  // ★ 死亡旗標跟著 player-state 一起送，避免被藥水補滿後覆寫掉
@@ -290,16 +291,17 @@ function handleMessage(fromPeerId, data) {
   }
   if (data.type === 'player-state') {
     if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
-    // 死亡黏著：同副本內 player-state 不能把 dead 洗回 false（避免藥水補滿 HP 後 dead 失效，team-wipe 永遠不觸發）
-    // 但跨副本要清掉 — 否則同一隊友下一場仍被標記陣亡，toast / team-wipe 邏輯通通失準
+    // 死亡黏著：同一場戰鬥內 dead 不能洗回 false（避免藥水補滿 HP 後 dead 失效，team-wipe 失準）
+    // 用 battleStartTs（每次 startBattle 都會刷新）判斷「同一場 vs 新一場」
+    // — 解決 RAID 自動再戰回同一 dungeonId 但實際是新戰場，dead 黏著清不掉的 bug
     const prev = MP.players[fromPeerId].battleState;
-    const prevDungeonId = prev && prev.dungeonId;
-    const newDungeonId = data.payload && data.payload.dungeonId;
-    const sameDungeon = prevDungeonId && newDungeonId && prevDungeonId === newDungeonId;
-    const wasDead = sameDungeon && prev && prev.dead;
+    const prevTs = prev && prev.battleStartTs;
+    const newTs = data.payload && data.payload.battleStartTs;
+    const sameBattle = prevTs && newTs && prevTs === newTs;
+    const wasDead = sameBattle && prev && prev.dead;
     MP.players[fromPeerId].battleState = data.payload;
     if (wasDead) MP.players[fromPeerId].battleState.dead = true;
-    if (!sameDungeon) MP.players[fromPeerId]._deathToasted = false;  // 新副本 → 重置 toast 旗標
+    if (!sameBattle) MP.players[fromPeerId]._deathToasted = false;  // 新一場 → 重置 toast 旗標
   }
   if (data.type === 'player-dead') {
     if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
