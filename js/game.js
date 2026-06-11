@@ -5147,7 +5147,60 @@ window.showResultModal = function(lc) {
   }
 
   overlay.classList.remove('hidden');
-  document.getElementById('resultClose').onclick = () => overlay.classList.add('hidden');
+
+  // 清掉前一場可能殘留的倒數
+  if (window._autoRestartTimer) {
+    clearInterval(window._autoRestartTimer);
+    window._autoRestartTimer = null;
+  }
+  const _oldCountdown = document.getElementById('resultCountdown');
+  if (_oldCountdown) _oldCountdown.remove();
+
+  const closeBtn = document.getElementById('resultClose');
+  closeBtn.onclick = () => {
+    overlay.classList.add('hidden');
+    if (window._autoRestartTimer) {
+      clearInterval(window._autoRestartTimer);
+      window._autoRestartTimer = null;
+    }
+    const cd = document.getElementById('resultCountdown');
+    if (cd) cd.remove();
+  };
+
+  // RAID 通關 + autoRun + 單人 → 啟動 3 秒倒數自動再戰
+  const _mpOn = window.MP_API && typeof MP_API.isConnected === 'function' && MP_API.isConnected();
+  const _shouldAutoRestart = lc.isRaid && !lc.failed && !lc.isEndless
+    && GAME_STATE.state.autoRun && !_mpOn;
+  if (_shouldAutoRestart) {
+    let remaining = 3;
+    const countdown = document.createElement('div');
+    countdown.id = 'resultCountdown';
+    countdown.style.cssText = 'text-align:center;color:var(--gold);font-size:13px;margin-top:8px;';
+    const render = () => {
+      countdown.innerHTML = `${remaining} 秒後自動再戰 RAID <span id="resultCancelAuto" style="color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">[取消]</span>`;
+      const cancel = document.getElementById('resultCancelAuto');
+      if (cancel) cancel.onclick = () => {
+        if (window._autoRestartTimer) { clearInterval(window._autoRestartTimer); window._autoRestartTimer = null; }
+        countdown.innerHTML = `<span style="color:var(--muted)">已取消自動再戰</span>`;
+      };
+    };
+    render();
+    closeBtn.parentNode.appendChild(countdown);  // 放在 [確認] 按鈕之後
+    window._autoRestartTimer = setInterval(() => {
+      remaining--;
+      if (remaining > 0) {
+        render();
+      } else {
+        clearInterval(window._autoRestartTimer);
+        window._autoRestartTimer = null;
+        overlay.classList.add('hidden');
+        countdown.remove();
+        if (!GAME_STATE.state.autoRun) return;  // 倒數期間玩家關了自動 → 不再戰
+        const ok = startBattle(lc.dungeonId, GAME_STATE.state.activeCharId);
+        if (!ok) toast('自動再戰失敗（戰力/等級不足）', 'error');
+      }
+    }, 1000);
+  }
 };
 
 // ============================================================================
