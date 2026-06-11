@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 8766;
 // GitHub Pages + 本機開發
 const ALLOWED_ORIGINS = [
   'https://kafuuchino87.github.io',
+  'https://desktop-41ch992.tailed47b7.ts.net',   // Tailscale Funnel 本機公開網址
   'http://localhost:8765',
   'http://127.0.0.1:8765',
   'http://localhost:5500',          // VS Code Live Server
