@@ -2042,10 +2042,27 @@ function forgeCost(level, def) {
     17: { gold: 7_000_000, mats: [{ name: '終焉印石', qty: 20 }, { name: '異界之鎚', qty: 5 }, { name: '罪薔之心', qty: 3 }] },
   };
   const recipe = RECIPES[level] || RECIPES[17];
+  const isUr = def && def.rarity === 'UR';
   // 罪薔之心：只有 UR3 / 緋月血薔薇套（tier 6 含上）才需要
   // 其他 UR2 / 蝕痕鎧神等 tier ≤ 5 強化不要求罪薔之心
   const isUr3 = def && (def.tier || 0) >= 6;
-  const mats = isUr3 ? recipe.mats : recipe.mats.filter(m => m.name !== '罪薔之心');
+  let mats;
+  if (!isUr) {
+    // 非 UR：改用 神鋼/永晶/夢晶 scaling，不消耗無盡塔素材（蝕痕碎片/神核/印石/異界之鎚）
+    const NONUR_RECIPES = {
+      10: [{ name: '神鋼', qty: 8 },  { name: '永晶', qty: 1 }],
+      11: [{ name: '神鋼', qty: 12 }, { name: '永晶', qty: 2 }],
+      12: [{ name: '神鋼', qty: 18 }, { name: '永晶', qty: 3 }],
+      13: [{ name: '神鋼', qty: 25 }, { name: '永晶', qty: 5 }],
+      14: [{ name: '神鋼', qty: 35 }, { name: '夢晶', qty: 1 }],
+      15: [{ name: '神鋼', qty: 50 }, { name: '夢晶', qty: 2 }],
+      16: [{ name: '神鋼', qty: 70 }, { name: '夢晶', qty: 3 }],
+      17: [{ name: '神鋼', qty: 90 }, { name: '夢晶', qty: 5 }],
+    };
+    mats = NONUR_RECIPES[level] || NONUR_RECIPES[17];
+  } else {
+    mats = isUr3 ? recipe.mats : recipe.mats.filter(m => m.name !== '罪薔之心');
+  }
   return {
     goldCost: recipe.gold,
     mats,
