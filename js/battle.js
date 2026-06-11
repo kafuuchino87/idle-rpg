@@ -2226,6 +2226,7 @@ function onEnemyDown() {
 }
 
 // 無盡塔：累積傷害變更時更新已達階梯
+// 達成最高階梯（V）→ solo / host 立即結算；guest 等 host 的 endless-end 廣播
 function updateEndlessTier() {
   if (!BATTLE._endlessMode || !BATTLE._endlessTiers) return;
   const dmg = BATTLE._endlessTeamDmg;
@@ -2235,6 +2236,11 @@ function updateEndlessTier() {
         BATTLE._endlessReached = i;
         const t = BATTLE._endlessTiers[i];
         logLine(`<span class="lg-clear">★ 階梯 ${t.label} 達成！（${(dmg/1e6).toFixed(1)}M）</span>`, '');
+        const isMaxTier = i === BATTLE._endlessTiers.length - 1;
+        if (isMaxTier && BATTLE._mpMode !== 'guest' && !BATTLE._cleared) {
+          logLine(`<span class="lg-clear">🏆 已達最高階梯，提早結算！</span>`, '');
+          onEndlessTimeUp();
+        }
       }
       return;
     }
@@ -2293,12 +2299,13 @@ function onEndlessTimeUp() {
     }
   }
 
+  const elapsedSec = Math.max(0, Math.min(30, 30 - (BATTLE._endlessTimeLeft || 0)));
   BATTLE.lastClear = {
     dungeonId,
     dungeonName: d.name,
     isEndless: true,
     failed: false,
-    time: 30,
+    time: elapsedSec,
     endlessTotalDmg: totalDmg,
     endlessSelfDmg: selfDmg,
     endlessTierIdx: reached,
@@ -2309,7 +2316,8 @@ function onEndlessTimeUp() {
     damage: { ...BATTLE.damageStats, bySkill: { ...BATTLE.damageStats.bySkill } },
   };
 
-  logLine(`<span class="lg-clear">⏱ 時間到！累積傷害 ${(totalDmg/1e6).toFixed(2)}M，達成階梯：${BATTLE.lastClear.endlessTierLabel}</span>`, '');
+  const _endLabel = (reached === tiers.length - 1) ? '🏆 階梯 V 達成' : '⏱ 時間到';
+  logLine(`<span class="lg-clear">${_endLabel}！累積傷害 ${(totalDmg/1e6).toFixed(2)}M，達成階梯：${BATTLE.lastClear.endlessTierLabel}</span>`, '');
   GAME_STATE.scheduleSave();
   if (BATTLE.onClear) BATTLE.onClear();
   BATTLE._pendingStopTimer = setTimeout(() => { BATTLE._pendingStopTimer = null; stopBattle(); }, 400);
