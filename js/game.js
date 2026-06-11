@@ -5167,17 +5167,22 @@ window.showResultModal = function(lc) {
     if (cd) cd.remove();
   };
 
-  // RAID 通關 + autoRun + 單人 → 啟動 3 秒倒數自動再戰
-  const _mpOn = window.MP_API && typeof MP_API.isConnected === 'function' && MP_API.isConnected();
-  const _shouldAutoRestart = lc.isRaid && !lc.failed && !lc.isEndless
-    && GAME_STATE.state.autoRun && !_mpOn;
+  // RAID 通關 + autoRun → 啟動 3 秒倒數自動再戰（單人 / 多人 host 都會直接開戰，guest 等房主廣播）
+  const _mpApi = window.MP_API;
+  const _isMp = _mpApi && typeof _mpApi.isConnected === 'function' && _mpApi.isConnected();
+  const _isHost = _isMp && typeof _mpApi.isHost === 'function' && _mpApi.isHost();
+  const _isGuest = _isMp && !_isHost;
+  const _shouldAutoRestart = lc.isRaid && !lc.failed && !lc.isEndless && GAME_STATE.state.autoRun;
   if (_shouldAutoRestart) {
     let remaining = 3;
     const countdown = document.createElement('div');
     countdown.id = 'resultCountdown';
     countdown.style.cssText = 'text-align:center;color:var(--gold);font-size:13px;margin-top:8px;';
+    const labelByRole = _isGuest
+      ? (n) => `${n} 秒後等候房主自動再戰`
+      : (n) => `${n} 秒後自動再戰 RAID`;
     const render = () => {
-      countdown.innerHTML = `${remaining} 秒後自動再戰 RAID <span id="resultCancelAuto" style="color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">[取消]</span>`;
+      countdown.innerHTML = `${labelByRole(remaining)} <span id="resultCancelAuto" style="color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline">[取消]</span>`;
       const cancel = document.getElementById('resultCancelAuto');
       if (cancel) cancel.onclick = () => {
         if (window._autoRestartTimer) { clearInterval(window._autoRestartTimer); window._autoRestartTimer = null; }
@@ -5185,7 +5190,7 @@ window.showResultModal = function(lc) {
       };
     };
     render();
-    closeBtn.parentNode.appendChild(countdown);  // 放在 [確認] 按鈕之後
+    closeBtn.parentNode.appendChild(countdown);
     window._autoRestartTimer = setInterval(() => {
       remaining--;
       if (remaining > 0) {
@@ -5196,6 +5201,17 @@ window.showResultModal = function(lc) {
         overlay.classList.add('hidden');
         countdown.remove();
         if (!GAME_STATE.state.autoRun) return;  // 倒數期間玩家關了自動 → 不再戰
+        // 中途已有戰鬥開始（host 廣播提前拉 guest 進去 / 玩家手動進其他副本）→ 不重複
+        if (window.BATTLE && BATTLE.running && BATTLE.dungeonId === lc.dungeonId) return;
+        if (_isGuest) {
+          // Guest 不主動 startBattle — 等房主 raid-launch / enemy-sync
+          toast('等待房主開戰...', 'gold');
+          return;
+        }
+        // 房主多人房：先廣播再開戰，跟玩家手動點 [進入戰鬥] 一致
+        if (_isHost && typeof _mpApi.broadcastRaidLaunch === 'function') {
+          _mpApi.broadcastRaidLaunch(lc.dungeonId);
+        }
         const ok = startBattle(lc.dungeonId, GAME_STATE.state.activeCharId);
         if (!ok) toast('自動再戰失敗（戰力/等級不足）', 'error');
       }
