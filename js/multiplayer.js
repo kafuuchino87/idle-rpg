@@ -290,18 +290,25 @@ function handleMessage(fromPeerId, data) {
   }
   if (data.type === 'player-state') {
     if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
-    // 死亡黏著：一旦該玩家被標記過 dead，後續 player-state 不能把它洗回 false
-    // （避免藥水把 HP 補滿後 dead 旗標消失，team-wipe 永遠不觸發）
-    const wasDead = MP.players[fromPeerId].battleState && MP.players[fromPeerId].battleState.dead;
+    // 死亡黏著：同副本內 player-state 不能把 dead 洗回 false（避免藥水補滿 HP 後 dead 失效，team-wipe 永遠不觸發）
+    // 但跨副本要清掉 — 否則同一隊友下一場仍被標記陣亡，toast / team-wipe 邏輯通通失準
+    const prev = MP.players[fromPeerId].battleState;
+    const prevDungeonId = prev && prev.dungeonId;
+    const newDungeonId = data.payload && data.payload.dungeonId;
+    const sameDungeon = prevDungeonId && newDungeonId && prevDungeonId === newDungeonId;
+    const wasDead = sameDungeon && prev && prev.dead;
     MP.players[fromPeerId].battleState = data.payload;
     if (wasDead) MP.players[fromPeerId].battleState.dead = true;
+    if (!sameDungeon) MP.players[fromPeerId]._deathToasted = false;  // 新副本 → 重置 toast 旗標
   }
   if (data.type === 'player-dead') {
     if (!MP.players[fromPeerId]) MP.players[fromPeerId] = {};
     if (!MP.players[fromPeerId].battleState) MP.players[fromPeerId].battleState = {};
+    const alreadyToasted = !!MP.players[fromPeerId]._deathToasted;
     MP.players[fromPeerId].battleState.dead = true;
-    // 提示給本機 UI
-    if (typeof window.toast === 'function') {
+    // 提示給本機 UI — 同一場死亡只 toast 一次（多份 player-dead 廣播會去重）
+    if (!alreadyToasted && typeof window.toast === 'function') {
+      MP.players[fromPeerId]._deathToasted = true;
       const nick = MP.players[fromPeerId].nickname || '隊友';
       toast(`⚠ ${nick} 陣亡！`, 'error');
     }
