@@ -1308,8 +1308,8 @@ const SHARD_EXCHANGE = [
   { id: 'sx-yongjing', name: '永晶 ×3', cost: 120, reward: { kind: 'material', name: '永晶', qty: 3 }, desc: 'SSR 製作材料' },
   { id: 'sx-mengjing', name: '夢晶 ×1', cost: 250, reward: { kind: 'material', name: '夢晶', qty: 1 }, desc: '稀有材料，UR 強化用' },
   // 寶石
-  { id: 'sx-gem-sr',  name: 'SR 寶石（隨機）', cost: 400,  reward: { kind: 'gem-random', tier: [3, 3] }, desc: '高級寶石，隨機屬性' },
-  { id: 'sx-gem-ssr', name: 'SSR 寶石（隨機）', cost: 1200, reward: { kind: 'gem-random', tier: [4, 4] }, desc: '上品寶石，隨機屬性' },
+  { id: 'sx-gem-sr',  name: 'SR 寶石（隨機）', cost: 50,  reward: { kind: 'gem-random', tier: [3, 3] }, desc: '高級寶石，隨機屬性' },
+  { id: 'sx-gem-ssr', name: 'SSR 寶石（隨機）', cost: 100, reward: { kind: 'gem-random', tier: [4, 4] }, desc: '上品寶石，隨機屬性' },
   // 重抽詞綴
   { id: 'sx-reroll',  name: '詞綴重抽券 ×1', cost: 200, reward: { kind: 'reroll-token', qty: 1 }, desc: '重新隨機某件裝備的所有詞綴' },
   // 強化保護卷
