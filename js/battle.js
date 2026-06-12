@@ -551,9 +551,9 @@ function tickBattle(dt) {
 
   // 玩家行動（陣亡狀態不行動）
   if (!BATTLE._dead) {
-    // 攻擊速度上限 5（avoid 共鳴/buff/裝備堆滿出極端值）；某些 buff（如虛無一閃）可突破上限至 10
+    // 攻擊速度上限 8（avoid 共鳴/buff/裝備堆滿出極端值）；某些 buff（如虛無一閃）可突破上限至 14
     const hasUncap = BATTLE.buffs.some(b => b.spdUncap);
-    const spdCap = hasUncap ? 10 : 5;
+    const spdCap = hasUncap ? 14 : 8;
     const effSpd = Math.min(spdCap, BATTLE.player.spd * (1 + getBuffMod('spdMul')));
     if (!BATTLE.player.nextAtk) BATTLE.player.nextAtk = 1 / effSpd;
     BATTLE.player.nextAtk -= dtSec;

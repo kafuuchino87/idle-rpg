@@ -404,7 +404,7 @@ const SKILLS = {
   },
   'void-cleave': {
     name: '虛無一閃', tag: '★大招★', kind: 'arcane', path: 'A', requireTier: 3,
-    desc: '【終極奧義】魔劍劈裂虛空：1500% 攻擊力單體強擊，對 BOSS 額外 +80%（合計 2700% vs BOSS），必爆。施放後 10 秒：減傷 +25% + 攻速 +150%（突破上限至 10）+ 普攻附加 +100% 攻擊 + 強制觸發暗血盟（滿 +60% 攻）與背水之姫（+50% 攻 + 30% 暴傷）。CD 25s。',
+    desc: '【終極奧義】魔劍劈裂虛空：1500% 攻擊力單體強擊，對 BOSS 額外 +80%（合計 2700% vs BOSS），必爆。施放後 10 秒：減傷 +25% + 攻速 +150%（突破上限至 14）+ 普攻附加 +100% 攻擊 + 強制觸發暗血盟（滿 +60% 攻）與背水之姫（+50% 攻 + 30% 暴傷）。CD 25s。',
     mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true,
     buff: { dmgReduce: 0.25, spdMul: 1.5, spdUncap: true, basicBonusAtk: 1.0, forceLowHp: true, dur: 10 },
     cd: 25, mpCost: 270, costTier: 'heavy',
