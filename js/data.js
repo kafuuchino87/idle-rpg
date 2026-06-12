@@ -312,14 +312,14 @@ const SKILLS = {
   },
   'moonwheel-waltz': {
     name: '月華輪舞', tag: '持續', kind: 'physical', path: 'A', requireTier: 2,
-    desc: '八段舞踏狀態：總 650% 攻擊力（末段 180% 暴擊強擊）。CD 18s。',
-    mult: [0.5, 0.5, 0.6, 0.6, 0.7, 0.9, 1.0, 1.8], cd: 18.0, mpCost: 270, costTier: 'heavy',
+    desc: '八段舞踏狀態：總 950% 攻擊力（末段 250% 強擊）。CD 18s。',
+    mult: [0.7, 0.7, 0.9, 0.9, 1.0, 1.3, 1.5, 2.5], cd: 18.0, mpCost: 270, costTier: 'heavy',
   },
   'endless-night': {
     name: '永夜千華舞', tag: '★大招★', kind: 'physical', path: 'A', requireTier: 3,
-    desc: '【終極奧義】十二段月華舞踏 AOE，全段必爆，總 1100% 攻擊力（末段 220% 強擊）。施放後自身攻擊 +30% 持續 6 秒。CD 25s。',
-    mult: [0.5, 0.5, 0.6, 0.7, 0.7, 0.8, 0.8, 0.9, 1.0, 1.1, 1.4, 2.2],
-    aoe: true, alwaysCrit: true, buff: { atk: 0.3, dur: 6 },
+    desc: '【終極奧義】十二段月華舞踏 AOE，全段必爆，總 1500% 攻擊力（末段 300% 強擊），對 BOSS 額外 +50%（合計 2250% vs BOSS）。施放後自身攻擊 +30% 持續 6 秒。CD 25s。',
+    mult: [0.7, 0.7, 0.8, 0.9, 1.0, 1.1, 1.1, 1.2, 1.3, 1.4, 1.8, 3.0],
+    aoe: true, alwaysCrit: true, vsBossBonus: 0.5, buff: { atk: 0.3, dur: 6 },
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
@@ -513,7 +513,7 @@ const SKILLS = {
   },
   'oracle-arrow': {
     name: '神諭斷罪', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 1對 HP<80% 敵 +5%。CD 25s。',
+    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 15% 吸血。CD 25s。',
     mult: 15.0, vsBossBonus: 1.0, alwaysCrit: true, lifesteal: 0.15,
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
