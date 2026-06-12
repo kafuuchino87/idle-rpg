@@ -2019,6 +2019,11 @@ window.showRaidPreview = function(dungeonId) {
       toast(`戰力不足，需要 ${Math.floor(_minCp).toLocaleString()} CP（目前 ${_myCP.toLocaleString()}）`, 'error');
       return;
     }
+    // 世界 BOSS：強制單人入場（連線時擋掉，避免雙計傷害 / host-guest 同步混亂）
+    if (d.isWorldBoss && window.MP_API && MP_API.isConnected()) {
+      toast('世界 BOSS 只能單人挑戰，請先離開房間再進入', 'error');
+      return;
+    }
     // 無盡塔：先檢查並扣入場券（早退失敗）
     if (d.isEndless) {
       const passId = d.passId || 'pass-endless';
@@ -3196,19 +3201,24 @@ function renderEnemyCards() {
       const card = document.createElement('div');
       const useBigCard = BATTLE._endlessMode || e.portrait;  // 多階 BOSS 也用大卡
       const isTall = !!e.portraitTall;  // 直幅立繪用 3:4 卡片
+      const isWorldBoss = !!e.portraitWorldBoss;
       card.className = 'fighter-card enemy-card'
         + (useBigCard ? ' endless-boss-card' : '')
         + (isTall ? ' tall-portrait' : '')
+        + (isWorldBoss ? ' worldboss-card' : '')
         + (e.bossSkillTag === 'crimson' ? ' crimson-idle' : '');
       card.dataset.idx = i;
       // 立繪優先順序：BOSS 個別 portrait > 無盡塔 dungeon.bossPortrait > 像素 portrait
       const dungeon = GAME_DATA.getDungeon(BATTLE.dungeonId);
       let portraitHtml = '';
       // 直幅圖：cover + 靠上，把臉留在可見區，下襬裁切
+      // 世界 BOSS（1:1 方圖）：cover + 置中，龍臉填滿卡片
       // 橫幅圖：contain，完整顯示
       const fitStyle = isTall
         ? 'object-fit:cover;object-position:center 18%'
-        : 'object-fit:contain';
+        : isWorldBoss
+          ? 'object-fit:cover;object-position:center center'
+          : 'object-fit:contain';
       if (e.portrait) {
         portraitHtml = `<img src="${e.portrait}" alt="${e.name}" style="width:100%;height:100%;${fitStyle}">`;
       } else if (BATTLE._endlessMode && dungeon && dungeon.bossPortrait) {

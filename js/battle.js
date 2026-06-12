@@ -225,6 +225,7 @@ function buildWaves(dungeon) {
     if (dungeon.bossPortrait) {
       boss.portrait = dungeon.bossPortrait;            // 戰鬥卡顯示立繪
       boss.portraitTall = !!dungeon.bossPortraitTall;  // 直幅圖 cover 填滿卡片
+      boss.portraitWorldBoss = !!dungeon.isWorldBoss;  // 1:1 方圖、加大卡片
     }
     if (dungeon.bossChargeSlash) {
       boss.chargeSlash = { ...dungeon.bossChargeSlash, timer: dungeon.bossChargeSlash.interval, charging: false };
