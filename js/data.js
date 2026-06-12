@@ -1191,7 +1191,7 @@ const GEM_FAMILIES = [
   { stat: 'spd',      base: '風石',   label: '速度', values: [0.02, 0.05, 0.10, 0.18, 0.30], pct: true },
   { stat: 'critDmg',  base: '凶玉',   label: '暴傷', values: [0.03, 0.07, 0.14, 0.25, 0.40], pct: true },
   { stat: 'dmgReduce',base: '鋼玉',   label: '減傷', values: [0.01, 0.02, 0.04, 0.07, 0.12], pct: true },
-  { stat: 'atkPct',   base: '焰心晶', label: '攻擊%', values: [0.02, 0.04, 0.07, 0.12, 0.20], pct: true, urOnly: true },  // 焰心古龍系（古龍寶箱掉，只有 UR 階存在）
+  { stat: 'atkPct',   base: '焰心晶', label: '攻擊%', values: [0.02, 0.04, 0.07, 0.12, 0.03], pct: true, urOnly: true },  // 焰心古龍系（古龍寶箱掉，UR 階 = +3% atk）
 ];
 const GEMS = (() => {
   const arr = [];
@@ -1772,13 +1772,11 @@ const ITEMS = {
       procId: 'execute',
       proc: { execute: { threshold: 0.80, bonus: 0.30 } },
       fixed: { label: '緋月血契：對 HP 低於 80% 的敵人造成 +30% 傷害' } },
-    // ===== UR 戒指（焰心古龍寶箱掉，純堆疊型）=====
-    { id: 'eq-ring-ur-dragonheart', slot: 'ring', name: '焰心古龍鱗', rarity: 'UR', tier: 4,
-      stats: { atk: 100, crit: 0.10, critDmg: 0.25 },
-      fixed: {
-        label: '焰心古龍鱗：攻擊力 +30%、對 BOSS +50%、暴擊傷害 +30%、技能傷害 +25%、對 HP<80% 敵 +10%',
-        effect: { atkPct: 0.30, vsBoss: 0.50, critDmg: 0.30, skillDmg: 0.25, lowHpDmg: 0.10 },
-      } },
+    // ===== UR 戒指（古龍寶箱掉，自動 AOE proc 機制型）=====
+    { id: 'eq-ring-ur-dragonheart', slot: 'ring', name: '焰心古龍鱗', rarity: 'UR', tier: 4, stats: {},
+      procId: 'dragon-breath',
+      proc: { breath: { interval: 20, mult: 8.0 } },  // 每 20 秒自動 800% AOE 攻擊力
+      fixed: { label: '焰心古龍鱗：戰鬥中每 20 秒自動釋放「焰心吐息」— 對所有敵人造成 800% 攻擊力 AOE 傷害（可暴擊、吃技能傷害加成）。' } },
   ],
 };
 

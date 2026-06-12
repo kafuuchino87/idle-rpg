@@ -163,7 +163,7 @@ function startBattle(dungeonId, charId) {
   BATTLE.bossRagingPending = null;  // 爆走結束後要套用的 phaseTransition 設定
   // 快取已裝戒指的觸發效果（procId / proc 來自戒指 def）
   BATTLE.ringProcs = (() => {
-    const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0, executeThreshold: 0, executeBonus: 0 };
+    const p = { cdResetChance: 0, skillStackAtkValue: 0, skillStackAtkMax: 0, executeThreshold: 0, executeBonus: 0, breathInterval: 0, breathMult: 0 };
     if (!cs.equip || !cs.bag || !cs.bag.equipment) return p;
     for (const slot of ['ring1', 'ring2']) {
       const id = cs.equip[slot];
@@ -182,9 +182,15 @@ function startBattle(dungeonId, charId) {
         p.executeThreshold = Math.max(p.executeThreshold, def.proc.execute.threshold);
         p.executeBonus = Math.max(p.executeBonus, def.proc.execute.bonus);
       }
+      // 焰心古龍鱗：定時 AOE 龍息（每 interval 秒自動釋放 mult × atk AOE）
+      if (def.proc.breath) {
+        p.breathInterval = Math.max(p.breathInterval, def.proc.breath.interval);
+        p.breathMult = Math.max(p.breathMult, def.proc.breath.mult);
+      }
     }
     return p;
   })();
+  BATTLE._breathTimer = BATTLE.ringProcs.breathInterval || 0;
   // 多人模式判定：襲擊戰 / 無盡塔 / 特殊副本 + 已連線 → host / guest，其他 → solo
   BATTLE._mpMode = 'solo';
   if ((dungeon.isRaid || dungeon.isEndless || dungeon.special) && window.MP_API && MP_API.isConnected()) {
@@ -561,6 +567,22 @@ function tickBattle(dt) {
     if (BATTLE.player.nextAtk <= 0) {
       doPlayerAction();
       BATTLE.player.nextAtk = 1 / effSpd;
+    }
+    // 焰心古龍鱗：每 interval 秒自動釋放「焰心吐息」AOE
+    if (BATTLE.ringProcs && BATTLE.ringProcs.breathInterval > 0
+        && BATTLE.currentWave && BATTLE.currentWave.some(e => e.hp > 0)) {
+      BATTLE._breathTimer -= dtSec;
+      if (BATTLE._breathTimer <= 0) {
+        BATTLE._breathTimer = BATTLE.ringProcs.breathInterval;
+        const effCrit = (BATTLE.player.crit || 0) + getBuffMod('crit');
+        const isCrit = Math.random() < effCrit;
+        const skillMod = 1 + (BATTLE.player.skillDmg || 0);
+        BATTLE._activeSkillId = 'dragon-breath';
+        BATTLE._activeSkillName = '焰心吐息';
+        applyAoeDamage({ aoe: true }, BATTLE.ringProcs.breathMult, isCrit, skillMod);
+        logLine(`<span class="lg-skill">🐲 焰心吐息！</span>`, '');
+        if (window.battleAnim) battleAnim('player', 'attacking');
+      }
     }
   }
 

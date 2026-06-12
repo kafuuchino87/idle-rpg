@@ -3290,7 +3290,7 @@ function renderEnemyCards() {
       const fitStyle = isTall
         ? 'object-fit:cover;object-position:center 18%'
         : isWorldBoss
-          ? 'object-fit:cover;object-position:center center'
+          ? 'object-fit:cover;object-position:15% center'  // 4:3 卡 + 16:9 圖，偏左把龍頭置中
           : 'object-fit:contain';
       if (e.portrait) {
         portraitHtml = `<img src="${e.portrait}" alt="${e.name}" style="width:100%;height:100%;${fitStyle}">`;

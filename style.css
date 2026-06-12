@@ -726,9 +726,9 @@ button.primary:hover { filter: brightness(1.1); }
   width: 100%;
   margin: 0 auto;
 }
-/* 世界 BOSS：跟原圖一樣 16:9，卡片強化邊框 + 紅光（焰心古龍） */
+/* 世界 BOSS：4:3 比例（比 16:9 更高更壓迫），cover 裁掉右側煙霧、龍頭佔滿整張 */
 .enemy-side.cnt-1 .endless-boss-card.worldboss-card .card-frame {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 3;
   max-width: 100%;
   width: 100%;
   border: 3px solid #ff6e3a;
