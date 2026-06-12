@@ -49,6 +49,26 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS world_boss (
+    id INTEGER PRIMARY KEY CHECK (id = 1),    -- 永遠只有 1 列
+    name TEXT NOT NULL,
+    max_hp INTEGER NOT NULL,
+    current_hp INTEGER NOT NULL,
+    stamp_day TEXT NOT NULL,                  -- YYYY-MM-DD (Asia/Taipei)
+    killed_at INTEGER                          -- 第一次被打死的時間（同一日二次傷害不會覆寫）
+  );
+
+  CREATE TABLE IF NOT EXISTS world_boss_damage (
+    uuid TEXT NOT NULL,
+    nickname TEXT,
+    damage INTEGER NOT NULL DEFAULT 0,
+    stamp_day TEXT NOT NULL,
+    last_hit_at INTEGER,
+    PRIMARY KEY (uuid, stamp_day)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_wbd_day ON world_boss_damage(stamp_day, damage DESC);
 `);
 
 // ===== Helpers =====
@@ -236,6 +256,111 @@ function getRecentChats(since) {
   return stmt.all(since || 0, CHAT_MAX_KEEP);
 }
 
+// ===== 世界 BOSS =====
+const WORLD_BOSS_NAME = '焰心古龍';
+const WORLD_BOSS_MAX_HP = 1_000_000_000_000;   // 1 兆
+const WORLD_BOSS_TZ_OFFSET_MS = 8 * 60 * 60 * 1000;  // Asia/Taipei = UTC+8
+
+// 今日刷新戳記（每天 00:00 Asia/Taipei 切換到新一天）
+function getTodayStampTPE() {
+  const now = Date.now() + WORLD_BOSS_TZ_OFFSET_MS;
+  return new Date(now).toISOString().slice(0, 10);  // YYYY-MM-DD
+}
+
+// 取得 BOSS（自動處理跨日刷新 + 自動初始化）
+function getOrInitWorldBoss() {
+  const today = getTodayStampTPE();
+  let row = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
+  if (!row) {
+    db.prepare(`
+      INSERT INTO world_boss (id, name, max_hp, current_hp, stamp_day)
+      VALUES (1, ?, ?, ?, ?)
+    `).run(WORLD_BOSS_NAME, WORLD_BOSS_MAX_HP, WORLD_BOSS_MAX_HP, today);
+    return db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
+  }
+  if (row.stamp_day !== today) {
+    // 新一天 → 重設 HP、清掉昨日傷害紀錄
+    db.prepare(`
+      UPDATE world_boss
+      SET current_hp = max_hp, stamp_day = ?, killed_at = NULL
+      WHERE id = 1
+    `).run(today);
+    db.prepare('DELETE FROM world_boss_damage WHERE stamp_day != ?').run(today);
+    row = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
+  }
+  return row;
+}
+
+// 套用玩家本場傷害到共用 HP，並累積到玩家當日貢獻
+// 戰敗也呼叫（accepted 可能為 0 if 已死）
+function applyWorldBossDamage(uuid, nickname, dmg) {
+  const boss = getOrInitWorldBoss();  // 自動跨日刷新
+  const today = boss.stamp_day;
+  const now = Date.now();
+  const safeDmg = Math.max(0, Math.floor(dmg) || 0);
+
+  let accepted = 0;
+  let alreadyDead = boss.current_hp <= 0;
+  let killedNow = false;
+
+  if (!alreadyDead && safeDmg > 0) {
+    accepted = Math.min(safeDmg, boss.current_hp);
+    const newHp = boss.current_hp - accepted;
+    db.prepare('UPDATE world_boss SET current_hp = ? WHERE id = 1').run(newHp);
+    if (newHp <= 0 && !boss.killed_at) {
+      db.prepare('UPDATE world_boss SET killed_at = ? WHERE id = 1').run(now);
+      killedNow = true;
+    }
+  }
+
+  // 即便 alreadyDead，仍要寫入玩家當日紀錄（讓他能在排行榜出現），但 dmg 加入是「打死前的有效傷害」
+  // 如果 alreadyDead 完全沒貢獻就不寫入（避免送 0 dmg 也佔位）
+  if (safeDmg > 0) {
+    db.prepare(`
+      INSERT INTO world_boss_damage (uuid, nickname, damage, stamp_day, last_hit_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(uuid, stamp_day) DO UPDATE SET
+        damage = damage + excluded.damage,
+        nickname = excluded.nickname,
+        last_hit_at = excluded.last_hit_at
+    `).run(uuid, String(nickname || '無名旅人').slice(0, 32), safeDmg, today, now);
+  }
+
+  const refreshed = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
+  return { boss: refreshed, accepted, alreadyDead, killedNow };
+}
+
+function getWorldBossPlayerDmg(uuid) {
+  const today = getTodayStampTPE();
+  return db.prepare(`
+    SELECT damage, last_hit_at FROM world_boss_damage
+    WHERE uuid = ? AND stamp_day = ?
+  `).get(uuid, today);
+}
+
+function getWorldBossPlayerRank(uuid) {
+  const today = getTodayStampTPE();
+  const me = db.prepare('SELECT damage FROM world_boss_damage WHERE uuid = ? AND stamp_day = ?').get(uuid, today);
+  if (!me) return null;
+  const r = db.prepare(`
+    SELECT COUNT(*) + 1 AS rank
+    FROM world_boss_damage
+    WHERE stamp_day = ? AND damage > ?
+  `).get(today, me.damage);
+  return r ? r.rank : null;
+}
+
+function getWorldBossLeaderboard(limit) {
+  const today = getTodayStampTPE();
+  return db.prepare(`
+    SELECT uuid, nickname, damage, last_hit_at
+    FROM world_boss_damage
+    WHERE stamp_day = ?
+    ORDER BY damage DESC
+    LIMIT ?
+  `).all(today, Math.min(limit || 100, 500));
+}
+
 module.exports = {
   db,
   upsertPlayer,
@@ -253,4 +378,10 @@ module.exports = {
   insertChatMessage,
   getRecentChats,
   CHAT_MAX_TEXT_LEN,
+  // world boss
+  getOrInitWorldBoss,
+  applyWorldBossDamage,
+  getWorldBossPlayerDmg,
+  getWorldBossPlayerRank,
+  getWorldBossLeaderboard,
 };

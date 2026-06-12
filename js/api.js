@@ -234,6 +234,25 @@
     if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
   }
 
+  // ===== 世界 BOSS =====
+
+  async function worldBossState() {
+    return apiGet('/api/world-boss?uuid=' + encodeURIComponent(getOrCreateUuid()));
+  }
+
+  async function worldBossSubmitDamage(damage) {
+    const nick = (window.GAME_STATE && GAME_STATE.state && GAME_STATE.state.playerNickname) || '無名旅人';
+    return apiPost('/api/world-boss/damage', {
+      uuid: getOrCreateUuid(),
+      nickname: nick,
+      damage: Math.floor(damage || 0),
+    });
+  }
+
+  async function worldBossLeaderboard(limit) {
+    return apiGet('/api/world-boss/leaderboard?limit=' + (limit || 100));
+  }
+
   // ===== 暴露 =====
   window.API = {
     getUuid: getOrCreateUuid,
@@ -256,5 +275,9 @@
     getRecentChats,
     startChatPolling,
     stopChatPolling,
+    // world boss
+    worldBossState,
+    worldBossSubmitDamage,
+    worldBossLeaderboard,
   };
 })();

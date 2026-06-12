@@ -2300,10 +2300,12 @@ function onEndlessTimeUp() {
   }
 
   const elapsedSec = Math.max(0, Math.min(30, 30 - (BATTLE._endlessTimeLeft || 0)));
+  const isWorldBoss = !!(d && d.isWorldBoss);
   BATTLE.lastClear = {
     dungeonId,
     dungeonName: d.name,
     isEndless: true,
+    isWorldBoss,
     failed: false,
     time: elapsedSec,
     endlessTotalDmg: totalDmg,
@@ -2316,8 +2318,30 @@ function onEndlessTimeUp() {
     damage: { ...BATTLE.damageStats, bySkill: { ...BATTLE.damageStats.bySkill } },
   };
 
-  const _endLabel = (reached === tiers.length - 1) ? '🏆 階梯 V 達成' : '⏱ 時間到';
-  logLine(`<span class="lg-clear">${_endLabel}！累積傷害 ${(totalDmg/1e6).toFixed(2)}M，達成階梯：${BATTLE.lastClear.endlessTierLabel}</span>`, '');
+  // 世界 BOSS：上報玩家本場個人傷害到後端（不算隊友傷害，避免雙計）
+  if (isWorldBoss && window.API && API.worldBossSubmitDamage) {
+    API.worldBossSubmitDamage(selfDmg).then(r => {
+      if (r && r.ok) {
+        // 把後端回傳的 BOSS 狀態 / 玩家排名塞進 lastClear，供 result modal 顯示
+        BATTLE.lastClear.worldBoss = {
+          name: r.boss && r.boss.name,
+          maxHp: r.boss && r.boss.max_hp,
+          currentHp: r.boss && r.boss.current_hp,
+          killedNow: !!r.killedNow,
+          alreadyDead: !!r.alreadyDead,
+          accepted: r.accepted || 0,
+          myDmg: r.myDmg || 0,
+          myRank: r.myRank || null,
+        };
+        if (typeof window.showResultModal === 'function' && BATTLE.lastClear) {
+          showResultModal(BATTLE.lastClear);  // 重新渲染一次，把世界 BOSS 區塊塞進去
+        }
+      }
+    }).catch(() => {});
+  }
+
+  const _endLabel = isWorldBoss ? '🐉 焰心古龍試煉結束' : (reached === tiers.length - 1) ? '🏆 階梯 V 達成' : '⏱ 時間到';
+  logLine(`<span class="lg-clear">${_endLabel}！累積傷害 ${(totalDmg/1e6).toFixed(2)}M</span>`, '');
   GAME_STATE.scheduleSave();
   if (BATTLE.onClear) BATTLE.onClear();
   BATTLE._pendingStopTimer = setTimeout(() => { BATTLE._pendingStopTimer = null; stopBattle(); }, 400);

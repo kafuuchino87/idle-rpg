@@ -224,6 +224,69 @@ app.get('/api/chat/recent', (req, res) => {
   }
 });
 
+// ===== 世界 BOSS：當前狀態 =====
+// GET /api/world-boss?uuid=xxx — 回傳 BOSS 當前狀態 + 你今日貢獻 + 你的排名
+app.get('/api/world-boss', (req, res) => {
+  try {
+    const boss = db.getOrInitWorldBoss();
+    const uuid = req.query.uuid;
+    let myDmg = 0, myRank = null;
+    if (uuid && typeof uuid === 'string' && uuid.length <= 64) {
+      markSeen(uuid);
+      const r = db.getWorldBossPlayerDmg(uuid);
+      myDmg = r ? r.damage : 0;
+      myRank = db.getWorldBossPlayerRank(uuid);
+    }
+    res.json({ ok: true, boss, myDmg, myRank });
+  } catch (err) {
+    console.error('[world-boss]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// POST /api/world-boss/damage — 上報本場傷害（戰鬥結算時送）
+app.post('/api/world-boss/damage', (req, res) => {
+  try {
+    const { uuid, nickname, damage } = req.body || {};
+    if (!uuid || typeof uuid !== 'string' || uuid.length > 64) {
+      return res.status(400).json({ error: 'invalid_uuid' });
+    }
+    // 防呆：dmg 必須是 number 且 < 1 兆（單場上限）
+    if (typeof damage !== 'number' || damage < 0 || damage > 1_000_000_000_000) {
+      return res.status(400).json({ error: 'invalid_damage' });
+    }
+    markSeen(uuid);
+    const result = db.applyWorldBossDamage(uuid, nickname, damage);
+    const myDmgRow = db.getWorldBossPlayerDmg(uuid);
+    const myRank = db.getWorldBossPlayerRank(uuid);
+    res.json({
+      ok: true,
+      boss: result.boss,
+      accepted: result.accepted,
+      alreadyDead: result.alreadyDead,
+      killedNow: result.killedNow,
+      myDmg: myDmgRow ? myDmgRow.damage : 0,
+      myRank,
+    });
+  } catch (err) {
+    console.error('[world-boss damage]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// GET /api/world-boss/leaderboard — 今日傷害貢獻 Top N
+app.get('/api/world-boss/leaderboard', (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const list = db.getWorldBossLeaderboard(limit);
+    const boss = db.getOrInitWorldBoss();
+    res.json({ ok: true, boss, list });
+  } catch (err) {
+    console.error('[world-boss leaderboard]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // ===== 取得單一玩家（含當前排名）=====
 app.get('/api/players/:id', (req, res) => {
   try {
@@ -256,6 +319,9 @@ app.listen(PORT, () => {
   console.log(`    POST /api/saves/restore-by-code  — 跨裝置還原（用恢復碼）`);
   console.log(`    POST /api/chat/send              — 世界聊天發訊`);
   console.log(`    GET  /api/chat/recent?since=ts   — 世界聊天輪詢`);
+  console.log(`    GET  /api/world-boss             — 世界 BOSS 當前狀態 + 你今日貢獻`);
+  console.log(`    POST /api/world-boss/damage      — 上報本場傷害`);
+  console.log(`    GET  /api/world-boss/leaderboard — 今日傷害貢獻排名`);
   const cs = db.getCloudSaveCount();
   console.log(`  雲端存檔：${cs.count} 筆、${Math.round(cs.totalBytes/1024)} KB`);
 });

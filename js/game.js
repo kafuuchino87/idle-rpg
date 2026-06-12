@@ -1936,6 +1936,7 @@ window.showRaidPreview = function(dungeonId) {
         ${d.warning ? `<div class="raid-warning">⚠ ${d.warning}</div>` : ''}
         <div class="raid-section-title">通關獎勵</div>
         <div class="raid-rewards">${rewards}</div>
+        ${d.isWorldBoss ? '<div class="raid-section-title">焰心古龍 · 今日共擊</div><div id="worldBossPreviewState" style="padding:8px;background:rgba(255,80,40,0.10);border:1px solid #ff6e3a;border-radius:6px;font-size:12px;color:var(--muted);text-align:center">載入中...</div>' : ''}
         <div class="raid-section-title">戰力評估</div>
         <div class="raid-assessment ${assessClass}">
           <div>你的戰力：<b>${myCP.toLocaleString()}</b> vs BOSS <b>${d.cpHidden ? '???' : d.cp.toLocaleString()}</b> ${d.cpHidden ? '' : `(${(cpRatio * 100).toFixed(0)}%)`}</div>
@@ -1964,6 +1965,44 @@ window.showRaidPreview = function(dungeonId) {
   bringWindowToFront(win);
   win.classList.add('flash-open');
   setTimeout(() => win.classList.remove('flash-open'), 600);
+
+  // 世界 BOSS：async 抓後端狀態 + 渲染共擊 HP / 你的貢獻
+  if (d.isWorldBoss && window.API && API.worldBossState) {
+    const placeholder = document.getElementById('worldBossPreviewState');
+    API.worldBossState().then(r => {
+      if (!placeholder) return;
+      if (!r || !r.ok) {
+        placeholder.innerHTML = '<span style="color:var(--hp-enemy)">⚠ 後端離線，無法顯示 BOSS 狀態</span>';
+        return;
+      }
+      const b = r.data.boss;
+      const myDmg = r.data.myDmg || 0;
+      const myRank = r.data.myRank;
+      const hpPct = Math.max(0, b.current_hp / b.max_hp * 100);
+      const isDead = b.current_hp <= 0;
+      const fmtBig = (n) => n >= 1e12 ? (n/1e12).toFixed(2) + ' 兆'
+                       : n >= 1e8  ? (n/1e8).toFixed(2) + ' 億'
+                       : n >= 1e4  ? (n/1e4).toFixed(2) + ' 萬'
+                       : n.toLocaleString();
+      placeholder.innerHTML = `
+        <div style="font-weight:bold;color:${isDead ? 'var(--muted)' : 'var(--hp-enemy)'};font-size:13px;margin-bottom:4px">
+          ${isDead ? '✓ 焰心古龍已倒下（明日 00:00 復活）' : '🐉 BOSS 仍存活'}
+        </div>
+        <div style="background:#1a0a08;border-radius:4px;height:14px;overflow:hidden;border:1px solid #ff6e3a;margin:4px 0">
+          <div style="background:linear-gradient(90deg,#ff8a3c,#ff3030);height:100%;width:${hpPct.toFixed(2)}%"></div>
+        </div>
+        <div style="color:var(--text);font-size:11px">
+          HP <b>${fmtBig(b.current_hp)}</b> / ${fmtBig(b.max_hp)} (${hpPct.toFixed(2)}%)
+        </div>
+        <div style="margin-top:6px;color:var(--gold);font-size:11px">
+          你今日貢獻：<b>${fmtBig(myDmg)}</b> · 排名 <b>${myRank ? '#' + myRank : '未上榜'}</b>
+        </div>
+      `;
+    }).catch(() => {
+      if (placeholder) placeholder.innerHTML = '<span style="color:var(--hp-enemy)">⚠ 載入失敗</span>';
+    });
+  }
+
   // 綁定按鈕
   body.querySelector('button[data-raid-start]')?.addEventListener('click', () => {
     // ★ 預先驗證 CP / 等級 — 失敗就 toast 早退，不發廣播、不播 cutscene
@@ -3379,6 +3418,7 @@ function renderDungeonList() {
     <button class="${_dungeonTab === 'special' ? 'active' : ''}" data-dtab="special">⭐ 特殊副本</button>
     <button class="${_dungeonTab === 'raid' ? 'active' : ''}" data-dtab="raid">⚔ 襲擊戰</button>
     <button class="${_dungeonTab === 'endless' ? 'active' : ''}" data-dtab="endless">✦ 無盡塔</button>
+    <button class="${_dungeonTab === 'worldboss' ? 'active' : ''}" data-dtab="worldboss">🐉 世界BOSS</button>
   `;
   root.appendChild(tabs);
   tabs.querySelectorAll('button[data-dtab]').forEach(b => {
@@ -3387,10 +3427,11 @@ function renderDungeonList() {
 
   // 依分頁過濾 regions
   const filteredRegions = GAME_DATA.REGIONS.filter(r => {
-    if (_dungeonTab === 'main') return !r.isSpecial && !r.isRaid && !r.isEndless;
+    if (_dungeonTab === 'main') return !r.isSpecial && !r.isRaid && !r.isEndless && !r.isWorldBoss;
     if (_dungeonTab === 'special') return r.isSpecial;
     if (_dungeonTab === 'raid') return r.isRaid;
-    if (_dungeonTab === 'endless') return r.isEndless;
+    if (_dungeonTab === 'endless') return r.isEndless && !r.isWorldBoss;
+    if (_dungeonTab === 'worldboss') return r.isWorldBoss;
     return true;
   });
   if (filteredRegions.length === 0) {
@@ -3612,21 +3653,33 @@ function renderImbue() {
 // 🏆 戰力排行榜
 // ============================================================
 let _lbLastFetch = 0;
+let _lbTab = 'cp';   // 'cp' | 'worldboss'
 async function renderLeaderboard() {
   const root = document.getElementById('tabLeaderboard');
   if (!root) return;
   root.innerHTML = `
     <div style="padding:10px 14px">
+      <div class="craft-tabs" style="margin-bottom:8px">
+        <button class="${_lbTab === 'cp' ? 'active' : ''}" data-lbtab="cp">🏆 戰力</button>
+        <button class="${_lbTab === 'worldboss' ? 'active' : ''}" data-lbtab="worldboss">🐉 世界BOSS傷害</button>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="color:var(--muted);font-size:12px">戰力即時排行 — 每次開啟自動同步當前角色</div>
+        <div id="lbSubtitle" style="color:var(--muted);font-size:12px">${_lbTab === 'cp' ? '戰力即時排行 — 每次開啟自動同步當前角色' : '今日世界 BOSS 傷害貢獻 — 每天 00:00 Asia/Taipei 重置'}</div>
         <button id="btnLbRefresh" class="ghost small">🔄 重整</button>
       </div>
       <div id="lbStatus" style="color:var(--muted);font-size:11px;margin-bottom:8px">載入中…</div>
       <div id="lbTable"></div>
     </div>
   `;
-  root.querySelector('#btnLbRefresh').onclick = () => loadLeaderboard();
-  loadLeaderboard();
+  root.querySelectorAll('button[data-lbtab]').forEach(b => {
+    b.onclick = () => { _lbTab = b.dataset.lbtab; renderLeaderboard(); };
+  });
+  root.querySelector('#btnLbRefresh').onclick = () => {
+    if (_lbTab === 'cp') loadLeaderboard();
+    else loadWorldBossLeaderboard();
+  };
+  if (_lbTab === 'cp') loadLeaderboard();
+  else loadWorldBossLeaderboard();
 }
 
 async function loadLeaderboard() {
@@ -3697,6 +3750,80 @@ async function loadLeaderboard() {
       <div>排名</div><div>玩家 / 職業</div><div>戰力</div><div>更新</div><div></div>
     </div>
     <div style="max-height:60vh;overflow-y:auto">${rows}</div>
+  `;
+}
+
+async function loadWorldBossLeaderboard() {
+  const statusEl = document.getElementById('lbStatus');
+  const tableEl = document.getElementById('lbTable');
+  if (!statusEl || !tableEl) return;
+  statusEl.textContent = '同步中…';
+  tableEl.innerHTML = '';
+
+  if (!window.API || !window.API_ENABLED) {
+    statusEl.innerHTML = '<span style="color:var(--hp-enemy)">⚠ API 未啟用</span>';
+    return;
+  }
+  const r = await API.worldBossLeaderboard(100);
+  if (!r.ok) {
+    statusEl.innerHTML = `<span style="color:var(--hp-enemy)">⚠ 載入失敗：${r.offline ? '後端離線' : (r.error || 'unknown')}</span>`;
+    return;
+  }
+  const boss = r.data.boss;
+  const list = r.data.list || [];
+  const fmtBig = (n) => n >= 1e12 ? (n/1e12).toFixed(2) + ' 兆'
+                   : n >= 1e8  ? (n/1e8).toFixed(2) + ' 億'
+                   : n >= 1e6  ? (n/1e6).toFixed(2) + ' M'
+                   : n.toLocaleString();
+  const isDead = boss.current_hp <= 0;
+  const hpPct = boss.max_hp ? (boss.current_hp / boss.max_hp * 100) : 0;
+  statusEl.innerHTML = `
+    <div style="background:#1a0a08;border:1px solid #ff6e3a;border-radius:6px;padding:10px;margin-bottom:8px">
+      <div style="font-weight:bold;color:${isDead ? 'var(--muted)' : 'var(--hp-enemy)'};margin-bottom:6px">
+        🐉 ${boss.name} ${isDead ? '— 已倒下，等明日 00:00 復活' : ''}
+      </div>
+      <div style="background:#0a0504;border-radius:4px;height:14px;overflow:hidden;border:1px solid #ff6e3a">
+        <div style="background:linear-gradient(90deg,#ff8a3c,#ff3030);height:100%;width:${hpPct.toFixed(2)}%"></div>
+      </div>
+      <div style="color:var(--text);font-size:11px;margin-top:4px">
+        HP <b>${fmtBig(boss.current_hp)}</b> / ${fmtBig(boss.max_hp)} (${hpPct.toFixed(2)}%) · 今日參與 <b>${list.length}</b> 位旅人
+      </div>
+    </div>
+  `;
+
+  if (list.length === 0) {
+    tableEl.innerHTML = '<div style="color:var(--muted);padding:20px;text-align:center">今日尚無傷害紀錄 — 你可能是第一個</div>';
+    return;
+  }
+
+  const myId = API.getUuid();
+  const rows = list.map((p, idx) => {
+    const rank = idx + 1;
+    const isMe = p.uuid === myId;
+    const rankColor = rank === 1 ? 'color:#ffcf3c;font-weight:700'
+                    : rank === 2 ? 'color:#d8d8e0;font-weight:700'
+                    : rank === 3 ? 'color:#cd7f32;font-weight:700' : 'color:var(--muted)';
+    const rowBg = isMe ? 'background:linear-gradient(90deg,rgba(255,80,40,0.18),transparent);border-left:3px solid #ff6e3a' : '';
+    const ago = formatAgo(Date.now() - (p.last_hit_at || 0));
+    const pct = boss.max_hp ? (p.damage / boss.max_hp * 100) : 0;
+    return `
+      <div class="lb-row" style="display:grid;grid-template-columns:50px 1fr 130px 100px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);${rowBg}">
+        <div style="font-size:14px;${rankColor}">#${rank}</div>
+        <div>
+          <div style="font-weight:600">${escapeHtml(p.nickname || '無名')}${isMe ? ' <span style="color:var(--accent);font-size:10px">(你)</span>' : ''}</div>
+          <div style="color:var(--muted);font-size:10px">佔 BOSS 總血 ${pct.toFixed(2)}%</div>
+        </div>
+        <div style="color:#ff8a3c;font-weight:700;font-size:14px">${fmtBig(p.damage)}</div>
+        <div style="color:var(--muted);font-size:10px">${ago}</div>
+      </div>
+    `;
+  }).join('');
+
+  tableEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:50px 1fr 130px 100px;gap:8px;padding:8px 10px;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--line)">
+      <div>排名</div><div>玩家</div><div>今日傷害</div><div>最後一擊</div>
+    </div>
+    <div style="max-height:55vh;overflow-y:auto">${rows}</div>
   `;
 }
 
@@ -5027,6 +5154,21 @@ window.showResultModal = function(lc) {
     titleEl.textContent = '✘ 戰敗';
     titleEl.className = 'result-title fail';
     subEl.textContent = `${lc.dungeonName}　·　堅持了 ${lc.time.toFixed(1)} 秒`;
+  } else if (lc.isWorldBoss) {
+    const wb = lc.worldBoss;
+    titleEl.textContent = wb && wb.killedNow ? '🏆 焰心古龍 被擊倒！' : '🐉 焰心古龍 試煉結束';
+    titleEl.className = 'result-title raid';
+    const fmtBig = (n) => n >= 1e12 ? (n/1e12).toFixed(2)+' 兆'
+                     : n >= 1e8  ? (n/1e8).toFixed(2)+' 億'
+                     : n >= 1e6  ? (n/1e6).toFixed(2)+' M'
+                     : n.toLocaleString();
+    if (wb) {
+      const remain = Math.max(0, wb.currentHp || 0);
+      const hpPct = wb.maxHp ? (remain / wb.maxHp * 100) : 0;
+      subEl.innerHTML = `本場個人傷害 <b>${fmtBig(lc.endlessSelfDmg||0)}</b> · 今日累計 <b style="color:var(--gold)">${fmtBig(wb.myDmg||0)}</b> ${wb.myRank ? `(排名 #${wb.myRank})` : ''}　·　BOSS 剩餘 ${fmtBig(remain)} (${hpPct.toFixed(2)}%)`;
+    } else {
+      subEl.textContent = `${lc.dungeonName}　·　本場個人傷害 ${fmtBig(lc.endlessSelfDmg||0)}（上報後端中...）`;
+    }
   } else if (lc.isEndless) {
     titleEl.textContent = `✦ 階梯 ${lc.endlessTierLabel} 達成`;
     titleEl.className = 'result-title raid';

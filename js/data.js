@@ -866,6 +866,40 @@ const REGIONS = [
         boss: '暗影結晶霸主' },
     ],
   },
+  // ===== 世界 BOSS（跨玩家共用 HP，每天 00:00 Asia/Taipei 復活）=====
+  {
+    id: 'world-boss', name: '世界 BOSS', tagline: '全球玩家共擊一隻巨龍，每天午夜復活、傷害貢獻計入當日排行。',
+    palette: { sky: '#3a1a14', ground: '#5e2814' }, mats: [],
+    isWorldBoss: true,
+    dungeons: [
+      { id: 'world-boss-dragon', name: '焰心古龍', cp: 999999, unlock: 'raid-calamity', requiredLv: 99,
+        isWorldBoss: true,
+        // 機制借用無盡塔（30 秒 BOSS 無 HP 上限，累積傷害結算上報後端）
+        isEndless: true, baseTime: 30, timeLimit: 30,
+        expBase: 0, goldBase: 0,
+        passId: 'pass-world-boss',  // 入場券：神格寶箱掉
+        // damageTiers 為空陣列：本副本不靠累積階梯給獎，獎勵在「共用 HP 全擊殺後」由排行榜分配
+        damageTiers: [],
+        bossChargeSlash: { name: '焰心崩斬', interval: 5, chargeTime: 1.5, damagePct: 0.6 },  // 每 5 秒蓄力一刀
+        lore: [
+          '熔火之心，焰心古龍——傳說中由眾神血液孕育的災厄之龍。',
+          '牠的每片鱗甲都比山岩更堅硬，每一口氣息都能熔化星辰。',
+          '今日，全世界的旅人共擊一隻古龍。每一擊都被天界鐫刻。',
+          '時限 30 秒。盡你所能，留下你的名字。',
+        ],
+        warning: '世界 BOSS — 跨玩家共用 HP，每天 00:00 復活。本場時限 30 秒，全部傷害即時上報後端、累積到當日傷害貢獻排行榜。戰敗也照樣上報。BOSS 被擊倒則當日結束，要等明日 00:00 復活。入場需消耗 1 張「焰心古龍試煉令」。',
+        rewards: [
+          { label: '時限', value: '30 秒（BOSS HP 由後端共用，無 client-side 上限）', color: 'var(--accent)' },
+          { label: '入場', value: '消耗 1 張焰心古龍試煉令（神格寶箱 6% 掉）', color: 'var(--shard)' },
+          { label: '今日 HP', value: '1 兆（每天 00:00 Asia/Taipei 復活）', color: 'var(--hp-enemy)' },
+          { label: '排行榜', value: '今日傷害貢獻 Top N — 看「世界BOSS傷害」分頁', color: 'var(--gold)' },
+        ],
+        bossPortrait: 'assets/portraits/world-boss-dragon.png',
+        bossPortraitTall: false,
+        enemies: [],
+        boss: '焰心古龍' },
+    ],
+  },
   // ===== 襲擊戰（Lv 99 endgame，超級難）=====
   {
     id: 'raid', name: '襲擊戰', tagline: '災厄降臨。需主線畢業（Lv 99）。唯一可掉 UR 武器（3%）。',
@@ -1335,6 +1369,11 @@ const PASSES = {
     desc: '進入「暗影結晶塔 · 霸主試煉」需消耗 1 張。金箱/神格箱低機率掉落。',
     dungeonId: 'endless-crystal',
   },
+  'pass-world-boss': {
+    id: 'pass-world-boss', name: '焰心古龍試煉令', rarity: 'UR', icon: '🐉',
+    desc: '挑戰世界 BOSS「焰心古龍」需消耗 1 張。神格寶箱低機率掉落。',
+    dungeonId: 'world-boss-dragon',
+  },
 };
 function findPass(id) { return PASSES[id]; }
 
@@ -1407,6 +1446,7 @@ const CHESTS = {
       { kind: 'equip-rarity', rarity: 'SSR', weight: 9 },
       { kind: 'pass', id: 'pass-endless', min: 1, max: 1, weight: 8 },  // 8%
       { kind: 'pass', id: 'pass-crystal', min: 1, max: 1, weight: 8 },  // 8%
+      { kind: 'pass', id: 'pass-world-boss', min: 1, max: 1, weight: 6 },  // 6% — 焰心古龍試煉令
       { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 5 },  // 神箱 5%
     ],
   },
