@@ -726,12 +726,11 @@ button.primary:hover { filter: brightness(1.1); }
   width: 100%;
   margin: 0 auto;
 }
-/* 世界 BOSS：1:1 方形大卡（焰心古龍）— 比一般 BOSS 更壓迫 */
+/* 世界 BOSS：跟原圖一樣 16:9，卡片強化邊框 + 紅光（焰心古龍） */
 .enemy-side.cnt-1 .endless-boss-card.worldboss-card .card-frame {
-  aspect-ratio: 1 / 1;
-  max-width: 480px;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
   width: 100%;
-  margin: 0 auto;
   border: 3px solid #ff6e3a;
   box-shadow: 0 0 48px rgba(255, 110, 58, 0.6), inset 0 0 56px rgba(255, 60, 30, 0.25);
   background: radial-gradient(ellipse at center, rgba(255, 80, 40, 0.20) 0%, rgba(40, 10, 0, 0.85) 100%);

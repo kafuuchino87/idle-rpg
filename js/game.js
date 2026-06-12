@@ -2000,7 +2000,7 @@ window.showRaidPreview = function(dungeonId) {
   body.innerHTML = `
     <div class="raid-preview">
       <div class="raid-boss-portrait">
-        <img src="${d.bossPortrait || ''}" alt="${d.boss}" onerror="this.style.display='none'">
+        <img src="${d.bossPortrait || ''}" alt="${d.boss}" onerror="this.style.display='none'"${d.isWorldBoss ? ' style="object-position:25% center"' : ''}>
       </div>
       <div class="raid-info">
         <div class="raid-title">${d.name}</div>
