@@ -69,6 +69,18 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_wbd_day ON world_boss_damage(stamp_day, damage DESC);
+
+  CREATE TABLE IF NOT EXISTS world_boss_rewards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT NOT NULL,
+    stamp_day TEXT NOT NULL,           -- 哪一日的貢獻產生這份獎勵
+    rank INTEGER NOT NULL,
+    damage INTEGER NOT NULL,            -- 紀錄那天打了多少（給玩家看用）
+    chest_qty INTEGER NOT NULL,         -- 古龍寶箱數量
+    created_at INTEGER NOT NULL,
+    claimed_at INTEGER                  -- 未領取為 NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_wbr_uuid_unclaimed ON world_boss_rewards(uuid, claimed_at);
 `);
 
 // ===== Helpers =====
@@ -267,7 +279,17 @@ function getTodayStampTPE() {
   return new Date(now).toISOString().slice(0, 10);  // YYYY-MM-DD
 }
 
-// 取得 BOSS（自動處理跨日刷新 + 自動初始化）
+// 依排名給寶箱數量
+// 1 名 = 5 箱、2-3 名 = 4 箱、4-10 名 = 3 箱、11+ = 2 箱、所有參與者保底 1 箱
+function rewardQtyByRank(rank) {
+  if (rank === 1) return 5;
+  if (rank <= 3) return 4;
+  if (rank <= 10) return 3;
+  if (rank <= 30) return 2;
+  return 1;
+}
+
+// 取得 BOSS（自動處理跨日刷新 + 自動初始化 + snapshot 排行榜給獎勵）
 function getOrInitWorldBoss() {
   const today = getTodayStampTPE();
   let row = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
@@ -279,7 +301,24 @@ function getOrInitWorldBoss() {
     return db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
   }
   if (row.stamp_day !== today) {
-    // 新一天 → 重設 HP、清掉昨日傷害紀錄
+    const yesterday = row.stamp_day;
+    // 在清傷害表前 snapshot：把昨日 leaderboard 轉成 rewards
+    const yesterdayBoard = db.prepare(`
+      SELECT uuid, damage FROM world_boss_damage
+      WHERE stamp_day = ? AND damage > 0
+      ORDER BY damage DESC
+    `).all(yesterday);
+    const insertReward = db.prepare(`
+      INSERT INTO world_boss_rewards (uuid, stamp_day, rank, damage, chest_qty, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const now = Date.now();
+    yesterdayBoard.forEach((p, idx) => {
+      const rank = idx + 1;
+      const qty = rewardQtyByRank(rank);
+      insertReward.run(p.uuid, yesterday, rank, p.damage, qty, now);
+    });
+    // 重設 HP、清掉昨日傷害紀錄
     db.prepare(`
       UPDATE world_boss
       SET current_hp = max_hp, stamp_day = ?, killed_at = NULL
@@ -289,6 +328,25 @@ function getOrInitWorldBoss() {
     row = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
   }
   return row;
+}
+
+function getWorldBossPendingRewards(uuid) {
+  return db.prepare(`
+    SELECT id, stamp_day, rank, damage, chest_qty, created_at
+    FROM world_boss_rewards
+    WHERE uuid = ? AND claimed_at IS NULL
+    ORDER BY stamp_day DESC
+  `).all(uuid);
+}
+
+function claimWorldBossRewards(uuid) {
+  getOrInitWorldBoss();  // 確保跨日 snapshot 已執行
+  const pending = getWorldBossPendingRewards(uuid);
+  if (pending.length === 0) return { totalChests: 0, claimed: [] };
+  const now = Date.now();
+  db.prepare(`UPDATE world_boss_rewards SET claimed_at = ? WHERE uuid = ? AND claimed_at IS NULL`).run(now, uuid);
+  const totalChests = pending.reduce((s, r) => s + r.chest_qty, 0);
+  return { totalChests, claimed: pending };
 }
 
 // 套用玩家本場傷害到共用 HP，並累積到玩家當日貢獻
@@ -384,4 +442,6 @@ module.exports = {
   getWorldBossPlayerDmg,
   getWorldBossPlayerRank,
   getWorldBossLeaderboard,
+  getWorldBossPendingRewards,
+  claimWorldBossRewards,
 };

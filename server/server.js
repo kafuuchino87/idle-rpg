@@ -274,6 +274,40 @@ app.post('/api/world-boss/damage', (req, res) => {
   }
 });
 
+// GET /api/world-boss/rewards?uuid=xxx — 我未領取的獎勵列表
+app.get('/api/world-boss/rewards', (req, res) => {
+  try {
+    const uuid = req.query.uuid;
+    if (!uuid || typeof uuid !== 'string' || uuid.length > 64) {
+      return res.status(400).json({ error: 'invalid_uuid' });
+    }
+    markSeen(uuid);
+    db.getOrInitWorldBoss();  // 確保跨日 snapshot 已執行
+    const list = db.getWorldBossPendingRewards(uuid);
+    const totalChests = list.reduce((s, r) => s + r.chest_qty, 0);
+    res.json({ ok: true, list, totalChests });
+  } catch (err) {
+    console.error('[world-boss rewards]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+// POST /api/world-boss/claim — 領取所有未領取的獎勵（一鍵領取）
+app.post('/api/world-boss/claim', (req, res) => {
+  try {
+    const { uuid } = req.body || {};
+    if (!uuid || typeof uuid !== 'string' || uuid.length > 64) {
+      return res.status(400).json({ error: 'invalid_uuid' });
+    }
+    markSeen(uuid);
+    const result = db.claimWorldBossRewards(uuid);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[world-boss claim]', err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
 // GET /api/world-boss/leaderboard — 今日傷害貢獻 Top N
 app.get('/api/world-boss/leaderboard', (req, res) => {
   try {
@@ -322,6 +356,8 @@ app.listen(PORT, () => {
   console.log(`    GET  /api/world-boss             — 世界 BOSS 當前狀態 + 你今日貢獻`);
   console.log(`    POST /api/world-boss/damage      — 上報本場傷害`);
   console.log(`    GET  /api/world-boss/leaderboard — 今日傷害貢獻排名`);
+  console.log(`    GET  /api/world-boss/rewards     — 我未領取的古龍寶箱`);
+  console.log(`    POST /api/world-boss/claim       — 一鍵領取所有獎勵`);
   const cs = db.getCloudSaveCount();
   console.log(`  雲端存檔：${cs.count} 筆、${Math.round(cs.totalBytes/1024)} KB`);
 });

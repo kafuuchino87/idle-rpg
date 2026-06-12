@@ -42,6 +42,79 @@ function init() {
   }
   // 世界聊天輪詢
   _startWorldChatPolling();
+  // 世界 BOSS 未領取獎勵 — 開遊戲 3 秒後檢查（避免擋在開場流程）
+  if (window.API && typeof window.API.worldBossMyRewards === 'function' && GAME_STATE.state.hasCharacter) {
+    setTimeout(() => checkWorldBossRewards(), 3000);
+  }
+}
+
+// 檢查並彈出世界 BOSS 領取視窗
+async function checkWorldBossRewards() {
+  if (!window.API || !window.API_ENABLED) return;
+  const r = await API.worldBossMyRewards();
+  if (!r.ok || !r.data) return;
+  const list = r.data.list || [];
+  if (list.length === 0) return;
+  const totalChests = r.data.totalChests || 0;
+  showWorldBossClaimDialog(list, totalChests);
+}
+
+function showWorldBossClaimDialog(list, totalChests) {
+  const fmtBig = (n) => n >= 1e12 ? (n/1e12).toFixed(2) + ' 兆'
+                   : n >= 1e8  ? (n/1e8).toFixed(2) + ' 億'
+                   : n >= 1e6  ? (n/1e6).toFixed(2) + ' M'
+                   : (n || 0).toLocaleString();
+  const rows = list.map(r => `
+    <div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12px">
+      <span style="color:var(--muted)">${r.stamp_day}</span>
+      <span><b style="color:#ff8a3c">#${r.rank}</b> · 傷害 ${fmtBig(r.damage)}</span>
+      <span style="color:var(--gold);font-weight:700">🐉 古龍寶箱 ×${r.chest_qty}</span>
+    </div>
+  `).join('');
+  const overlay = document.createElement('div');
+  overlay.id = 'worldBossClaimOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#1a0a08;border:2px solid #ff6e3a;border-radius:10px;padding:20px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(255,110,58,0.5)">
+      <h2 style="color:#ff8a3c;margin:0 0 10px;text-align:center">🐉 焰心古龍 試煉獎勵</h2>
+      <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:12px">
+        你在過往的試煉中留下了傷害貢獻 — 累積獎勵已送達
+      </div>
+      <div style="background:rgba(0,0,0,0.4);border-radius:6px;margin-bottom:14px;max-height:300px;overflow-y:auto">
+        ${rows}
+      </div>
+      <div style="text-align:center;color:var(--gold);font-size:15px;font-weight:bold;margin-bottom:14px">
+        合計：🐉 古龍寶箱 ×${totalChests}
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="primary big" id="btnClaimWB">領取</button>
+        <button class="ghost" id="btnClaimWBLater">稍後再說</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('btnClaimWBLater').onclick = () => overlay.remove();
+  document.getElementById('btnClaimWB').onclick = async () => {
+    const btn = document.getElementById('btnClaimWB');
+    btn.disabled = true;
+    btn.textContent = '領取中...';
+    const cr = await API.worldBossClaimRewards();
+    if (!cr.ok) {
+      toast('領取失敗：' + (cr.error || cr.offline ? '後端離線' : 'unknown'), 'error');
+      btn.disabled = false;
+      btn.textContent = '領取';
+      return;
+    }
+    // 把寶箱加進玩家背包（給 active char）
+    const qty = cr.data.totalChests || 0;
+    if (qty > 0) {
+      GAME_STATE.gainChest('chest-dragon', qty);
+      GAME_STATE.scheduleSave();
+    }
+    toast(`✓ 領取 古龍寶箱 ×${qty}`, 'gold');
+    overlay.remove();
+    if (typeof renderBag === 'function') renderBag();
+  };
 }
 
 // 接收 api.js 的雲端較新提示 — 跳 confirm 對話框讓玩家決定要不要拉雲端版

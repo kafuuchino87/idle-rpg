@@ -1328,6 +1328,18 @@ function openChest(chestId) {
       gainMagicStone(r.id, r.qty || 1);
       const s = GAME_DATA.findMagicStone(r.id);
       granted.push({ label: `${s ? s.icon + ' ' + s.name : r.id} ×${r.qty || 1}`, kind: 'magicstone', color: s?.color, rarity: r.id === 'mstone-mega' ? 'UR' : 'SR' });
+    } else if (r.kind === 'gem-specific') {
+      const gem = GAME_DATA.GEMS.find(g => g.id === r.gemId);
+      if (gem) {
+        gainGem(gem.id, 1);
+        granted.push({ label: `${gem.name} ×1`, kind: 'gem', rarity: gem.rarity });
+      }
+    } else if (r.kind === 'equip-specific') {
+      const def = GAME_DATA.findEquipment(r.equipId);
+      if (def) {
+        const instId = createEquipInstance(def.id, true);
+        granted.push({ label: `[${def.rarity}] ${def.name}`, kind: 'equip', rarity: def.rarity, instId });
+      }
     }
   }
   return { ok: true, rewards: granted, chestName: GAME_DATA.findChest(chestId)?.name };
@@ -1366,6 +1378,15 @@ function openChestBatch(chestId, n) {
         if (picked) {
           const instId = createEquipInstance(picked.id, true);
           accum.equips.push({ name: picked.name, rarity: picked.rarity, instId });
+        }
+      } else if (r.kind === 'gem-specific') {
+        const gem = GAME_DATA.GEMS.find(g => g.id === r.gemId);
+        if (gem) { gainGem(gem.id, 1); accum.gems.push({ name: gem.name, rarity: gem.rarity }); }
+      } else if (r.kind === 'equip-specific') {
+        const def = GAME_DATA.findEquipment(r.equipId);
+        if (def) {
+          const instId = createEquipInstance(def.id, true);
+          accum.equips.push({ name: def.name, rarity: def.rarity, instId });
         }
       }
     }

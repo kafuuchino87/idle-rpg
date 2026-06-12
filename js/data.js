@@ -1191,11 +1191,13 @@ const GEM_FAMILIES = [
   { stat: 'spd',      base: '風石',   label: '速度', values: [0.02, 0.05, 0.10, 0.18, 0.30], pct: true },
   { stat: 'critDmg',  base: '凶玉',   label: '暴傷', values: [0.03, 0.07, 0.14, 0.25, 0.40], pct: true },
   { stat: 'dmgReduce',base: '鋼玉',   label: '減傷', values: [0.01, 0.02, 0.04, 0.07, 0.12], pct: true },
+  { stat: 'atkPct',   base: '焰心晶', label: '攻擊%', values: [0.02, 0.04, 0.07, 0.12, 0.20], pct: true, urOnly: true },  // 焰心古龍系（古龍寶箱掉，只有 UR 階存在）
 ];
 const GEMS = (() => {
   const arr = [];
   for (const f of GEM_FAMILIES) {
-    for (let t = 1; t <= 5; t++) {
+    const minTier = f.urOnly ? 5 : 1;
+    for (let t = minTier; t <= 5; t++) {
       arr.push({
         id: `gem-${f.stat}-${t}`,
         name: `${GEM_TIER_NAMES[t]}${f.base}`,
@@ -1460,6 +1462,29 @@ const CHESTS = {
       { kind: 'magicstone', id: 'mstone-blue',   weight: 19 },
       { kind: 'magicstone', id: 'mstone-yellow', weight: 19 },
       { kind: 'magicstone', id: 'mstone-mega',   weight: 3 },  // 3/60 = 5% 巨型
+    ],
+  },
+  // 古龍寶箱：焰心古龍試煉排名獎勵專用
+  // 設計：rolls 4 → 平均開出 4 樣東西。魔力石 4 色機率均等（含巨型），UR 寶石/戒指低機率
+  'chest-dragon': {
+    id: 'chest-dragon', name: '古龍寶箱', rarity: 'UR', color: '#ff6e3a',
+    desc: '焰心古龍試煉排名獎勵。每箱開出 4 樣戰利品：魔力石（紅/藍/黃/巨型機率均等）、UR 魔法石、稀有材料、低機率掉 UR 戒指「焰心古龍鱗」。',
+    rolls: 4,
+    pool: [
+      // 魔力石 — 4 色機率均等（巨型跟三色一樣）
+      { kind: 'magicstone', id: 'mstone-red',    weight: 15 },
+      { kind: 'magicstone', id: 'mstone-blue',   weight: 15 },
+      { kind: 'magicstone', id: 'mstone-yellow', weight: 15 },
+      { kind: 'magicstone', id: 'mstone-mega',   weight: 15 },  // 25% — 跟紅藍黃齊
+      // UR 鑲嵌寶石 — 主推焰心晶（攻擊%），其他 UR 寶石隨機補充
+      { kind: 'gem-specific', gemId: 'gem-atkPct-5', weight: 8 },   // 至高焰心晶（UR atkPct）
+      { kind: 'gem-random', tier: [5, 5], weight: 6 },              // 其他 UR 寶石
+      // UR 戒指 — 焰心古龍鱗（稀有）
+      { kind: 'equip-specific', equipId: 'eq-ring-ur-dragonheart', weight: 2 },
+      // 高階材料 / 魂晶
+      { kind: 'material', name: '夢晶', min: 2, max: 5, weight: 6 },
+      { kind: 'material', name: '異界之鎚', min: 1, max: 1, weight: 4 },
+      { kind: 'shard', min: 80, max: 200, weight: 4 },
     ],
   },
 };
@@ -1747,6 +1772,13 @@ const ITEMS = {
       procId: 'execute',
       proc: { execute: { threshold: 0.80, bonus: 0.30 } },
       fixed: { label: '緋月血契：對 HP 低於 80% 的敵人造成 +30% 傷害' } },
+    // ===== UR 戒指（焰心古龍寶箱掉，純堆疊型）=====
+    { id: 'eq-ring-ur-dragonheart', slot: 'ring', name: '焰心古龍鱗', rarity: 'UR', tier: 4,
+      stats: { atk: 100, crit: 0.10, critDmg: 0.25 },
+      fixed: {
+        label: '焰心古龍鱗：攻擊力 +30%、對 BOSS +50%、暴擊傷害 +30%、技能傷害 +25%、對 HP<80% 敵 +10%',
+        effect: { atkPct: 0.30, vsBoss: 0.50, critDmg: 0.30, skillDmg: 0.25, lowHpDmg: 0.10 },
+      } },
   ],
 };
 

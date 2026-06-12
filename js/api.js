@@ -253,6 +253,14 @@
     return apiGet('/api/world-boss/leaderboard?limit=' + (limit || 100));
   }
 
+  async function worldBossMyRewards() {
+    return apiGet('/api/world-boss/rewards?uuid=' + encodeURIComponent(getOrCreateUuid()));
+  }
+
+  async function worldBossClaimRewards() {
+    return apiPost('/api/world-boss/claim', { uuid: getOrCreateUuid() });
+  }
+
   // ===== 暴露 =====
   window.API = {
     getUuid: getOrCreateUuid,
@@ -279,5 +287,7 @@
     worldBossState,
     worldBossSubmitDamage,
     worldBossLeaderboard,
+    worldBossMyRewards,
+    worldBossClaimRewards,
   };
 })();
