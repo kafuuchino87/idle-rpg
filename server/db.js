@@ -280,13 +280,13 @@ function getTodayStampTPE() {
 }
 
 // 依排名給寶箱數量
-// 1 名 = 5 箱、2-3 名 = 4 箱、4-10 名 = 3 箱、11+ = 2 箱、所有參與者保底 1 箱
+// 1 名 = 20 箱、2-3 名 = 15 箱、4-10 名 = 10 箱、11-30 名 = 5 箱、所有參與者保底 3 箱
 function rewardQtyByRank(rank) {
-  if (rank === 1) return 5;
-  if (rank <= 3) return 4;
-  if (rank <= 10) return 3;
-  if (rank <= 30) return 2;
-  return 1;
+  if (rank === 1) return 20;
+  if (rank <= 3) return 15;
+  if (rank <= 10) return 10;
+  if (rank <= 30) return 5;
+  return 3;
 }
 
 // 取得 BOSS（自動處理跨日刷新 + 自動初始化 + snapshot 排行榜給獎勵）
