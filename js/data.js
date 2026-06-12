@@ -609,12 +609,12 @@ const SKILLS = {
 // 被動定義
 // --------------------------------------------------------------------------
 const PASSIVES = {
-  'fox-eye':    { name: '狐眼',       desc: '暴擊 +5%、攻擊速度 +5%。',                 apply: s => { s.crit += 0.05; s.spd *= 1.05; } },
-  'wind-seal':  { name: '疾風之印',   desc: '攻擊力 +10%（戰鬥中常駐生效）。',           apply: s => { s.atk *= 1.10; } },
+  'fox-eye':    { name: '狐眼',       desc: '暴擊 +5%、暴擊傷害 +15%、攻擊速度 +5%。',  apply: s => { s.crit += 0.05; s.critDmg = (s.critDmg || 1.8) + 0.15; s.spd *= 1.05; } },
+  'wind-seal':  { name: '疾風之印',   desc: '攻擊力 +20%、攻擊速度 +20%。',              apply: s => { s.atk *= 1.20; s.spd *= 1.20; } },
   'pact-seal':  { name: '契約之印',   desc: '召喚物傷害 +80%、暴擊率 +5%。',              apply: s => { s.summonMul = (s.summonMul || 1) * 1.8; s.crit += 0.05; } },
-  'traceless':  { name: '無痕',       desc: '受到傷害 -15%。',                           apply: s => { s.dmgReduce = (s.dmgReduce || 0) + 0.15; } },
-  'oracle':     { name: '神諭',       desc: '所有技能冷卻 -20%、攻擊力 +10%。',           apply: s => { s.cdReduce = (s.cdReduce || 0) + 0.20; s.atk *= 1.10; } },
-  'silver-soul':{ name: '銀月之魂',   desc: '全屬性 +50%。',                             apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; } },
+  'traceless':  { name: '無痕',       desc: '受到傷害 -15%、暴擊 +10%、技能傷害 +20%。', apply: s => { s.dmgReduce = (s.dmgReduce || 0) + 0.15; s.crit += 0.10; s.skillDmg = (s.skillDmg || 0) + 0.20; } },
+  'oracle':     { name: '神諭',       desc: '技能冷卻 -20%、攻擊力 +25%、召喚物傷害 +40%。', apply: s => { s.cdReduce = (s.cdReduce || 0) + 0.20; s.atk *= 1.25; s.summonMul = (s.summonMul || 1) * 1.4; } },
+  'silver-soul':{ name: '銀月之魂',   desc: '全屬性 +50%、技能傷害 +25%、攻擊速度 +10%。', apply: s => { s.atk *= 1.5; s.def *= 1.5; s.hp *= 1.5; s.skillDmg = (s.skillDmg || 0) + 0.25; s.spd *= 1.10; } },
 
   // ===== 雪羽 被動 =====
   'third-eye':   { name: '心眼',       desc: '暴擊率 +6%、暴擊傷害 +15%。',                apply: s => { s.crit += 0.06; s.critDmg = (s.critDmg || 1.8) + 0.15; } },
