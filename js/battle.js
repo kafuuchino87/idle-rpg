@@ -2342,19 +2342,20 @@ function onEndlessTimeUp() {
   };
 
   // 世界 BOSS：上報玩家本場個人傷害到後端（不算隊友傷害，避免雙計）
+  // ⚠ apiPost 回傳 { ok, data } — server response 在 r.data 裡，不是 r 本身
   if (isWorldBoss && window.API && API.worldBossSubmitDamage) {
     API.worldBossSubmitDamage(selfDmg).then(r => {
-      if (r && r.ok) {
-        // 把後端回傳的 BOSS 狀態 / 玩家排名塞進 lastClear，供 result modal 顯示
+      if (r && r.ok && r.data) {
+        const d = r.data;
         BATTLE.lastClear.worldBoss = {
-          name: r.boss && r.boss.name,
-          maxHp: r.boss && r.boss.max_hp,
-          currentHp: r.boss && r.boss.current_hp,
-          killedNow: !!r.killedNow,
-          alreadyDead: !!r.alreadyDead,
-          accepted: r.accepted || 0,
-          myDmg: r.myDmg || 0,
-          myRank: r.myRank || null,
+          name: d.boss && d.boss.name,
+          maxHp: d.boss && d.boss.max_hp,
+          currentHp: d.boss && d.boss.current_hp,
+          killedNow: !!d.killedNow,
+          alreadyDead: !!d.alreadyDead,
+          accepted: d.accepted || 0,
+          myDmg: d.myDmg || 0,
+          myRank: d.myRank || null,
         };
         if (typeof window.showResultModal === 'function' && BATTLE.lastClear) {
           showResultModal(BATTLE.lastClear);  // 重新渲染一次，把世界 BOSS 區塊塞進去
