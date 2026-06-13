@@ -1776,8 +1776,8 @@ const ITEMS = {
     // ===== UR 戒指（古龍寶箱掉，自動 AOE proc 機制型）=====
     { id: 'eq-ring-ur-dragonheart', slot: 'ring', name: '焰心古龍鱗', rarity: 'UR', tier: 4, stats: {},
       procId: 'dragon-breath',
-      proc: { breath: { interval: 20, mult: 8.0 } },  // 每 20 秒自動 800% AOE 攻擊力
-      fixed: { label: '焰心古龍鱗：戰鬥中每 20 秒自動釋放「焰心吐息」— 對所有敵人造成 800% 攻擊力 AOE 傷害（可暴擊、吃技能傷害加成）。' } },
+      proc: { breath: { interval: 5, mult: 8.0 } },  // 每 5 秒自動 800% AOE 攻擊力
+      fixed: { label: '焰心古龍鱗：戰鬥中每 5 秒自動釋放「焰心吐息」— 對所有敵人造成 800% 攻擊力 AOE 傷害（可暴擊、吃技能傷害加成）。' } },
   ],
 };
 
