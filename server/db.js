@@ -462,4 +462,5 @@ module.exports = {
   getWorldBossLeaderboard,
   getWorldBossPendingRewards,
   claimWorldBossRewards,
+  snapshotWorldBossRewards,   // 對外暴露給 admin / 手動補發用
 };
