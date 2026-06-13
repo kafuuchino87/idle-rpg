@@ -1723,7 +1723,20 @@ function tickSummons(dt) {
       if (BATTLE.enemy) {
         const effCrit = BATTLE.player.crit + getBuffMod('crit');
         const isCrit = Math.random() < effCrit;
-        const dmg = computeDamage(s.dps * BATTLE.player.summonMul, isCrit);
+        let dmg = computeDamage(s.dps * BATTLE.player.summonMul, isCrit);
+        // 召喚物吃跟技能一樣的加成：skillDmg / vsBoss / lowHpDmg
+        // （原本 tick 直接寫 enemy.hp 跳過 applyDamage，導致召喚向角色完全不受 player 屬性 buff）
+        if (BATTLE.player.skillDmg) dmg = Math.floor(dmg * (1 + BATTLE.player.skillDmg));
+        if (BATTLE.enemy.isBoss && BATTLE.player.vsBoss) {
+          dmg = Math.floor(dmg * (1 + BATTLE.player.vsBoss));
+        }
+        const lhdSum = BATTLE.player.lowHpDmg || 0;
+        if (lhdSum > 0 && BATTLE.enemy.maxHp > 0) {
+          const ratioSum = BATTLE._endlessMode
+            ? (typeof BATTLE._worldBossHpRatio === 'number' ? BATTLE._worldBossHpRatio : 1)
+            : (BATTLE.enemy.hp / BATTLE.enemy.maxHp);
+          if (ratioSum < 0.80) dmg = Math.floor(dmg * (1 + lhdSum));
+        }
         if (BATTLE._endlessMode) {
           BATTLE._endlessTotalDmg += dmg;
           BATTLE._endlessTeamDmg += dmg;
