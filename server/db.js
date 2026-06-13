@@ -56,7 +56,8 @@ db.exec(`
     max_hp INTEGER NOT NULL,
     current_hp INTEGER NOT NULL,
     stamp_day TEXT NOT NULL,                  -- YYYY-MM-DD (Asia/Taipei)
-    killed_at INTEGER                          -- 第一次被打死的時間（同一日二次傷害不會覆寫）
+    killed_at INTEGER,                         -- 被打死的時間（NULL = 存活中）
+    respawn_at INTEGER                         -- 復活時間（killed_at + 1hr，NULL = 存活中）
   );
 
   CREATE TABLE IF NOT EXISTS world_boss_damage (
@@ -78,10 +79,19 @@ db.exec(`
     damage INTEGER NOT NULL,            -- 紀錄那天打了多少（給玩家看用）
     chest_qty INTEGER NOT NULL,         -- 古龍寶箱數量
     created_at INTEGER NOT NULL,
-    claimed_at INTEGER                  -- 未領取為 NULL
+    claimed_at INTEGER,                 -- 未領取為 NULL
+    kill_at INTEGER                     -- 本筆對應的擊殺週期（killed_at 時間戳，給 dedup 用）
   );
   CREATE INDEX IF NOT EXISTS idx_wbr_uuid_unclaimed ON world_boss_rewards(uuid, claimed_at);
 `);
+
+// Schema migrations：CREATE TABLE IF NOT EXISTS 不會幫舊表加新欄位，要手動 ALTER
+// 用 try/catch 因為若欄位已存在 SQLite 會丟 SqliteError
+function safeAddColumn(table, col, type) {
+  try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch (e) { /* already exists */ }
+}
+safeAddColumn('world_boss', 'respawn_at', 'INTEGER');
+safeAddColumn('world_boss_rewards', 'kill_at', 'INTEGER');
 
 // ===== Helpers =====
 
@@ -272,6 +282,7 @@ function getRecentChats(since) {
 const WORLD_BOSS_NAME = '焰心古龍';
 const WORLD_BOSS_MAX_HP = 1_000_000_000_000;   // 1 兆
 const WORLD_BOSS_TZ_OFFSET_MS = 8 * 60 * 60 * 1000;  // Asia/Taipei = UTC+8
+const WORLD_BOSS_RESPAWN_MS = 60 * 60 * 1000;       // BOSS 死後 1 小時自動復活
 
 // 今日刷新戳記（每天 00:00 Asia/Taipei 切換到新一天）
 function getTodayStampTPE() {
@@ -289,11 +300,17 @@ function rewardQtyByRank(rank) {
   return 3;
 }
 
-// 依當日 leaderboard 為某一天發放獎勵到 world_boss_rewards
-// idempotent：同 stamp_day 已 snapshot 過就不重複（避免 BOSS 被打死 + 跨日各發一次）
-function snapshotWorldBossRewards(stampDay) {
-  const exists = db.prepare('SELECT 1 FROM world_boss_rewards WHERE stamp_day = ? LIMIT 1').get(stampDay);
-  if (exists) return false;
+// 依當日 leaderboard 為某次擊殺週期發放獎勵到 world_boss_rewards
+// idempotent：同 kill_at 已 snapshot 過就不重複（同日多次擊殺也能各自發獎）
+// killAt = NULL 時 fallback 到舊版 stamp_day dedup（給跨日 backstop 用）
+function snapshotWorldBossRewards(stampDay, killAt) {
+  if (killAt) {
+    const exists = db.prepare('SELECT 1 FROM world_boss_rewards WHERE kill_at = ? LIMIT 1').get(killAt);
+    if (exists) return false;
+  } else {
+    const exists = db.prepare('SELECT 1 FROM world_boss_rewards WHERE stamp_day = ? AND kill_at IS NULL LIMIT 1').get(stampDay);
+    if (exists) return false;
+  }
   const board = db.prepare(`
     SELECT uuid, damage FROM world_boss_damage
     WHERE stamp_day = ? AND damage > 0
@@ -301,14 +318,14 @@ function snapshotWorldBossRewards(stampDay) {
   `).all(stampDay);
   if (board.length === 0) return false;
   const insert = db.prepare(`
-    INSERT INTO world_boss_rewards (uuid, stamp_day, rank, damage, chest_qty, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO world_boss_rewards (uuid, stamp_day, rank, damage, chest_qty, created_at, kill_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const now = Date.now();
   const tx = db.transaction(() => {
     board.forEach((p, idx) => {
       const rank = idx + 1;
-      insert.run(p.uuid, stampDay, rank, p.damage, rewardQtyByRank(rank), now);
+      insert.run(p.uuid, stampDay, rank, p.damage, rewardQtyByRank(rank), now, killAt || null);
     });
   });
   tx();
@@ -326,16 +343,25 @@ function getOrInitWorldBoss() {
     `).run(WORLD_BOSS_NAME, WORLD_BOSS_MAX_HP, WORLD_BOSS_MAX_HP, today);
     return db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
   }
-  if (row.stamp_day !== today) {
-    const yesterday = row.stamp_day;
-    // 確保昨日 rewards 已 snapshot（idempotent — 若 BOSS 已被打死 + 已 snapshot 過就跳過）
-    snapshotWorldBossRewards(yesterday);
-    // 重設 HP、清掉昨日傷害紀錄
+  // (1) 復活檢查：BOSS 死了且過了 1 小時 → 復活（HP 滿、清死亡 / 復活時間、清傷害紀錄）
+  const nowMs = Date.now();
+  if (row.respawn_at && nowMs >= row.respawn_at) {
     db.prepare(`
       UPDATE world_boss
-      SET current_hp = max_hp, stamp_day = ?, killed_at = NULL
+      SET current_hp = max_hp, killed_at = NULL, respawn_at = NULL
       WHERE id = 1
-    `).run(today);
+    `).run();
+    // 上一輪的傷害紀錄清空（這樣下一輪排行榜是新的）
+    db.prepare('DELETE FROM world_boss_damage').run();
+    row = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
+  }
+  // (2) 跨日檢查：stamp_day 更新（只是 leaderboard 日期 metadata，不影響 HP / 復活邏輯）
+  if (row.stamp_day !== today) {
+    const yesterday = row.stamp_day;
+    // 跨日 backstop snapshot（若昨天 BOSS 死了但中間沒有人 query 觸發 applyDamage 路徑的 snapshot）
+    snapshotWorldBossRewards(yesterday);
+    db.prepare('UPDATE world_boss SET stamp_day = ? WHERE id = 1').run(today);
+    // 清掉非今日的傷害紀錄（防止累積髒資料）
     db.prepare('DELETE FROM world_boss_damage WHERE stamp_day != ?').run(today);
     row = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
   }
@@ -378,7 +404,8 @@ function applyWorldBossDamage(uuid, nickname, dmg) {
     const newHp = boss.current_hp - accepted;
     db.prepare('UPDATE world_boss SET current_hp = ? WHERE id = 1').run(newHp);
     if (newHp <= 0 && !boss.killed_at) {
-      db.prepare('UPDATE world_boss SET killed_at = ? WHERE id = 1').run(now);
+      const respawnAt = now + WORLD_BOSS_RESPAWN_MS;
+      db.prepare('UPDATE world_boss SET killed_at = ?, respawn_at = ? WHERE id = 1').run(now, respawnAt);
       killedNow = true;
     }
   }
@@ -396,10 +423,10 @@ function applyWorldBossDamage(uuid, nickname, dmg) {
     `).run(uuid, String(nickname || '無名旅人').slice(0, 32), safeDmg, today, now);
   }
 
-  // BOSS 本擊倒下 → 立即 snapshot 獎勵（不用等跨日 00:00）
-  // snapshot 是 idempotent — 跨日時 getOrInitWorldBoss 再呼叫一次也不會重複發
+  // BOSS 本擊倒下 → 立即 snapshot 獎勵（不用等跨日 00:00 / 1 小時復活）
+  // 用 killed_at (= now) 作為 cycle id，dedup 正確處理同日多次擊殺
   if (killedNow) {
-    snapshotWorldBossRewards(today);
+    snapshotWorldBossRewards(today, now);
   }
 
   const refreshed = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();

@@ -2039,9 +2039,10 @@ window.showRaidPreview = function(dungeonId) {
   win.classList.add('flash-open');
   setTimeout(() => win.classList.remove('flash-open'), 600);
 
-  // 世界 BOSS：async 抓後端狀態 + 渲染共擊 HP / 你的貢獻
+  // 世界 BOSS：async 抓後端狀態 + 渲染共擊 HP / 你的貢獻 / 復活倒數
   if (d.isWorldBoss && window.API && API.worldBossState) {
     const placeholder = document.getElementById('worldBossPreviewState');
+    const startBtn = body.querySelector('button[data-raid-start]');
     API.worldBossState().then(r => {
       if (!placeholder) return;
       if (!r || !r.ok) {
@@ -2053,13 +2054,21 @@ window.showRaidPreview = function(dungeonId) {
       const myRank = r.data.myRank;
       const hpPct = Math.max(0, b.current_hp / b.max_hp * 100);
       const isDead = b.current_hp <= 0;
+      const respawnAt = b.respawn_at || 0;
+      const msToRespawn = Math.max(0, respawnAt - Date.now());
       const fmtBig = (n) => n >= 1e12 ? (n/1e12).toFixed(2) + ' 兆'
                        : n >= 1e8  ? (n/1e8).toFixed(2) + ' 億'
                        : n >= 1e4  ? (n/1e4).toFixed(2) + ' 萬'
                        : n.toLocaleString();
+      const fmtMs = (ms) => {
+        const totalSec = Math.ceil(ms / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return `${m} 分 ${s.toString().padStart(2, '0')} 秒`;
+      };
       placeholder.innerHTML = `
         <div style="font-weight:bold;color:${isDead ? 'var(--muted)' : 'var(--hp-enemy)'};font-size:13px;margin-bottom:4px">
-          ${isDead ? '✓ 焰心古龍已倒下（明日 00:00 復活）' : '🐉 BOSS 仍存活'}
+          ${isDead ? `✓ 焰心古龍已倒下 — ${msToRespawn > 0 ? fmtMs(msToRespawn) + ' 後復活' : '即將復活'}` : '🐉 BOSS 仍存活'}
         </div>
         <div style="background:#1a0a08;border-radius:4px;height:14px;overflow:hidden;border:1px solid #ff6e3a;margin:4px 0">
           <div style="background:linear-gradient(90deg,#ff8a3c,#ff3030);height:100%;width:${hpPct.toFixed(2)}%"></div>
@@ -2071,6 +2080,12 @@ window.showRaidPreview = function(dungeonId) {
           你今日貢獻：<b>${fmtBig(myDmg)}</b> · 排名 <b>${myRank ? '#' + myRank : '未上榜'}</b>
         </div>
       `;
+      // 復活期間禁止進場（擋按鈕 + 改 label）
+      if (isDead && startBtn) {
+        startBtn.disabled = true;
+        startBtn.textContent = `🕓 BOSS 復活前禁止進場（${msToRespawn > 0 ? fmtMs(msToRespawn) : '即將復活'}）`;
+        startBtn.dataset.worldbossDead = '1';
+      }
     }).catch(() => {
       if (placeholder) placeholder.innerHTML = '<span style="color:var(--hp-enemy)">⚠ 載入失敗</span>';
     });
@@ -2096,6 +2111,14 @@ window.showRaidPreview = function(dungeonId) {
     if (d.isWorldBoss && window.MP_API && MP_API.isConnected()) {
       toast('世界 BOSS 只能單人挑戰，請先離開房間再進入', 'error');
       return;
+    }
+    // 世界 BOSS：復活期間禁止進場（按鈕擋了；保險再 fallback 即時抓一次狀態）
+    if (d.isWorldBoss) {
+      const startBtnNow = body.querySelector('button[data-raid-start]');
+      if (startBtnNow && startBtnNow.dataset.worldbossDead === '1') {
+        toast('焰心古龍正在復活中，請稍候', 'error');
+        return;
+      }
     }
     // 無盡塔：先檢查並扣入場券（早退失敗）
     if (d.isEndless) {
