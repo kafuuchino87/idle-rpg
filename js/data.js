@@ -513,8 +513,8 @@ const SKILLS = {
   },
   'oracle-arrow': {
     name: '神諭斷罪', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +100%（合計 3000% vs BOSS）+ 必爆 + 15% 吸血。CD 25s。',
-    mult: 15.0, vsBossBonus: 1.0, alwaysCrit: true, lifesteal: 0.15,
+    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +80%（合計 2700% vs BOSS）+ 必爆 + 15% 吸血。CD 25s。',
+    mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true, lifesteal: 0.15,
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
@@ -598,8 +598,8 @@ const SKILLS = {
   },
   'photon-oracle': {
     name: '光子神諭', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】光子協議全開：1800% 攻擊力 + 對 BOSS +80%（合計 3240% vs BOSS）+ 必爆 + 自身與隊友 MP 全滿（回 100%）。CD 28s。',
-    mult: 18.0, vsBossBonus: 0.8, alwaysCrit: true, restoreMp: 1.0, restoreMpAlly: true,
+    desc: '【終極奧義】光子協議全開：1800% 攻擊力 + 對 BOSS +60%（合計 2880% vs BOSS）+ 必爆 + 自身與隊友 MP 全滿（回 100%）。CD 28s。',
+    mult: 18.0, vsBossBonus: 0.6, alwaysCrit: true, restoreMp: 1.0, restoreMpAlly: true,
     cd: 28, mpCost: 270, costTier: 'heavy',
   },
 
