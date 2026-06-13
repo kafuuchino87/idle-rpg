@@ -341,8 +341,9 @@ const SKILLS = {
   },
   'fox-god-descend': {
     name: '狐神降世', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】九尾狐神降臨：即發 700% AOE + 持續 12 秒每 0.3 秒（單次 150% × ~40 次 ≈ 6000% 召喚），總 6700%。對 BOSS 額外 +60%。召喚物可暴擊，無敵人時暫停。CD 30s。',
-    mult: 7.0, aoe: true, summon: { dps: 1.5, dur: 12, interval: 0.3 }, vsBossBonus: 0.6,
+    desc: '【終極奧義】九尾狐神降臨：即發 1000% AOE 必爆 + 持續 14 秒每 0.3 秒（單次 200% × ~47 次 ≈ 9400% 召喚），總 ~10400%。對 BOSS 額外 +70%。施放後自身攻擊 +25% 持續 14 秒。召喚物可暴擊，無敵人時暫停。CD 30s。',
+    mult: 10.0, aoe: true, alwaysCrit: true, summon: { dps: 2.0, dur: 14, interval: 0.3 }, vsBossBonus: 0.7,
+    buff: { atk: 0.25, dur: 14 },
     cd: 30, mpCost: 270, costTier: 'heavy',
   },
 
