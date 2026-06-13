@@ -289,6 +289,32 @@ function rewardQtyByRank(rank) {
   return 3;
 }
 
+// 依當日 leaderboard 為某一天發放獎勵到 world_boss_rewards
+// idempotent：同 stamp_day 已 snapshot 過就不重複（避免 BOSS 被打死 + 跨日各發一次）
+function snapshotWorldBossRewards(stampDay) {
+  const exists = db.prepare('SELECT 1 FROM world_boss_rewards WHERE stamp_day = ? LIMIT 1').get(stampDay);
+  if (exists) return false;
+  const board = db.prepare(`
+    SELECT uuid, damage FROM world_boss_damage
+    WHERE stamp_day = ? AND damage > 0
+    ORDER BY damage DESC
+  `).all(stampDay);
+  if (board.length === 0) return false;
+  const insert = db.prepare(`
+    INSERT INTO world_boss_rewards (uuid, stamp_day, rank, damage, chest_qty, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const now = Date.now();
+  const tx = db.transaction(() => {
+    board.forEach((p, idx) => {
+      const rank = idx + 1;
+      insert.run(p.uuid, stampDay, rank, p.damage, rewardQtyByRank(rank), now);
+    });
+  });
+  tx();
+  return true;
+}
+
 // 取得 BOSS（自動處理跨日刷新 + 自動初始化 + snapshot 排行榜給獎勵）
 function getOrInitWorldBoss() {
   const today = getTodayStampTPE();
@@ -302,22 +328,8 @@ function getOrInitWorldBoss() {
   }
   if (row.stamp_day !== today) {
     const yesterday = row.stamp_day;
-    // 在清傷害表前 snapshot：把昨日 leaderboard 轉成 rewards
-    const yesterdayBoard = db.prepare(`
-      SELECT uuid, damage FROM world_boss_damage
-      WHERE stamp_day = ? AND damage > 0
-      ORDER BY damage DESC
-    `).all(yesterday);
-    const insertReward = db.prepare(`
-      INSERT INTO world_boss_rewards (uuid, stamp_day, rank, damage, chest_qty, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const now = Date.now();
-    yesterdayBoard.forEach((p, idx) => {
-      const rank = idx + 1;
-      const qty = rewardQtyByRank(rank);
-      insertReward.run(p.uuid, yesterday, rank, p.damage, qty, now);
-    });
+    // 確保昨日 rewards 已 snapshot（idempotent — 若 BOSS 已被打死 + 已 snapshot 過就跳過）
+    snapshotWorldBossRewards(yesterday);
     // 重設 HP、清掉昨日傷害紀錄
     db.prepare(`
       UPDATE world_boss
@@ -382,6 +394,12 @@ function applyWorldBossDamage(uuid, nickname, dmg) {
         nickname = excluded.nickname,
         last_hit_at = excluded.last_hit_at
     `).run(uuid, String(nickname || '無名旅人').slice(0, 32), safeDmg, today, now);
+  }
+
+  // BOSS 本擊倒下 → 立即 snapshot 獎勵（不用等跨日 00:00）
+  // snapshot 是 idempotent — 跨日時 getOrInitWorldBoss 再呼叫一次也不會重複發
+  if (killedNow) {
+    snapshotWorldBossRewards(today);
   }
 
   const refreshed = db.prepare('SELECT * FROM world_boss WHERE id = 1').get();
