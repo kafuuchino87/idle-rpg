@@ -514,8 +514,8 @@ const SKILLS = {
   },
   'oracle-arrow': {
     name: '神諭斷罪', tag: '★大招★', kind: 'arcane', path: 'B', requireTier: 3,
-    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +80%（合計 2700% vs BOSS）+ 必爆 + 15% 吸血。CD 25s。',
-    mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true, lifesteal: 0.15,
+    desc: '【終極奧義】神之斷罪箭：1500% 攻擊力 + 對 BOSS +80%（合計 2700% vs BOSS）+ 必爆 + 施放時回復 15% 最大 HP。CD 25s。',
+    mult: 15.0, vsBossBonus: 0.8, alwaysCrit: true, heal: 0.15,
     cd: 25, mpCost: 270, costTier: 'heavy',
   },
 
