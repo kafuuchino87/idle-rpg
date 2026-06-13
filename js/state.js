@@ -1057,6 +1057,7 @@ function combatPower(charId) {
     (s.vsBoss || 0) * 10000 +       // 100% → 10,000
     (s.skillDmg || 0) * 10000 +     // 100% → 10,000
     (s.defPierce || 0) * 10000 +    // 75% → 7,500
+    (s.lowHpDmg || 0) * 10000 +     // 低血增傷 13% → 1,300
     // ── MP 池（超過基礎部分）──
     Math.max(0, (s.maxMp || 400) - 400) * 0.5
   );

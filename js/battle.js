@@ -204,6 +204,16 @@ function startBattle(dungeonId, charId) {
   BATTLE._endlessTeamDmg = 0;      // 團隊累積（含自己 + 廣播）
   BATTLE._endlessTiers = dungeon.damageTiers || [];
   BATTLE._endlessReached = -1;     // 達到的最高階梯 idx
+  // 世界 BOSS 共擊 HP 比例（給 lowHpDmg 用，本地 enemy.hp 寫死 MAX_SAFE_INTEGER 沒法看）
+  // 預設 1.0 代表「不觸發 lowHpDmg」；async 抓回真實 ratio 之後寫回
+  BATTLE._worldBossHpRatio = 1;
+  if (dungeon.isWorldBoss && window.API && typeof API.worldBossState === 'function') {
+    API.worldBossState().then(r => {
+      if (r && r.ok && r.data && r.data.boss && r.data.boss.max_hp > 0) {
+        BATTLE._worldBossHpRatio = r.data.boss.current_hp / r.data.boss.max_hp;
+      }
+    }).catch(() => {});
+  }
   spawnNextEnemy();
 
   const lastLog = BATTLE.log[BATTLE.log.length - 1];
@@ -2021,9 +2031,12 @@ function applyDamage(dmg, isCrit) {
     }
   }
   // 低血增傷（lowHpDmg）：對 HP < 80% 的敵人增傷（裝備/套裝/鍛造）
+  // 世界 BOSS：本地 enemy.hp = MAX_SAFE_INTEGER 沒法看，改用 BATTLE._worldBossHpRatio（後端 ratio）
   const lhd = BATTLE.player.lowHpDmg || 0;
   if (lhd > 0 && BATTLE.enemy.maxHp > 0) {
-    const ratio = BATTLE.enemy.hp / BATTLE.enemy.maxHp;
+    const ratio = BATTLE._endlessMode
+      ? (typeof BATTLE._worldBossHpRatio === 'number' ? BATTLE._worldBossHpRatio : 1)
+      : (BATTLE.enemy.hp / BATTLE.enemy.maxHp);
     if (ratio < 0.80) {
       actualDmg = Math.floor(actualDmg * (1 + lhd));
     }
@@ -2127,10 +2140,13 @@ function applyAoeDamage(sk, mult, isCrit, skillMod) {
       if (sk.vsBossBonus) dmg = Math.floor(dmg * (1 + sk.vsBossBonus));
       if (BATTLE.player.vsBoss) dmg = Math.floor(dmg * (1 + BATTLE.player.vsBoss));
     }
-    // 低血增傷（lowHpDmg）：對 HP < 80% 的敵人增傷
+    // 低血增傷（lowHpDmg）：對 HP < 80% 的敵人增傷（世界 BOSS 用後端 ratio）
     const lhdAoe = BATTLE.player.lowHpDmg || 0;
-    if (lhdAoe > 0 && e.maxHp > 0 && (e.hp / e.maxHp) < 0.80) {
-      dmg = Math.floor(dmg * (1 + lhdAoe));
+    if (lhdAoe > 0 && e.maxHp > 0) {
+      const ratioAoe = BATTLE._endlessMode
+        ? (typeof BATTLE._worldBossHpRatio === 'number' ? BATTLE._worldBossHpRatio : 1)
+        : (e.hp / e.maxHp);
+      if (ratioAoe < 0.80) dmg = Math.floor(dmg * (1 + lhdAoe));
     }
     // 鏡夢縛魂技能攔截（同 applyDamage：只在 host / solo 套用 hook）
     const aoeRawDmg = dmg;

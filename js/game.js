@@ -878,7 +878,7 @@ function renderCharDetail() {
         <div class="stat-row-pair"><span>對 BOSS</span><b>+${((s.vsBoss || 0) * 100).toFixed(0)}%</b></div>
         <div class="stat-row-pair"><span>技能傷害</span><b>+${((s.skillDmg || 0) * 100).toFixed(0)}%</b></div>
         <div class="stat-row-pair"><span>無視防禦</span><b>${((s.defPierce || 0) * 100).toFixed(0)}%${(s.defPierce || 0) >= 0.95 ? '<span style="color:var(--gold);font-size:9px;margin-left:4px">(上限)</span>' : ''}</b></div>
-        ${(s.lowHpDmg || 0) > 0 ? `<div class="stat-row-pair"><span>低血增傷</span><b style="color:#ff6e7d">+${((s.lowHpDmg || 0) * 100).toFixed(1)}%</b></div>` : ''}
+        <div class="stat-row-pair"><span>低血增傷</span><b style="color:#ff6e7d">+${((s.lowHpDmg || 0) * 100).toFixed(1)}%</b></div>
       </div>
       <div class="stat-card mp-card">
         <div class="stat-card-title">秘力組</div>
